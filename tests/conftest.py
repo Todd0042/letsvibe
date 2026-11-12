@@ -3,9 +3,24 @@ Pytest configuration and global isolation fixtures.
 Ensures the test suite NEVER touches production databases or live queue/appeals inboxes.
 """
 
+import os
 from pathlib import Path
-import pytest
-from letsvibe.storage.db import init_db
+
+# Tests must behave the same with or without a developer's private .env (CI has none). Set the test
+# identity BEFORE any LetsVibe module is imported: module-level settings are read at import time, and
+# load_dotenv() never overrides variables that are already set.
+os.environ.update({
+    "ADMIN_GITHUB_USER": "Todd0042",
+    "ADMIN_GITHUB_ID": "",
+    "ADMIN_EMAIL": "",
+    "SESSION_SECRET": "test_secret_for_isolated_pytest_suite_1234567890",
+    "GITHUB_CLIENT_ID": "mock_client_id_for_tests",
+    "GITHUB_CLIENT_SECRET": "mock_client_secret_for_tests",
+    "MAX_REGISTERED_USERS": "5",
+})
+
+import pytest  # noqa: E402
+from letsvibe.storage.db import init_db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
