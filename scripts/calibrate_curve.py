@@ -23,7 +23,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from letsvibe.core.ingest import RepositoryIngestor  # noqa: E402
 from letsvibe.evaluator.classifier import classify_project  # noqa: E402
-from letsvibe.evaluator.consensus import ConsensusEngine  # noqa: E402
 from letsvibe.evaluator.ollama import OllamaClient  # noqa: E402
 from letsvibe.evaluator.pipeline import PIPELINE_ID, evaluate, gather_metrics  # noqa: E402
 from letsvibe.evaluator.rubric import RUBRIC_VERSION  # noqa: E402
@@ -52,7 +51,7 @@ def grade_once(path: Path) -> dict:
     metrics, platform_info = gather_metrics(packed)
     classification = classify_project(client, packed.source_path, platform_info, readme=metrics.readme_excerpt,
                                       file_tree=packed.file_tree)
-    report = evaluate(ConsensusEngine(client=client), packed, str(path), metrics, classification)
+    report = evaluate(client, packed, str(path), metrics, classification)
     client.unload_all_models()
     return {
         "score": round(report.final_vibe_score, 1), "minutes": round((time.time() - t0) / 60, 1),
@@ -93,7 +92,7 @@ def main() -> None:
     data = {
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rubric_version": RUBRIC_VERSION, "pipeline": PIPELINE_ID,
-        "models": {"chunk_reviewer": "qwen2.5-coder:7b", "whole_project_reviewer": "qwen2.5-coder:14b"},
+        "models": {"checklists_and_descriptions": "qwen2.5-coder:14b", "archetype_embeddings": "mxbai-embed-large"},
         "runs_per_anchor": args.runs,
         "why": WHY,
         "peer_min_projects": PEER_MIN_PROJECTS, "a_requires_position": A_REQUIRES_POSITION,

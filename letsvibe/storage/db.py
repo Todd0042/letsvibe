@@ -20,6 +20,10 @@ logger = logging.getLogger("letsvibe.storage")
 
 
 DEFAULT_DB_PATH = Path("data/letsvibe.db")
+# Factors shown on the site (rubric v8 grades value, creativity and the user journey). Older badges for other
+# factors stay in ranking_history but are not displayed.
+SHOWN_BADGE_CATEGORIES = ("overall", "resonance", "creativity", "user_journey", "functionality", "ui_ux")
+_SHOWN_SQL = "(" + ", ".join(f"'{c}'" for c in SHOWN_BADGE_CATEGORIES) + ")"
 
 
 def resolve_db_path(db_path: Optional[Path] = None) -> Path:
@@ -199,6 +203,10 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         );
         """)
         # Safe migrations for existing databases
+        try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
+            conn.execute("ALTER TABLE reports ADD COLUMN curved_score REAL;")
+        except sqlite3.OperationalError:
+            pass
         try:  # a task stopped by the admin runs first when the queue resumes (web/worker.py)
             conn.execute("ALTER TABLE queue_settings ADD COLUMN front_task_id INTEGER;")
         except sqlite3.OperationalError:
@@ -374,6 +382,14 @@ def save_report_to_db(
     verdict_title = report_dict.get("verdict_title", "")
     verdict_summary = report_dict.get("verdict_summary", "")
 
+    # Experience grading (rubric v8) grades value, creativity, user journey, functionality and UI/UX. Code health and
+    # operational safety are stored empty (never 0 or 100), so rankings, badges and averages treat them as "not graded".
+    if str(report_dict.get("rubric_version", "")).startswith("v8"):
+        ops_score = maint_score = arch_score = health_score = None
+        vib_score = float((factors.get("resonance") or {}).get("score", 0.0))
+        fnc_score = float(factors["functionality"]["score"]) if isinstance(factors.get("functionality"), dict) else None
+        ui_score = float(factors["ui_ux"]["score"]) if isinstance(factors.get("ui_ux"), dict) else None
+
     with conn:
         # Upsert project
         conn.execute(
@@ -464,15 +480,14 @@ def recalculate_historical_ranks(db_path: Path = DEFAULT_DB_PATH) -> None:
     """
     conn = get_db_connection(db_path)
 
+    # Rubric v8 grades value, creativity, user journey, functionality and UI/UX; badges follow the graded factors.
     categories = {
         "overall": ("final_score", "Overall Champion"),
-        "operational_safety": ("operational_safety_score", "Operational Safety Master"),
-        "functionality": ("functionality_score", "Feature Completeness Champion"),
         "user_journey": ("user_journey_score", "Smoothest User Journey"),
-        "ui_ux": ("ui_ux_score", "UI & UX Intuitiveness Leader"),
         "resonance": ("resonance_score", "Real-World Value Pioneer"),
         "creativity": ("creativity_score", "Creativity & Novelty Icon"),
-        "code_health": ("code_health_score", "Code Health Champion"),
+        "functionality": ("functionality_score", "Feature Completeness Champion"),
+        "ui_ux": ("ui_ux_score", "UI & UX Intuitiveness Leader"),
     }
 
     now_iso = datetime.now().isoformat()
@@ -487,7 +502,7 @@ def recalculate_historical_ranks(db_path: Path = DEFAULT_DB_PATH) -> None:
             )
             SELECT project_id, id as report_id, full_slug, {col_name} as score
             FROM latest_reports
-            WHERE rn = 1
+            WHERE rn = 1 AND {col_name} IS NOT NULL
             ORDER BY score DESC, id ASC
             LIMIT 3;
             """
@@ -613,7 +628,7 @@ def get_leaderboard(
     conn = get_db_connection(db_path)
 
     col_map = {
-        "overall": "r.final_score",
+        "overall": "COALESCE(r.curved_score, r.final_score)",
         "operational_safety": "r.operational_safety_score",
         "code_health": "r.code_health_score",
         "user_journey": "r.user_journey_score",
@@ -640,6 +655,7 @@ def get_leaderboard(
         p.repo_icon_url,
         r.id as report_id,
         r.final_score,
+        COALESCE(r.curved_score, r.final_score) AS curved_score,
         r.letter_grade,
         r.archetype_name,
         r.archetype_category,
@@ -670,6 +686,7 @@ def get_leaderboard(
     badge_cur = conn.execute("""
         SELECT project_id, category, rank, badge_title, peak_score, achieved_at, superseded_at
         FROM ranking_history
+        WHERE category IN """ + _SHOWN_SQL + """
         ORDER BY superseded_at IS NULL DESC, rank ASC, achieved_at DESC
     """)
     badges_by_project: Dict[int, List[Dict[str, Any]]] = {}
@@ -767,6 +784,7 @@ def get_hall_of_fame(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     FROM ranking_history h
     JOIN projects p ON h.project_id = p.id
     JOIN reports r ON h.report_id = r.id
+    WHERE h.category IN """ + _SHOWN_SQL + """
     ORDER BY h.category = 'overall' DESC, h.rank ASC, h.superseded_at IS NULL DESC, h.achieved_at DESC
     """
     cur = conn.execute(query)
@@ -817,6 +835,26 @@ def get_hall_of_fame(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     )
 
 
+RADAR_FACTOR_COLUMNS = ("functionality", "user_journey", "ui_ux", "resonance", "creativity", "code_health", "operational_safety")
+def factor_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
+    """
+    Per-factor average and highest score across every project's latest report, for the report radar: the dashed
+    line is the average, and each axis runs to the highest score any project has on that factor.
+    """
+    cols = ", ".join(f"r.{f}_score AS {f}" for f in RADAR_FACTOR_COLUMNS)
+    rows = [dict(x) for x in conn.execute(f"""
+        WITH latest AS (SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.project_id ORDER BY r.id DESC) AS rn FROM reports r)
+        SELECT {cols} FROM latest r WHERE r.rn = 1
+    """).fetchall()]
+    avg, best = {}, {}
+    for f in RADAR_FACTOR_COLUMNS:
+        vals = [float(r[f]) for r in rows if r.get(f) is not None]
+        if vals:
+            avg[f] = round(sum(vals) / len(vals), 1)
+            best[f] = round(max(vals), 1)
+    return {"count": len(rows), "average": avg, "best": best}
+
+
 def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optional[Dict[str, Any]]:
     """Returns project details, latest report, parsed JSON, and historical achievements."""
     init_db(db_path)
@@ -824,7 +862,8 @@ def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optio
 
     cur = conn.execute(
         """
-        SELECT p.*, r.id as report_id, r.commit_sha, r.final_score, r.letter_grade, r.archetype_name,
+        SELECT p.*, r.id as report_id, r.commit_sha, r.final_score, COALESCE(r.curved_score, r.final_score) AS curved_score,
+               COALESCE(r.general_category, 'other') AS general_category, r.letter_grade, r.archetype_name,
                r.archetype_category, r.primary_language, r.verdict_title, r.verdict_summary,
                r.total_loc, r.total_files, r.malware_risk_score, r.operational_safety_score, r.code_health_score,
                r.user_journey_score, r.functionality_score, r.resonance_score, r.creativity_score,
@@ -851,13 +890,14 @@ def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optio
             data["full_report"] = None
     from .peer_grades import category_standing
     data["standing"] = category_standing(conn, data["id"])
+    data["factor_stats"] = factor_stats(conn)
 
     # Fetch badges
     b_cur = conn.execute(
         """
         SELECT category, rank, badge_title, peak_score, achieved_at, superseded_at
         FROM ranking_history
-        WHERE project_id = ?
+        WHERE project_id = ? AND category IN """ + _SHOWN_SQL + """
         ORDER BY superseded_at IS NULL DESC, rank ASC, achieved_at DESC
         """,
         (data["id"],),

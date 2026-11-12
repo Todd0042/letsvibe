@@ -1231,7 +1231,7 @@
       <div class="brand" onclick="navigateTo('leaderboard')">
         <img src="/static/website-icon.webp" alt="LetsVibe" class="brand-logo-img">
         <span class="brand-logo">LetsVibe</span>
-        <span class="brand-tag">Dual-Model AI</span>
+        <span class="brand-tag">Local AI</span>
       </div>
 
       <!-- Navigation Tabs -->
@@ -1282,7 +1282,7 @@
       <!-- 3D Podium Display (#1, #2, #3) -->
       <section class="podium-container">
         <h1 class="podium-title">🏆 Top Graded Repositories</h1>
-        <p class="podium-subtitle">Evaluated 100% locally with 7B Micro + 14B Macro LLMs &amp; Deterministic AST Metrics</p>
+        <p class="podium-subtitle">Graded 100% locally on what people experience: value, creativity and the user journey</p>
         <div class="podium-grid" id="podium-cards">
           <div style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">Loading podium rankings...</div>
         </div>
@@ -1301,12 +1301,10 @@
           <select id="sort-select" class="select-dropdown" onchange="fetchLeaderboard()">
             <option value="overall">⭐ Overall Vibe Score</option>
             <option value="resonance">🚀 Real-World Value</option>
-            <option value="functionality">⚙️ Functionality</option>
-            <option value="user_journey">🧭 User Journey</option>
-            <option value="ui_ux">✨ UI &amp; UX</option>
             <option value="creativity">🎨 Creativity</option>
-            <option value="code_health">🧠 Code Health</option>
-            <option value="operational_safety">🔒 Operational Safety</option>
+            <option value="user_journey">🧭 User Journey</option>
+            <option value="functionality">⚙️ Functionality</option>
+            <option value="ui_ux">✨ UI &amp; UX</option>
             <option value="date">🕒 Most Recently Graded</option>
           </select>
         </div>
@@ -1322,7 +1320,7 @@
               <th>Repository &amp; Owner</th>
               <th id="score-col-header">Score &amp; Grade</th>
               <th>Archetype</th>
-              <th>7-factor Balance</th>
+              <th>Factor Balance</th>
               <th>Merit Badges</th>
               <th style="text-align: right;">Action</th>
             </tr>
@@ -1406,12 +1404,12 @@
             <p id="project-peer-summary" style="color: #e0fbff; font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.25rem; border-left: 3px solid var(--accent-cyan); padding-left: 0.6rem;" hidden></p>
           </div>
           <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.75rem;">
-            <i class="fa-solid fa-scale-balanced" style="color: var(--accent-magenta);"></i> Dynamic Weight Rationale
+            <i class="fa-solid fa-scale-balanced" style="color: var(--accent-magenta);"></i> How the score is weighted
           </h2>
           <p id="project-weight-rationale" style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;"></p>
 
           <h3 style="font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">
-            <i class="fa-solid fa-microchip" style="color: var(--accent-green);"></i> Static AST Telemetry
+            <i class="fa-solid fa-circle-info" style="color: var(--accent-green);"></i> Project facts
           </h3>
           <div id="project-telemetry-pills">
             <!-- Telemetry pills rendered via JS -->
@@ -1419,20 +1417,20 @@
         </div>
       </div>
 
-      <!-- 7-factor Scorecard Table -->
+      <!-- Factor Scorecard Table -->
       <div class="report-card">
         <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem;">
-          <i class="fa-solid fa-table-list" style="color: var(--accent-gold);"></i> 7-factor Evaluation Scorecard
+          <i class="fa-solid fa-table-list" style="color: var(--accent-gold);"></i> Evaluation Scorecard
         </h2>
         <div data-scroll-x style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
           <table class="scorecard-table">
             <thead>
               <tr>
                 <th>Evaluation Factor</th>
-                <th>Dynamic Weight</th>
+                <th>Weight</th>
                 <th>Raw Score</th>
                 <th>Contribution</th>
-                <th>Consensus Observations</th>
+                <th>What we found</th>
               </tr>
             </thead>
             <tbody id="project-factors-tbody">
@@ -1459,6 +1457,14 @@
           <ul id="project-attention-features" style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.7; color: #e2e8f0;">
           </ul>
         </div>
+      </div>
+
+      <div id="project-maintainer-card" class="report-card" style="border-left: 4px solid var(--accent-cyan);" hidden>
+        <h3 style="color: #67e8f9; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem;">
+          <i class="fa-solid fa-screwdriver-wrench"></i> Maintainer notes <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">(only you can see these)</span>
+        </h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.6rem;">Code-health findings from an automatic scan, each with the file and line to check. They are notes for the developer and never count toward the score.</p>
+        <div id="project-maintainer-notes" style="font-size: 0.85rem; line-height: 1.6; color: #e2e8f0;"></div>
       </div>
 
       <div id="project-next-steps-card" class="report-card" style="border-left: 4px solid var(--accent-purple);" hidden>
@@ -1553,12 +1559,10 @@
       <div class="hof-tabs" id="hof-category-tabs">
         <button class="hof-category-btn active" onclick="setHofCategory('overall', this)">⭐ Overall</button>
         <button class="hof-category-btn" onclick="setHofCategory('resonance', this)">🚀 Real-World Value</button>
-        <button class="hof-category-btn" onclick="setHofCategory('functionality', this)">⚙️ Functionality</button>
         <button class="hof-category-btn" onclick="setHofCategory('user_journey', this)">🧭 User Journey</button>
-        <button class="hof-category-btn" onclick="setHofCategory('ui_ux', this)">✨ UI &amp; UX</button>
         <button class="hof-category-btn" onclick="setHofCategory('creativity', this)">🎨 Creativity</button>
-        <button class="hof-category-btn" onclick="setHofCategory('code_health', this)">🧠 Code Health</button>
-        <button class="hof-category-btn" onclick="setHofCategory('operational_safety', this)">🔒 Operational Safety</button>
+        <button class="hof-category-btn" onclick="setHofCategory('functionality', this)">⚙️ Functionality</button>
+        <button class="hof-category-btn" onclick="setHofCategory('ui_ux', this)">✨ UI &amp; UX</button>
       </div>
 
       <!-- Simplified Hall of Fame List -->
@@ -1864,9 +1868,7 @@
           <div style="margin-bottom: 1.5rem;">
             <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem;">Audit Mode</label>
             <select id="mode-input" class="select-dropdown" style="width: 100%;">
-              <option value="blend">✨ Dual-Model Blend (7B Micro + 14B Macro Consensus) — Recommended</option>
-              <option value="fast">⚡ Fast Mode (7B Micro-Analyst Only)</option>
-              <option value="deep">🔍 Deep Mode (14B Macro-Architect Only)</option>
+              <option value="blend">✨ Experience grading (rubric v8): value, creativity and user journey</option>
             </select>
           </div>
 
@@ -2036,12 +2038,8 @@
     let currentCreatorMode = 'peak';
     let currentRadarChart = null;
 
-    // Report radar: 0 at the centre, outer edge at the project's best factor (rounded up to 5), so the
-    // shape uses the whole chart. A dashed ring marks 62, the centre of the vibe-coded score bands.
-    const TYPICAL_SCORE = 62;
-    function radarPointColor(v) {
-      return v >= 75 ? '#39ff14' : v >= TYPICAL_SCORE ? '#00f0ff' : v >= 50 ? '#ffb703' : '#ff2a85';
-    }
+    // Report radar glow (the chart itself is built in buildRadarChart: each axis scaled to the highest score of all
+    // graded projects on that factor, dashed line = their average).
     const radarGlow = {
       id: 'radarGlow',
       beforeDatasetDraw(chart, args) {
@@ -2054,14 +2052,16 @@
         if (args.index === 0) chart.ctx.restore();
       },
     };
-    function buildRadarChart(canvas, labels, scores) {
-      const top = Math.max(...scores, 1);
-      const max = Math.min(100, Math.max(20, Math.ceil(top / 5) * 5));
-      const step = max / 4;  // four evenly spaced rings; each factor's score is shown in its label
-      const showTypical = TYPICAL_SCORE <= max;
+    function buildRadarChart(canvas, labels, scores, stats, factorKeys) {
+      // Each axis runs from 0 to the highest score any graded project has on that factor, so the edge means "as good
+      // as the best vibe-coded project at this". Dashed = the average of all projects on that factor.
+      const best = factorKeys.map((f, i) => Math.max(Number((stats && stats.best || {})[f] ?? 0), scores[i], 1));
+      const avg = factorKeys.map(f => (stats && stats.average || {})[f]);
+      const rel = (v, i) => Math.min(100, (Number(v) / best[i]) * 100);
+      const groupLabel = `all ${stats ? stats.count : 0} graded projects`;
       const datasets = [{
-        label: 'Score',
-        data: scores,
+        label: 'This project',
+        data: scores.map(rel),
         backgroundColor: (c) => {
           const area = c.chart.chartArea;
           if (!area) return 'rgba(0, 240, 255, 0.25)';
@@ -2074,19 +2074,23 @@
         },
         borderColor: '#00f0ff',
         borderWidth: 2.5,
-        pointBackgroundColor: scores.map(radarPointColor),
+        pointBackgroundColor: scores.map((v, i) => {
+          const a = avg[i];
+          if (a == null) return '#00f0ff';
+          return v >= best[i] - 0.05 ? '#39ff14' : v >= a ? '#00f0ff' : v >= a * 0.85 ? '#ffb703' : '#ff2a85';
+        }),
         pointBorderColor: '#0b0f19',
         pointBorderWidth: 2,
         pointRadius: 5,
         pointHoverRadius: 8,
         order: 1,
       }];
-      if (showTypical) {
+      if (avg.every(a => a != null)) {
         datasets.push({
-          label: `Typical vibe-coded project (${TYPICAL_SCORE})`,
-          data: labels.map(() => TYPICAL_SCORE),
+          label: `Average of ${groupLabel}`,
+          data: avg.map(rel),
           backgroundColor: 'transparent',
-          borderColor: 'rgba(255, 183, 3, 0.55)',
+          borderColor: 'rgba(255, 183, 3, 0.6)',
           borderDash: [5, 5],
           borderWidth: 1.5,
           pointRadius: 0,
@@ -2105,13 +2109,9 @@
           scales: {
             r: {
               min: 0,
-              max,
-              ticks: { stepSize: step, display: false },
-              grid: {
-                circular: false,
-                color: (c) => (c.index % 2 ? 'rgba(0, 240, 255, 0.10)' : 'rgba(255, 255, 255, 0.05)'),
-                lineWidth: 1,
-              },
+              max: 100,
+              ticks: { stepSize: 25, display: false },
+              grid: { circular: false, color: (c) => (c.index % 2 ? 'rgba(0, 240, 255, 0.10)' : 'rgba(255, 255, 255, 0.05)'), lineWidth: 1 },
               angleLines: { color: 'rgba(0, 240, 255, 0.10)' },
               pointLabels: {
                 color: '#e2e8f0',
@@ -2123,12 +2123,9 @@
           },
           plugins: {
             legend: {
-              display: showTypical,
+              display: datasets.length > 1,
               position: 'bottom',
-              labels: {
-                color: '#94a3b8', boxWidth: 18, boxHeight: 1, font: { size: 10 },
-                filter: (item) => item.datasetIndex === 1,
-              },
+              labels: { color: '#94a3b8', boxWidth: 18, boxHeight: 1, font: { size: 10 }, filter: (item) => item.datasetIndex === 1 },
             },
             tooltip: {
               backgroundColor: 'rgba(11, 15, 25, 0.95)',
@@ -2141,9 +2138,11 @@
               filter: (item) => item.datasetIndex === 0,
               callbacks: {
                 label: (item) => {
-                  const v = item.raw;
-                  const vs = v >= TYPICAL_SCORE ? `${(v - TYPICAL_SCORE).toFixed(1)} above typical` : `${(TYPICAL_SCORE - v).toFixed(1)} below typical`;
-                  return `${v.toFixed(1)} / 100 (${vs})`;
+                  const i = item.dataIndex;
+                  const a = avg[i];
+                  const lines = [`This project: ${scores[i].toFixed(1)}`, `Highest of ${groupLabel}: ${best[i].toFixed(1)}`];
+                  if (a != null) lines.push(`Average: ${a.toFixed(1)}`);
+                  return lines;
                 },
               },
             },
@@ -2251,7 +2250,7 @@
 
         const repoPills = (c.projects || []).map(p => {
           const pGradeClass = `grade-${(p.letter_grade || 'C').replace('+', '-plus')}`;
-          const pIcon = px(p.repo_icon_url || p.owner_avatar_url || `https://github.com/${c.owner}.png`);
+          const pIcon = (p.repo_icon_url ? px(p.repo_icon_url) : '/static/project-placeholder.svg');
           return `
             <div class="creator-repo-pill" onclick="navigateTo('project', '${p.full_slug}')" title="${p.full_slug} • ${p.letter_grade} (${p.final_score.toFixed(1)})">
               <img src="${pIcon}" style="width: 14px; height: 14px; border-radius: 3px; object-fit: contain;" onerror="this.src='/static/avatar-placeholder.svg'">
@@ -2338,9 +2337,9 @@
       creativity: 'Creativity', code_health: 'Code Health', operational_safety: 'Operational Safety',
       maintainability: 'Maintainability (v5)', architecture: 'Architecture (v5)',
     };
-    const RADAR_FACTORS = ['functionality', 'user_journey', 'ui_ux', 'resonance', 'creativity', 'code_health', 'operational_safety'];
-    const MINI_BARS = [['functionality', 'FNC'], ['user_journey', 'JRN'], ['ui_ux', 'UI'], ['resonance', 'VAL'],
-                       ['creativity', 'CRT'], ['code_health', 'COD'], ['operational_safety', 'SAF']];
+    // Rubric v8 factors, in order of weight. Code health is shared with each project's owner only.
+    const RADAR_FACTORS = ['resonance', 'creativity', 'user_journey', 'functionality', 'ui_ux'];
+    const MINI_BARS = [['resonance', 'VAL'], ['creativity', 'CRT'], ['user_journey', 'JRN'], ['functionality', 'FNC'], ['ui_ux', 'UI']];
     function standingText(item) {
       if (!item.category_rank) return '';
       const curve = item.grade_basis === 'rubric' ? '' : ' · <a href="/grading-curve" onclick="event.stopPropagation()">on a curve</a>';
@@ -2545,16 +2544,45 @@
       return FACTOR_LABELS[sort] && sort !== 'overall' ? sort : null;
     }
 
+    // The number shown with the letter is on the same bell curve as the letter (storage/peer_grades.py)
+    // Owner-only code-health notes (never graded). The server checks again that the viewer is the owner or the admin.
+    async function loadMaintainerNotes(p) {
+      const card = document.getElementById('project-maintainer-card');
+      card.hidden = true;
+      const mine = currentUser && currentUser.username && p.owner && currentUser.username.toLowerCase() === String(p.owner).toLowerCase();
+      if (!currentUser || !(mine || currentUser.is_admin)) return;
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo_name)}/maintainer-notes`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.available || !data.notes.length) return;
+        const groups = {};
+        data.notes.forEach(n => (groups[n.kind] = groups[n.kind] || []).push(n));
+        document.getElementById('project-maintainer-notes').innerHTML = Object.entries(groups).map(([kind, items]) => `
+          <details style="margin-bottom: 0.4rem;"><summary><strong>${escapeHtml(kind)}</strong> (${items.length})</summary>
+            <ul style="padding-left: 1.25rem; margin-top: 0.3rem;">${items.slice(0, 40).map(n =>
+              `<li><code>${escapeHtml(n.file)}${n.line ? ':' + n.line : ''}</code> ${escapeHtml(n.detail)}</li>`).join('')}</ul>
+          </details>`).join('');
+        card.hidden = false;
+      } catch (e) {
+        card.hidden = true;
+      }
+    }
+
+    function shownScore(item) {
+      return Number(item.curved_score ?? item.final_score ?? 0);
+    }
+
     function scorePill(item, compact) {
       const style = compact ? ' style="font-size: 0.95rem; padding: 0.25rem 0.6rem;"' : '';
       const gradeClass = `grade-${item.letter_grade.replace('+', '-plus')}`;
       const factor = sortedFactor();
       if (!factor) {
-        return `<span class="podium-score-pill"${style}>${item.final_score.toFixed(1)} <span class="grade-badge ${gradeClass}">${item.letter_grade}</span></span>`;
+        return `<span class="podium-score-pill"${style} title="On the grading curve (raw model score ${item.final_score.toFixed(1)})">${shownScore(item).toFixed(1)} <span class="grade-badge ${gradeClass}">${item.letter_grade}</span></span>`;
       }
       const value = Number(item[factor + '_score'] || 0).toFixed(1);
       return `<span class="podium-score-pill"${style} title="${escapeHtml(FACTOR_LABELS[factor])} score">${value}</span>
-        <div class="standing-note">${escapeHtml(FACTOR_LABELS[factor])} &middot; overall ${item.final_score.toFixed(1)} <span class="grade-badge ${gradeClass}" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">${item.letter_grade}</span></div>`;
+        <div class="standing-note">${escapeHtml(FACTOR_LABELS[factor])} &middot; overall ${shownScore(item).toFixed(1)} <span class="grade-badge ${gradeClass}" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">${item.letter_grade}</span></div>`;
     }
 
     function renderPodium(top3) {
@@ -2572,14 +2600,14 @@
       container.innerHTML = ordered.map(entry => {
         const item = entry.item;
         const rank = entry.rank;
-        const appIcon = px(item.repo_icon_url || item.owner_avatar_url || `https://github.com/${item.owner}.png`);
+        const appIcon = (item.repo_icon_url ? px(item.repo_icon_url) : '/static/project-placeholder.svg');
         const creatorAvatar = px(item.owner_avatar_url || `https://github.com/${item.owner}.png`);
         const gradeClass = `grade-${item.letter_grade.replace('+', '-plus')}`;
 
         return `
           <div class="podium-card rank-${rank}">
             <div class="podium-trophy">${rank === 1 ? '👑' : (rank === 2 ? '🥈' : '🥉')}</div>
-            <img src="${appIcon}" class="podium-avatar" alt="${item.repo_name}" onerror="this.src='${creatorAvatar}'">
+            <img src="${appIcon}" class="podium-avatar" alt="${item.repo_name}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
             <div class="podium-repo">${item.repo_name}</div>
             <div class="podium-owner">
               <img src="${creatorAvatar}" class="creator-mini-avatar" alt="${item.owner}" onerror="this.src='/static/avatar-placeholder.svg'">@${item.owner}
@@ -2610,7 +2638,8 @@
       }
 
       tbody.innerHTML = items.map(item => {
-        const appIcon = px(item.repo_icon_url || item.owner_avatar_url || `https://github.com/${item.owner}.png`);
+        // The big image is the project's own icon; the owner's avatar appears only once, beside their name.
+        const appIcon = item.repo_icon_url ? px(item.repo_icon_url) : '/static/project-placeholder.svg';
         const creatorAvatar = px(item.owner_avatar_url || `https://github.com/${item.owner}.png`);
         const gradeClass = `grade-${item.letter_grade.replace('+', '-plus')}`;
         const topClass = item.rank <= 3 ? `top-${item.rank}` : '';
@@ -2620,9 +2649,9 @@
             <td class="rank-cell ${topClass}">#${item.rank}</td>
             <td>
               <div class="repo-cell">
-                <img src="${appIcon}" class="repo-avatar" alt="${item.repo_name}" onerror="this.src='${creatorAvatar}'">
+                <img src="${appIcon}" class="repo-avatar" alt="${escapeHtml(item.repo_name)}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
                 <div class="repo-info">
-                  <span class="repo-title" onclick="navigateTo('project', '${item.full_slug}')">${item.full_slug}</span>
+                  <span class="repo-title" title="${escapeHtml(item.full_slug)}" onclick="navigateTo('project', '${item.full_slug}')">${escapeHtml(item.repo_name)}</span>
                   <span class="repo-meta">
                     <img src="${creatorAvatar}" class="creator-micro-avatar" alt="${item.owner}" onerror="this.src='/static/avatar-placeholder.svg'">@${item.owner} • ${item.primary_language || 'Code'} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC
                   </span>
@@ -2678,7 +2707,7 @@
         const rep = p.full_report || {};
         currentProjectSlug = p.full_slug;
 
-        const appIcon = px(p.repo_icon_url || p.owner_avatar_url || `https://github.com/${p.owner}.png`);
+        const appIcon = (p.repo_icon_url ? px(p.repo_icon_url) : '/static/project-placeholder.svg');
         const creatorAvatar = px(p.owner_avatar_url || `https://github.com/${p.owner}.png`);
 
         document.getElementById('project-full-slug').textContent = p.full_slug;
@@ -2716,7 +2745,8 @@
 
         // Grade & Score
         document.getElementById('project-grade-badge').textContent = p.letter_grade;
-        document.getElementById('project-final-score').textContent = `${p.final_score.toFixed(1)} / 100`;
+        document.getElementById('project-final-score').textContent = `${shownScore(p).toFixed(1)} / 100`;
+        document.getElementById('project-final-score').title = `On the grading curve. Raw model score: ${p.final_score.toFixed(1)}`;
 
 
         const deleteBtn = document.getElementById('btn-delete-project-admin');
@@ -2786,60 +2816,75 @@
           ? `Graded with rubric ${escapeHtml(rep.rubric_version)}. <a href="/changelog">What changed?</a> Scores can vary by a few points between runs. <a href="/how-it-works">How grading works</a>`
           : `Graded before rubric versioning was introduced. <a href="/how-it-works">How grading works</a>`;
 
-        // Reviewer verdict (macro critique summary)
-        const verdictSummary = (rep.verdict_summary || '').trim();
-        document.getElementById('project-verdict-block').hidden = !verdictSummary || verdictSummary === 'Evaluation complete.';
+        // Verdict and overall summary. Text that already appears in a factor's row is never repeated here.
+        const factorTexts = Object.values(rep.factor_evaluations || {}).map(fe => (fe.reasoning || '').trim()).filter(Boolean);
+        let verdictSummary = (rep.verdict_summary || '').trim();
+        if (verdictSummary === 'Evaluation complete.' || factorTexts.includes(verdictSummary)) verdictSummary = '';
+        let peerSummary = (rep.peer_summary || '').trim();
+        if (peerSummary === verdictSummary || factorTexts.includes(peerSummary)) peerSummary = '';
+        document.getElementById('project-verdict-block').hidden = !verdictSummary && !rep.verdict_title;
         document.getElementById('project-verdict-title').textContent = rep.verdict_title || 'Reviewer Verdict';
-        document.getElementById('project-verdict-summary').textContent = verdictSummary;
+        const summaryEl = document.getElementById('project-verdict-summary');
+        summaryEl.textContent = verdictSummary;
+        summaryEl.hidden = !verdictSummary;
         const peerEl = document.getElementById('project-peer-summary');
-        peerEl.textContent = rep.peer_summary || '';
-        peerEl.hidden = !rep.peer_summary;
+        peerEl.textContent = peerSummary;
+        peerEl.hidden = !peerSummary;
         const st = p.standing;
         document.getElementById('project-standing').innerHTML = st
-          ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>${curveNote(st.basis, rep.curve)} <a href="/grading-curve">How the curve works</a></span>`
+          ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>${curveNote(st.basis, rep.curve)} Raw score: ${p.final_score.toFixed(1)}. <a href="/grading-curve">How the curve works</a></span>`
           : '';
+        loadMaintainerNotes(p);
         const nextSteps = rep.pro_next_steps || [];
         document.getElementById('project-next-steps-card').hidden = nextSteps.length === 0;
         document.getElementById('project-next-steps').innerHTML = nextSteps.map(x => `<li>${escapeHtml(x)}</li>`).join('');
 
-        // Dynamic Weight Rationale & Telemetry
+        // How the score is weighted (only the graded factors), and neutral project facts (nothing here is graded)
         const weights = rep.weights || {};
-        document.getElementById('project-weight-rationale').textContent = weights.justification || 'Dynamic factor weights assigned based on project archetype domain priorities.';
+        const weighted = RADAR_FACTORS.filter(f => Number(weights[f]) > 0).map(f => `${FACTOR_LABELS[f]} ${Number(weights[f]).toFixed(1)}%`);
+        document.getElementById('project-weight-rationale').textContent = weighted.length
+          ? `${weighted.join(', ')}. The weights are the same for every project.`
+          : (weights.justification || '');
         const dm = rep.deterministic_metrics || {};
+        // Programming languages by file extension (data, docs and styles are left out)
+        const LANG_NAMES = {py: 'Python', js: 'JavaScript', mjs: 'JavaScript', jsx: 'JavaScript', ts: 'TypeScript', tsx: 'TypeScript',
+          kt: 'Kotlin', kts: 'Kotlin', java: 'Java', cs: 'C#', cpp: 'C++', cc: 'C++', c: 'C', h: 'C/C++', hpp: 'C++', rs: 'Rust',
+          go: 'Go', swift: 'Swift', dart: 'Dart', gd: 'GDScript', lua: 'Lua', rb: 'Ruby', php: 'PHP', ino: 'Arduino', sh: 'Shell',
+          vue: 'Vue', svelte: 'Svelte', html: 'HTML'};
+        const langs = [...new Set(Object.entries(dm.languages || {}).sort((a, b) => b[1] - a[1])
+          .map(([ext]) => LANG_NAMES[String(ext).replace(/^\./, '').toLowerCase()]).filter(Boolean))].slice(0, 3);
+        const plats = ((rep.archetype || {}).platforms || p.platforms || []).map(x => platformLabel(x));
         document.getElementById('project-telemetry-pills').innerHTML = `
-          <span class="stat-pill">LOC: <strong>${(dm.total_loc || p.total_loc || 0).toLocaleString()}</strong></span>
+          <span class="stat-pill">Lines of code: <strong>${(dm.total_loc || p.total_loc || 0).toLocaleString()}</strong></span>
           <span class="stat-pill">Files: <strong>${dm.total_files || p.total_files || 0}</strong></span>
-          <span class="stat-pill">Avg Complexity: <strong>${dm.avg_cyclomatic_complexity || 'N/A'}</strong></span>
-          <span class="stat-pill">Max CC: <strong>${dm.max_cyclomatic_complexity || 'N/A'}</strong></span>
-          <span class="stat-pill">Secrets Found: <strong>${dm.detected_secrets_count || 0}</strong></span>
-          <span class="stat-pill">Tests LOC Ratio: <strong>${dm.test_to_code_ratio || 0}</strong></span>
-          <span class="stat-pill">CI/CD: <strong>${dm.has_ci_cd ? 'Yes' : 'No'}</strong></span>
-          <span class="stat-pill">Native Packaging: <strong>${dm.has_desktop_packaging ? 'Yes' : 'No'}</strong></span>
-          <span class="stat-pill">Docker: <strong>${dm.has_docker ? 'Yes' : 'No'}</strong></span>
-          <span class="stat-pill">License: <strong>${dm.has_license ? 'Yes' : 'No'}</strong></span>
+          ${langs.length ? `<span class="stat-pill">Languages: <strong>${escapeHtml(langs.join(', '))}</strong></span>` : ''}
+          ${plats.length ? `<span class="stat-pill">Runs on: <strong>${escapeHtml(plats.join(', '))}</strong></span>` : ''}
+          <span class="stat-pill">Installer or package: <strong>${dm.has_desktop_packaging ? 'Yes' : 'No'}</strong></span>
+          <span class="stat-pill">Licence: <strong>${dm.has_license ? 'Yes' : 'No'}</strong></span>
+          <span class="stat-pill" title="Shown for information only; none of these facts is graded">Not graded</span>
         `;
 
-        // 7-factor Core Scorecard Table (exclude 0-weight qualifiers)
+        // Scorecard: the graded factors only (older reports may hold more)
         const factors = rep.factor_evaluations || {};
         const tbody = document.getElementById('project-factors-tbody');
         tbody.innerHTML = Object.entries(factors)
-          .filter(([fname, fe]) => fname !== 'malware_risk')
+          .filter(([fname, fe]) => RADAR_FACTORS.includes(fname))
           .map(([fname, fe]) => `
           <tr>
             <td><strong>${escapeHtml((FACTOR_LABELS[fname] || fname.replace(/_/g, ' ')).toUpperCase())}</strong></td>
             <td>${Number(fe.weight).toFixed(1)}%</td>
             <td><strong style="color: var(--accent-cyan);">${fe.score}/100</strong></td>
             <td style="color: var(--accent-green); font-weight: 700;">+${Number(fe.weighted_score).toFixed(2)}</td>
-            <td style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.5;">${fe.reasoning || ''}</td>
+            <td style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.5;">${escapeHtml(fe.reasoning || '')}</td>
           </tr>
         `).join('');
 
         // Solid Features vs Attention
         const solids = (rep.top_solid_features && rep.top_solid_features.length > 0) ? rep.top_solid_features : (rep.top_strengths || []);
-        document.getElementById('project-solid-features').innerHTML = (solids.slice(0, 5).map(s => `<li>${s}</li>`).join('')) || '<li>Strong architectural fundamentals</li>';
+        document.getElementById('project-solid-features').innerHTML = (solids.slice(0, 5).map(s => `<li>${escapeHtml(s)}</li>`).join('')) || '<li>None listed.</li>';
 
         const attentions = (rep.top_features_needing_work && rep.top_features_needing_work.length > 0) ? rep.top_features_needing_work : (rep.priority_improvements || []);
-        document.getElementById('project-attention-features').innerHTML = (attentions.slice(0, 5).map(a => `<li>${a}</li>`).join('')) || '<li>No critical defects detected</li>';
+        document.getElementById('project-attention-features').innerHTML = (attentions.slice(0, 5).map(a => `<li>${escapeHtml(a)}</li>`).join('')) || '<li>None of the checked findings point to a problem.</li>';
 
         // Render Themed Radar Chart
         setTimeout(() => {
@@ -2847,7 +2892,7 @@
           if (ctx) {
             if (currentRadarChart) currentRadarChart.destroy();
             const scores = RADAR_FACTORS.map(f => Number(p[f + '_score'] ?? ((rep.factor_evaluations || {})[f] || {}).score ?? 0));
-            currentRadarChart = buildRadarChart(ctx, RADAR_FACTORS.map(f => FACTOR_LABELS[f]), scores);
+            currentRadarChart = buildRadarChart(ctx, RADAR_FACTORS.map(f => FACTOR_LABELS[f]), scores, p.factor_stats, RADAR_FACTORS);
           }
         }, 60);
 
@@ -2915,7 +2960,7 @@
       deduped.sort((a, b) => a.rank - b.rank);
 
       container.innerHTML = deduped.map(rec => {
-        const appIcon = px(rec.repo_icon_url || rec.owner_avatar_url || `https://github.com/${rec.owner}.png`);
+        const appIcon = (rec.repo_icon_url ? px(rec.repo_icon_url) : '/static/project-placeholder.svg');
         const creatorAvatar = px(rec.owner_avatar_url || `https://github.com/${rec.owner}.png`);
         const rankIcon = rec.rank === 1 ? '🥇 #1' : (rec.rank === 2 ? '🥈 #2' : '🥉 #3');
         const isReigning = !rec.superseded_at;
@@ -3486,7 +3531,7 @@
             const displayPct = exactPct || 30;
             bar.style.width = displayPct + '%';
             badge.textContent = `Auditing (${displayPct}%)`;
-            stepCounter.textContent = `Phase 5: Live Dual-Model GPU Evaluation (${displayPct}%)`;
+            stepCounter.textContent = `Phase 5: Experience grading on the GPU (${displayPct}%)`;
           }
           actionArea.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeTrackerModal()">Run in Background</button>`;
         } else if (t.status === 'rejected_non_vibe') {
@@ -3525,7 +3570,7 @@
 
           document.getElementById('tracker-live-message').innerHTML = `
             <div style="color: var(--accent-green); font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">🎉 Repository Evaluation Completed!</div>
-            <div style="color: var(--text-muted); font-size: 0.85rem;">Deterministic metrics and dual-model scorecards have been compiled into rankings.</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">The checklists have been scored and the rankings updated.</div>
           `;
 
           actionArea.innerHTML = `

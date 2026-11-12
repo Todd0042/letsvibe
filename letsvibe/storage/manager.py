@@ -45,16 +45,17 @@ class ReportStorageManager:
             identity.repo_name = report.repo_name
             identity.full_slug = f"local/{report.repo_name}"
 
-        # Intelligent Application Launcher Icon Discovery
-        from ..core.icons import discover_launcher_icon_relpath, get_github_raw_icon_url
+        # Project icon: GitHub's public link for public repos; a saved copy (in the report folder) for private ones
+        from ..core.icons import resolve_icon_url
         if repo_icon_url:
             identity.repo_icon_url = repo_icon_url
-        if not identity.repo_icon_url:
+        if not identity.repo_icon_url and identity.provider == "github":
             check_dir = source_path or (Path(target) if Path(target).is_dir() else None)
-            if check_dir and check_dir.exists():
-                rel_icon = discover_launcher_icon_relpath(check_dir, file_list)
-                if rel_icon and identity.provider == "github":
-                    identity.repo_icon_url = get_github_raw_icon_url(identity.owner, identity.repo_name, rel_icon)
+            if check_dir and Path(check_dir).exists():
+                try:
+                    identity.repo_icon_url = resolve_icon_url(identity.owner, identity.repo_name, check_dir, identity.get_report_dir())
+                except Exception:
+                    identity.repo_icon_url = None
 
         report_dir = identity.get_report_dir()
 

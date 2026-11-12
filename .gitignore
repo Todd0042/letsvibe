@@ -30,9 +30,10 @@ share/python-wheels/
 *.sqlite
 *.sqlite3
 *.log
-# Only the published curve calibration may live in the package data folder (never a database or backup)
+# Only published reference files may live in the package data folder (never a database or backup)
 letsvibe/data/*
 !letsvibe/data/curve_calibration.json
+!letsvibe/data/archetypes.json
 reports/
 temp_repos/
 *.html
@@ -79,3 +80,7 @@ legal-plan.md
 analyzing-model-direction.md
 model-bakeoff.md
 bakeoff-v2.md
+bakesale-summary.md
+factor-scoring.md
+deep-dive.md
+writer-test/

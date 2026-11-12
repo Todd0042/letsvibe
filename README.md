@@ -13,7 +13,7 @@
 [![Rubric](https://img.shields.io/badge/Rubric-v7%20(bell%20curve)-blueviolet.svg)](https://letsvibe.todd0042.dev/changelog)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-39ff14.svg)]()
 [![AI: 100% local](https://img.shields.io/badge/AI-100%25%20Local%20(Ollama)-black.svg)](https://ollama.com)
-[![Models](https://img.shields.io/badge/Models-Qwen2.5--Coder%207B%20%2B%2014B-teal.svg)]()
+[![Models](https://img.shields.io/badge/Models-Qwen2.5--Coder%2014B%20%2B%20mxbai--embed-teal.svg)]()
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Creator-F16061?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/todd0042)
 
 > 🤖 *LetsVibe is itself vibe-coded: directed by [Todd0042](https://github.com/Todd0042), written by Antigravity (Gemini) and then Claude Code. [Who did what](#-3-how-letsvibe-itself-was-made).*
@@ -34,7 +34,7 @@
   * [🎨 What Is LetsVibe?](#-what-is-letsvibe)
   * [🚀 How It Works in 3 Steps](#-how-it-works-in-3-steps)
   * [📸 Visual Tour](#-visual-tour)
-  * [🧭 The 7 Factors](#-the-7-factors)
+  * [🧭 The 5 Factors](#-the-5-factors)
   * [🔔 Graded on a Published Bell Curve](#-graded-on-a-published-bell-curve)
   * [🔒 Privacy Promises](#-privacy-promises)
   * [🛠️ Run It Yourself](#️-run-it-yourself)
@@ -43,7 +43,7 @@
   * [2. Ingestion & the Name-Based File Filter ([core/ingest.py](letsvibe/core/ingest.py), [evaluator/triage.py](letsvibe/evaluator/triage.py))](#2-ingestion--the-name-based-file-filter)
   * [3. Plain Measurements & User-Journey Evidence ([analyzers/](letsvibe/analyzers/))](#3-plain-measurements--user-journey-evidence)
   * [4. Classification & Category Weights ([evaluator/classifier.py](letsvibe/evaluator/classifier.py), [evaluator/weights.py](letsvibe/evaluator/weights.py))](#4-classification--category-weights)
-  * [5. Two-Model Review & the Evidence Checklist ([evaluator/consensus.py](letsvibe/evaluator/consensus.py))](#5-two-model-review--the-evidence-checklist)
+  * [5. Experience Grading: Dossier, Checklists & Points ([evaluator/experience/](letsvibe/evaluator/experience/))](#5-experience-grading-dossier-checklists--points)
   * [6. Scores, Letter Grades & the Bell Curve ([storage/peer_grades.py](letsvibe/storage/peer_grades.py))](#6-scores-letter-grades--the-bell-curve)
   * [7. The Website: Queue, Accounts, Privacy & Admin ([web/](letsvibe/web/), [storage/](letsvibe/storage/))](#7-the-website-queue-accounts-privacy--admin)
   * [8. CLI & Configuration](#8-cli--configuration)
@@ -61,7 +61,7 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 **LetsVibe** grades vibe-coded projects as what they are:
 
 1. **🏆 A public leaderboard** of graded GitHub projects, with a podium, filters by category and platform, factor-by-factor sorting and a Hall of Fame.
-2. **📋 A detailed report for every project**: seven factor scores, what works, what needs attention, and separately, *what a professional team would do next* — useful, never insulting.
+2. **📋 A detailed report for every project**: five factor scores, what works, what needs work (only problems the checks actually found), and private code-health notes that only the project's owner can see.
 3. **🔍 A fully disclosed method**: how grading works, every rubric change, and every number behind the grading curve are published on the site.
 
 ---
@@ -69,7 +69,7 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 ## 🚀 How It Works in 3 Steps
 
 1. **Sign in & submit**: Sign in with GitHub (public username, ID and avatar only — never your email) and submit a public repository **you own**. Nobody, including the site operator, can submit someone else's work.
-2. **Local AI review**: A temporary copy of the project is measured with plain code analysis, then reviewed by two open AI models on LetsVibe's own graphics card — a 7B model reads the code chunk by chunk, a 14B model reviews the project as a whole and answers 23 concrete yes/no questions. The copy is deleted afterwards. Your code never goes to an AI company.
+2. **Graded on what people experience**: A program writes an App Dossier of what people see and do in the project (screens, on-screen text, setup, launch, saving, devices). An open 14B model on LetsVibe's own graphics card answers fixed checklists about it, one topic at a time, quoting the dossier for every answer, and each answer is worth fixed points. No AI reads the code and no AI picks a number. The copy is deleted afterwards. Your code never goes to an AI company.
 3. **Graded on a curve**: Your project gets a raw score and a letter grade from a published bell curve, plus its rank among similar projects. Delete it — or your whole account — yourself, at any time, from the live site and every backup.
 
 ---
@@ -77,10 +77,10 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 ## 📸 Visual Tour
 
 ### 🏆 The Leaderboard
-A podium for the top three, then every graded project with its score, letter grade, rank in its category, platforms, a 7-factor balance strip and merit badges. Filter by grade, category and system, or sort by any single factor:
+A podium for the top three, then every graded project with its score, letter grade, rank in its category, platforms, a factor balance strip and merit badges. Filter by grade, category and system, or sort by any single factor:
 
 <p align="center">
-  <img src="screenshots/leaderboard.png" alt="Leaderboard with filters, grades and 7-factor balance" width="100%">
+  <img src="screenshots/leaderboard.png" alt="Leaderboard with filters, grades and factor balance" width="100%">
 </p>
 
 ### 📋 A Project Report
@@ -103,21 +103,19 @@ The radar is scaled to the project (0 at the centre, its best factor at the edge
 
 ---
 
-## 🧭 The 7 Factors
+## 🧭 The 5 Factors
 
-What users experience carries most of the weight; engineering habits are reported as next steps.
+Graded on what people experience, never on how the code is written. "Good enough" is the standard.
 
-| Factor | What it asks | Default weight |
+| Factor | What it asks | Weight |
 | :--- | :--- | :---: |
-| **Functionality** | Does it do what the README promises, with features wired together and bad input handled? | 20% |
-| **User Journey** | From install and first-run setup, through finding your way (and how deep settings are buried), to finishing the main task and being told it worked. | 16% |
-| **UI / UX** | Clarity, layout and feedback, judged for the target device (touch, keyboard, buttons, glanceable display, terminal). | 14% |
-| **Real-World Value** | A genuine problem solved or real enjoyment for an identifiable audience. | 20% |
-| **Creativity** | Custom mechanics, algorithms or inventive ideas beyond template code. | 11% |
-| **Code Health** | Readable, organized code, not dominated by giant tangled functions. | 12% |
-| **Operational Safety** | Doesn't hang, lose data or silently swallow errors; validates outside input. | 7% |
+| **Real-World Value** | More than a single short prompt would make? A common idea adapted for a niche, a real problem free tools overcomplicate, or a loop that keeps people coming back? | 25% |
+| **Creativity** | On-screen text with personality, an unusual way of using it, a richly themed world, features that combine into one experience. | 22% |
+| **User Journey** | From install to close: how it launches, whether you land on the main thing, how much setup is needed before first use, whether your data is kept, no ads, paywalls or forced sign-in. | 20% |
+| **Functionality** | Can the main task be done end to end, are the features wired together, does it say when something worked or failed? Proven problems (back-end features no screen calls, config files that can't be read) count against it, per 1,000 lines of code. | 18% |
+| **UI / UX** | Clear or cluttered, one consistent look or a patchwork, feedback while people wait, and a fit for its device (phone, TV, desktop, terminal). | 15% |
 
-Weights adapt to the project's category within published ranges (a game weighs creativity more than a CLI tool does). **Size is never a quality signal**: story apps and content-heavy games are not marked down for their length.
+**Code health** is shared with each project's owner only, as maintainer notes, and never counts toward the score. **Safety is not graded**: LetsVibe is not a security tool. **Size is never a quality signal**, and anything a scan could not find is never counted as missing.
 
 ---
 
@@ -192,11 +190,12 @@ flowchart TB
     Vibe --> Ingest["Temporary clone & packing<br/>(core/ingest.py)"]
     Ingest --> Measure["Plain measurements + user-journey evidence<br/>(analyzers/)"]
     Measure --> Classify["Category, platforms, device<br/>(evaluator/classifier.py)"]
-    Classify --> Filter["Name-based file filter, no AI<br/>(evaluator/triage.py)"]
-    Filter --> Micro["7B review, chunk by chunk<br/>(evaluator/consensus.py)"]
-    Micro --> Macro["14B whole-project review<br/>+ 23-question checklist"]
-    Macro --> Score["Weighted score + measurement adjustments<br/>(evaluator/consensus.py, weights.py)"]
-    Score --> Curve["Letter grade on the bell curve<br/>(storage/peer_grades.py)"]
+    Classify --> Dossier["App Dossier + proven-problem scan, no AI<br/>(evaluator/experience/dossier.py, analyzers/code_scan.py)"]
+    Dossier --> Cliche["Closest common app type<br/>(evaluator/experience/cliche.py)"]
+    Cliche --> Rubric["14B checklists, one topic at a time,<br/>every answer quoted (evaluator/experience/rubric.py)"]
+    Rubric --> Score["Fixed points per answer, fixed weights<br/>(evaluator/experience/scoring.py)"]
+    Score --> Describe["14B rewrites its checked answers<br/>(evaluator/experience/describe.py)"]
+    Describe --> Curve["Letter grade on the bell curve<br/>(storage/peer_grades.py)"]
     Curve --> Board["Leaderboard & report<br/>(storage/db.py, web/templates/)"]
     Calib["scripts/calibrate_curve.py<br/>reference projects x3 runs"] --> Curve
 ```
@@ -216,7 +215,7 @@ flowchart TB
   * docs, licences, build/config files and tests are **not sent to the models** (they reach them as measurements, the README and the file tree);
   * story, dialogue, level and other content files are **sampled** (the largest few, first part only), so content-heavy projects are judged on what they contain, not their length;
   * everything else — program logic, screens, setup, input/output — is read in full.
-* **Chunks of ~5,200 tokens**, each listing only its own files plus the project's top-level folders (instead of repeating the whole tree), which cut model reading by roughly a fifth.
+* **No model reads the code** (rubric v8): the App Dossier and the proven-problem scan read it with plain Python and pass on only what people experience and what a program can prove.
 
 ---
 
@@ -226,9 +225,9 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 
 | Measurement | Source | Used for |
 | :--- | :--- | :--- |
-| Cyclomatic complexity (average, max, worst functions) | [analyzers/complexity.py](letsvibe/analyzers/complexity.py) (Lizard) | Code-health adjustments |
-| Possible hard-coded secrets (**type and count only**) | [analyzers/security.py](letsvibe/analyzers/security.py) | Safety adjustments; locations are never stored |
-| Tests, CI, packaging, licence, README | [analyzers/functionality.py](letsvibe/analyzers/functionality.py) | Evidence for reviewers and code-health credit |
+| Proven problems and code-health findings | [analyzers/code_scan.py](letsvibe/analyzers/code_scan.py) | Functionality (endpoints nothing calls, unreadable configs, unfinished features); everything else becomes the owner's maintainer notes |
+| Cyclomatic complexity (average, max, worst functions) | [analyzers/complexity.py](letsvibe/analyzers/complexity.py) (Lizard) | Not graded; neutral project facts |
+| Packaging, licence, README | [analyzers/functionality.py](letsvibe/analyzers/functionality.py) | Neutral project facts shown on the report |
 | Platforms, hardware & device profile | [core/platforms.py](letsvibe/core/platforms.py) | Device-relative grading |
 | User-journey evidence | [analyzers/journey_signals.py](letsvibe/analyzers/journey_signals.py) | Installers & launch scripts, README quick start, setup wizards (including in-page wizards), permission requests, screens/commands, settings depth, confirmations, error and empty states |
 
@@ -237,22 +236,24 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 ## 4. Classification & Category Weights
 
 * **[evaluator/classifier.py](letsvibe/evaluator/classifier.py)** reads the README, file layout and build files to pick a general category (game, application, web app, tool, embedded, …) and target platforms.
-* **[evaluator/weights.py](letsvibe/evaluator/weights.py)** holds a published weight-range row per category group; the model proposes weights and they are clamped into the row's ranges, so no category can quietly ignore a factor.
+* **Fixed weights** ([evaluator/experience/scoring.py](letsvibe/evaluator/experience/scoring.py)): the same for every project (value 25, creativity 22, journey 20, functionality 18, UI/UX 15). The category is used for rankings, filters and the bell curve.
 
 ---
 
-## 5. Two-Model Review & the Evidence Checklist
+## 5. Experience Grading: Dossier, Checklists & Points
 
-* **Pass 1 — 7B chunk review**: `qwen2.5-coder:7b` reviews every chunk, listing up to two strengths and two weaknesses per factor before scoring. For user journey, UI, operational safety and real-world value, a chunk only counts if it contains relevant code — except that **operational safety always counts** for code with network calls, subprocesses, threads, file I/O, endless loops or swallowed errors.
-* **Pass 2 — 14B whole-project review**: `qwen2.5-coder:14b` reviews the project as a whole (README, full file tree, measurements, user-journey evidence, a code sample and the chunk findings) and writes the verdict, the peer summary and "what a pro team would do next".
-* **Evidence checklist ([evaluator/checklist.py](letsvibe/evaluator/checklist.py))**: 23 yes/no questions (for example *"Can common settings be reached in one or two steps, rather than menus inside menus?"*), blended 50/50 with the model scores. Questions that measurements already answer, or that AI-written code nearly always passes, are not asked.
-* **Shared reference class ([evaluator/prompts.py](letsvibe/evaluator/prompts.py))**: every prompt defines vibe-coded software, the score bands (62 = a typical working vibe-coded project) and the rule that size is never a quality signal.
+* **App Dossier ([experience/dossier.py](letsvibe/evaluator/experience/dossier.py))**: plain Python, about 3,000 tokens: what the project says it is (README and window titles, quoted as the owner's words), libraries, data and endpoints, screens, shared multi-device use (views other devices open at once, live sync, QR joining), the program's own features, launch and packaging, setup burden (input fields, technical wording, setup forced before first use), saving, screen and feedback facts, proven problems, hostile patterns and the on-screen text.
+* **Common app types ([experience/cliche.py](letsvibe/evaluator/experience/cliche.py))**: `mxbai-embed-large` compares the project with [data/archetypes.json](letsvibe/data/archetypes.json); the closest match is given to the checklist as a plain fact.
+* **Checklists ([experience/rubric.py](letsvibe/evaluator/experience/rubric.py))**: `qwen2.5-coder:14b` answers five separate checklists (value, creativity, journey, functionality, UI/UX) with fixed choices and 1-3 exact quotes from the dossier; a program checks every quote. When the dossier has no evidence either way, the answer is "not shown", which earns middle points.
+* **Points ([experience/scoring.py](letsvibe/evaluator/experience/scoring.py))**: every answer is worth fixed points (published on the How it works page); a factor scores the share of its points earned. The model never picks a number.
+* **Descriptions ([experience/describe.py](letsvibe/evaluator/experience/describe.py))**: the 14B rewrites its own checked answers in plain English; sentences that contradict a negative answer are removed by a program, and "needs work" lists only genuine problems.
+* **Maintainer notes**: code-health findings are saved in the project's own report folder and shown only to its owner or the admin.
 
 ---
 
 ## 6. Scores, Letter Grades & the Bell Curve
 
-* **Score**: the factor scores are combined with the category's weights and adjusted by measurements ([evaluator/consensus.py](letsvibe/evaluator/consensus.py)): clean, low-complexity code earns code-health credit, widespread complexity costs it, and each possible secret costs operational safety.
+* **Score**: the five factor scores are combined with fixed weights ([evaluator/experience/scoring.py](letsvibe/evaluator/experience/scoring.py)).
 * **Bell curve ([storage/peer_grades.py](letsvibe/storage/peer_grades.py))**: `z = (score − average) / standard deviation`. The reference projects set the starting bell (average = their midpoint, one standard deviation = a quarter of the gap); each category's own scores take over as it grows, fully at 30 projects.
 
 | Grade | Standard deviations from the average | Share of a full bell |
@@ -293,9 +294,7 @@ python letsvibe.py models                                   # list local Ollama 
 ```
 | `analyze` option | Description |
 | :--- | :--- |
-| `--mode blend\|fast\|deep` | `blend` (7B + 14B, default), `fast` (7B only) or `deep` (14B only) |
-| `--micro-model`, `--macro-model` | Override the Ollama models |
-| `--context-tokens` | Chunk size (default 5,200, the same as the website) |
+| `--mode`, `--micro-model`, `--macro-model`, `--context-tokens`, `--distill` | Accepted for compatibility; ignored since rubric v8 (one recipe for everything) |
 | `--html PATH`, `--markdown PATH`, `--json PATH` | Export the report |
 
 ### Environment variables ([.env.example](.env.example))
@@ -322,9 +321,9 @@ letsvibe/
 ├── scripts/calibrate_curve.py   # Builds the grading curve from the reference projects
 ├── letsvibe/
 │   ├── cli.py                   # analyze / web / models
-│   ├── analyzers/               # Complexity, secrets (type only), tests & packaging, user-journey evidence
+│   ├── analyzers/               # Proven-problem scan, complexity, packaging, user-journey evidence
 │   ├── core/                    # Ingestion, auth, terms, limits, platforms, vibe-coded check, data models
-│   ├── evaluator/               # Shared pipeline, file filter, prompts, checklist, weights, consensus, Ollama client
+│   ├── evaluator/               # Shared pipeline, experience grading (dossier, checklists, points), classifier, Ollama client
 │   ├── storage/                 # SQLite, bell curve, backups & deletion everywhere, held reports & corrections
 │   ├── reporters/               # Terminal, Markdown and HTML reports
 │   ├── data/curve_calibration.json  # Published curve calibration

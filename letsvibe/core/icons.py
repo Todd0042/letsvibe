@@ -25,6 +25,18 @@ def is_disqualified(path_str: str) -> bool:
     return any(re.search(pat, s) for pat in DISQUALIFIERS)
 
 
+def tracked_files(source_path) -> Optional[List[str]]:
+    """Every file git tracks in the repository (images included), or None if it isn't a git checkout.
+    The icon search needs this: the grader's own file list holds only the code it reads, never images."""
+    import subprocess
+    try:
+        res = subprocess.run(["git", "-C", str(source_path), "ls-files"], capture_output=True, text=True, timeout=10)
+        files = [f for f in res.stdout.splitlines() if f]
+        return files or None
+    except Exception:
+        return None
+
+
 def discover_launcher_icon_relpath(
     source_path: Optional[Union[Path, str, List[str]]] = None,
     known_files: Optional[List[str]] = None,
@@ -117,3 +129,41 @@ def get_github_raw_icon_url(owner: str, repo_name: str, relpath: str) -> str:
     """Constructs the canonical GitHub raw content URL for the launcher icon."""
     clean_rel = relpath.lstrip("/").replace("\\", "/")
     return f"https://raw.githubusercontent.com/{owner}/{repo_name}/HEAD/{clean_rel}"
+
+
+SAVED_ICON_EXTS = {".png": "image/png", ".webp": "image/webp", ".ico": "image/x-icon", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+SAVED_ICON_MAX_BYTES = 512 * 1024
+
+
+def is_publicly_reachable(url: str) -> bool:
+    """True when GitHub serves the file to anyone (the repository is public)."""
+    import httpx
+    try:
+        r = httpx.head(url, timeout=6.0, follow_redirects=True)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def resolve_icon_url(owner: str, repo_name: str, source_path, report_dir: Path) -> Optional[str]:
+    """
+    The project's icon for the leaderboard. Public repositories use GitHub's public file link (shown through the
+    same-origin image proxy). Only for private repositories, whose files GitHub won't serve, a copy is saved in the
+    project's own report folder (data/reports/<owner>/<repo>/), so deleting the project or account removes it, and
+    backups (database only) never hold it. SVG icons are never saved (they can contain script).
+    """
+    rel = discover_launcher_icon_relpath(source_path, tracked_files(source_path))
+    if not rel:
+        return None
+    url = get_github_raw_icon_url(owner, repo_name, rel)
+    if is_publicly_reachable(url):
+        return url
+    src = Path(source_path) / rel
+    ext = src.suffix.lower()
+    if ext not in SAVED_ICON_EXTS or not src.is_file() or src.stat().st_size > SAVED_ICON_MAX_BYTES:
+        return None
+    report_dir.mkdir(parents=True, exist_ok=True)
+    for old in report_dir.glob("icon.*"):
+        old.unlink()
+    (report_dir / f"icon{ext}").write_bytes(src.read_bytes())
+    return f"/icons/{owner}/{repo_name}"

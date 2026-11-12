@@ -3,14 +3,15 @@ The one evaluation recipe, shared by the queue worker and the curve calibration 
 (scripts/calibrate_curve.py), so the reference projects that set the grading curve are graded
 exactly like every submission.
 
-Recipe "v6-3b" (chosen in the 2026-11 model bake-off):
-1. Deterministic measurements (complexity, secrets, tests, packaging, platforms, user-journey evidence).
-2. Classification (category, platforms, device profile).
-3. Name-based file filter (no AI): docs, licenses, build/config files and tests are skipped (they reach
-   the reviewers as measurements); story/dialogue/level content is sampled; everything else is read.
-4. Chunks of about 5,200 tokens, each listing only its own files plus the project's top-level folders.
-5. qwen2.5-coder 7B reviews each chunk; qwen2.5-coder 14B reviews the whole project (given the full
-   file tree) and answers the yes/no checklist; scores are blended and adjusted by the measurements.
+Recipe "v8-experience" (2026-11-12): grades what people experience, never how the code is written.
+1. Deterministic measurements (size, languages, platforms, packaging) and classification (category, platforms).
+2. Experience grading (evaluator/experience): an App Dossier built by Python, a cliché check against common
+   vibe-coded app types, three 14B checklists (real-world value, creativity, user journey) answered with fixed
+   choices and quotes, a Python score from fixed points, and 14B descriptions of its own checked answers.
+3. A plain-Python scan for clearly malicious code holds the report for the owner to explain.
+
+The previous recipe ("v6-3b": chunked 7B code review + 14B whole-project review + checklist) is kept in
+evaluator/consensus.py and in the letsvibe-og-bk backup repository.
 """
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -22,7 +23,7 @@ from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from .triage import select_for_review
 
-PIPELINE_ID = "v6-3b"
+PIPELINE_ID = "v8-experience"
 CHUNK_TOKENS = 5200
 
 
@@ -58,12 +59,8 @@ def build_batches(packed_repo) -> Tuple[List[Tuple[str, str]], Dict[str, Tuple[i
     return batches, coverage
 
 
-def evaluate(engine, packed_repo, repo_source: str, metrics: DeterministicMetrics, classification,
-             mode: str = "blend", progress_callback: Optional[Callable[[str, int], None]] = None):
-    """Runs steps 3-5 for an already measured and classified repository; returns the VibeReport."""
-    batches, _ = build_batches(packed_repo)
-    return engine.evaluate_pipeline(
-        repo_name=packed_repo.repo_name, repo_source=repo_source, manifest_batches=batches, metrics=metrics,
-        mode=mode, progress_callback=progress_callback, classification=classification,
-        file_tree=packed_repo.file_tree,
-    )
+def evaluate(client, packed_repo, repo_source: str, metrics: DeterministicMetrics, classification,
+             progress_callback: Optional[Callable[[str, int], None]] = None):
+    """Grades an already measured and classified repository with experience grading; returns the VibeReport."""
+    from .experience import evaluate as experience_evaluate
+    return experience_evaluate(client, packed_repo, repo_source, metrics, classification, progress=progress_callback)

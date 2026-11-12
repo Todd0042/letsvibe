@@ -10,9 +10,9 @@ from rich.console import Console
 
 from .core.ingest import RepositoryIngestor
 from .evaluator.classifier import classify_project
-from .evaluator.pipeline import CHUNK_TOKENS, gather_metrics
+from .core.icons import tracked_files
+from .evaluator.pipeline import CHUNK_TOKENS, evaluate, gather_metrics
 from .evaluator.triage import select_for_review
-from .evaluator.consensus import ConsensusEngine
 from .evaluator.ollama import OllamaClient, get_free_vram_mb
 from .reporters.console import render_terminal_report
 from .reporters.html import generate_html_report
@@ -21,7 +21,7 @@ from .reporters.markdown import generate_markdown_report
 
 app = typer.Typer(
     name="letsvibe",
-    help="✨ 100% Offline, Dual-Model Repository Vibe & Health Analyzer",
+    help="✨ 100% offline grader for vibe-coded projects (rubric v8: graded on what people experience)",
     add_completion=False,
 )
 console = Console()
@@ -78,7 +78,8 @@ def analyze(
     ),
 ):
     """
-    Ingests and evaluates a whole repository across 7 dimensions using 100% local LLMs.
+    Grades a repository on what people experience (rubric v8: value, creativity, user journey, functionality, UI/UX),
+    using 100% local models.
     """
     console.rule("[bold cyan]LetsVibe: 100% Local Repository Evaluator[/bold cyan]")
 
@@ -122,41 +123,15 @@ def analyze(
             readme_excerpt = metrics.readme_excerpt
         static_elapsed = round(time.perf_counter() - t_static_start, 2)
 
-        # 3. Whole-Repo Manifest Batches (100% file coverage without omissions)
-        keep, _coverage, _roles = select_for_review(packed_repo.files)  # name-based file filter (no AI)
-        manifest_batches = packed_repo.get_coverage_manifests(
-            max_batch_tokens=context_tokens,
-            distill=distill,
-            only=keep,
-            local_tree=True,
-        )
-        distill_tag = " (distilled)" if distill else ""
-        console.print(f"[dim]Prepared [bold]{len(manifest_batches)}[/bold] whole-codebase module batches for evaluation{distill_tag}[/dim]")
-
-        # 4. LLM Consensus Engine
-        engine = ConsensusEngine(
-            client=client,
-            micro_model=micro_model,
-            macro_model=macro_model,
-            explicit_macro=explicit_macro,
-        )
-
-        with console.status(
-            f"[bold magenta]Executing {mode.upper()} mode local evaluation pipeline...[/bold magenta]"
-        ):
+        # 3-4. Experience grading (rubric v8): the same recipe as the website and the curve calibration
+        if mode != "blend" or explicit_macro or not distill:
+            console.print("[dim]Note: --mode, model and --distill options are ignored since rubric v8 (experience grading).[/dim]")
+        with console.status("[bold magenta]Experience grading: dossier, checklists and descriptions...[/bold magenta]"):
             classification = classify_project(
                 client, packed_repo.source_path, platform_info,
                 readme=readme_excerpt, file_tree=packed_repo.file_tree,
             )
-            report = engine.evaluate_pipeline(
-                repo_name=packed_repo.repo_name,
-                repo_source=target,
-                manifest_batches=manifest_batches,
-                metrics=metrics,
-                mode=mode,
-                classification=classification,
-                file_tree=packed_repo.file_tree,
-            )
+            report = evaluate(client, packed_repo, target, metrics, classification)
         report.timing_breakdown["deterministic_static_scan_sec"] = static_elapsed
 
         # 5. Output rendering
@@ -172,7 +147,7 @@ def analyze(
             custom_markdown=markdown,
             custom_json=json_output,
             source_path=packed_repo.source_path,
-            file_list=list(packed_repo.files.keys()),
+            file_list=tracked_files(packed_repo.source_path),
         )
 
         console.print(f"\n[bold green]✔ Saved to structured repository vault:[/] [cyan]{identity.get_report_dir()}[/cyan]")

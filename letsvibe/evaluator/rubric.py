@@ -8,10 +8,32 @@ scores (prompts, weights, aggregation, grade curve, checklist).
 
 from typing import Dict, List
 
-RUBRIC_VERSION = "v7"
+RUBRIC_VERSION = "v8"
 
 # Newest first. Plain language: this is shown publicly on /changelog.
 RUBRIC_CHANGELOG: List[Dict[str, object]] = [
+    {
+        "version": "v8",
+        "date": "2026-11-12",
+        "title": "Graded on what people experience, not on how the code is written",
+        "changes": [
+            "Projects are graded on five things, in order of weight: real-world value, creativity, the user journey (from "
+            "installing it to closing it), functionality and UI/UX. Code health is shared with each project's owner only, as "
+            "notes for the developer, and never counts toward the score.",
+            "No AI reads the code any more. A program first writes an App Dossier of what people see and do: what the "
+            "project says it is, its screens, the text on them, its own features, how many devices can use it at once, "
+            "how much setup it needs before first use, how it launches and saves, and any ads, paywalls or forced sign-in.",
+            "The project is compared with common app types people make from a single prompt (to-do lists, stock viewers, "
+            "space shooters and so on), and the closest match is given to the reviewer as a fact.",
+            "Problems a program can prove (for example back-end features no screen calls, or a config file that cannot be "
+            "read) count against functionality, per 1,000 lines of code. Anything a scan could not find is never counted as missing.",
+            "The reviewer answers fixed checklists, one topic at a time, and quotes the dossier for every answer. It never "
+            "picks a number: each answer is worth fixed points, so every score can be traced to the answers behind it.",
+            "The written review only restates the checked answers, and 'Needs work' lists only real problems (such as a "
+            "heavy setup, nothing being saved, or a standard copy of a common idea), never invented advice.",
+            "Safety is no longer graded: LetsVibe is not a security tool, and a grade never says software is safe to run.",
+        ],
+    },
     {
         "version": "v7",
         "date": "2026-11-11",

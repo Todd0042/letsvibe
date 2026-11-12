@@ -431,6 +431,50 @@ async def api_image_proxy(u: str = Query(..., max_length=500)):
     return Response(content=body, media_type=ctype, headers=headers)
 
 
+@app.get("/api/projects/{owner}/{repo}/maintainer-notes")
+async def api_maintainer_notes(owner: str, repo: str, request: Request):
+    """Code-health notes (never graded), for the project's owner or the admin only."""
+    import re
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Sign in to see maintainer notes.")
+    is_admin = bool(user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
+    if not is_admin and (user.get("username") or "").lower() != owner.lower():
+        raise HTTPException(status_code=403, detail="Maintainer notes are only shown to the project's owner.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
+        raise HTTPException(status_code=404, detail="No maintainer notes.")
+    f = Path("data/reports") / re.sub(r"[^\w\-.]", "_", owner) / re.sub(r"[^\w\-.]", "_", repo) / "maintainer_notes.json"
+    if not f.is_file():
+        return {"available": False, "notes": []}
+    data = json.loads(f.read_text())
+    return {"available": True, "lines_of_code": data.get("lines_of_code", 0), "notes": data.get("notes", [])}
+
+
+@app.get("/icons/{owner}/{repo}", include_in_schema=False)
+async def api_saved_icon(owner: str, repo: str):
+    """Icon saved for a private repository (core/icons.py resolve_icon_url), served only while the project is listed."""
+    import re
+    from ..core.icons import SAVED_ICON_EXTS
+
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
+        raise HTTPException(status_code=404, detail="Icon unavailable.")
+    conn = get_db_connection()
+    try:
+        listed = conn.execute("SELECT 1 FROM projects WHERE owner = ? AND repo_name = ?", (owner, repo)).fetchone()
+    finally:
+        conn.close()
+    if not listed:
+        raise HTTPException(status_code=404, detail="Icon unavailable.")
+    # Same folder as RepoIdentity.get_report_dir() (without creating it)
+    folder = Path("data/reports") / re.sub(r"[^\w\-.]", "_", owner) / re.sub(r"[^\w\-.]", "_", repo)
+    found = next((p for p in sorted(folder.glob("icon.*")) if p.suffix.lower() in SAVED_ICON_EXTS), None) if folder.is_dir() else None
+    if not found:
+        raise HTTPException(status_code=404, detail="Icon unavailable.")
+    headers = {"Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
+               "Content-Security-Policy": "default-src 'none'; sandbox"}
+    return FileResponse(found, media_type=SAVED_ICON_EXTS[found.suffix.lower()], headers=headers)
+
+
 # ==========================================
 # Self-service privacy controls ("My Data")
 # ==========================================

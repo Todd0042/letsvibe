@@ -185,3 +185,5 @@ class VibeReport(BaseModel):
         default_factory=list,
         description="Any warnings, retries, or issues encountered during analysis"
     )
+    # Experience grading (rubric v8): the checklist answers, their evidence checks and the points each earned
+    experience: Dict[str, Any] = Field(default_factory=dict)

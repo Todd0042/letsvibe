@@ -16,12 +16,11 @@ from ..analyzers.functionality import FunctionalityAnalyzer
 from ..analyzers.security import SecurityAnalyzer
 from ..core.ingest import RepositoryIngestor
 from ..analyzers.journey_signals import gather_journey_signals, full_readme as _full_readme
-from ..evaluator.pipeline import build_batches, gather_metrics
+from ..evaluator.pipeline import evaluate, gather_metrics
 from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from ..core.vibe_detector import VibeDetector
 from ..evaluator.classifier import classify_project
-from ..evaluator.consensus import ConsensusEngine
 from ..evaluator.ollama import CpuSpilloverError, OllamaClient
 from ..storage.db import (
     DEFAULT_DB_PATH,
@@ -31,6 +30,7 @@ from ..storage.db import (
     update_report_classification,
 )
 from ..storage.identity import parse_repo_identity
+from ..core.icons import tracked_files
 from ..storage.manager import ReportStorageManager
 
 logger = logging.getLogger("letsvibe.worker")
@@ -278,28 +278,14 @@ class AuditQueueWorker:
                 readme=readme_excerpt, file_tree=packed_repo.file_tree,
             )
 
-            # 3. Whole-Repo Manifest Batches (18% -> 20%)
-            manifest_batches, _coverage = build_batches(packed_repo)
-            last_step_msg = f"Partitioned {len(packed_repo.files)} files into {len(manifest_batches)} VRAM-safe batch(es){vendor_note}..."
-            self._update_task_progress(task_id, last_step_msg, pct=20)
-
-            # 4. Consensus Engine Evaluation (20% -> 95% with live batch callbacks)
+            # 3-4. Experience grading (rubric v8): dossier -> cliché check -> 14B checklists -> Python score
+            #      -> 14B descriptions. The same recipe as the curve calibration (evaluator/pipeline.py).
             def on_llm_progress(step_text: str, pct: int) -> None:
                 nonlocal last_step_msg
                 last_step_msg = step_text
                 self._update_task_progress(task_id, step_text, pct=pct)
 
-            engine = ConsensusEngine(client=client)
-            report = engine.evaluate_pipeline(
-                repo_name=packed_repo.repo_name,
-                repo_source=target,
-                manifest_batches=manifest_batches,
-                metrics=metrics,
-                mode=mode,
-                progress_callback=on_llm_progress,
-                classification=classification,
-                file_tree=packed_repo.file_tree,
-            )
+            report = evaluate(client, packed_repo, target, metrics, classification, progress_callback=on_llm_progress)
 
             # 4.5 Privacy: if the owner deleted their data while this audit ran, the queue row is gone.
             # Discard the result instead of publishing it.
@@ -319,7 +305,7 @@ class AuditQueueWorker:
                 report=report,
                 target=target,
                 source_path=packed_repo.source_path,
-                file_list=list(packed_repo.files.keys()),
+                file_list=tracked_files(packed_repo.source_path),
                 db_path=self.db_path,
             )
 
@@ -383,7 +369,7 @@ class AuditQueueWorker:
 
     def _hold_for_explanation(self, task: dict, target: str, report, packed_repo) -> None:
         """Stores the report privately and asks the owner to explain the flagged lines (neutral wording)."""
-        from ..core.icons import discover_launcher_icon_relpath, get_github_raw_icon_url
+        from ..core.icons import discover_launcher_icon_relpath, get_github_raw_icon_url, tracked_files
         from ..storage.integrity import hold_report, locate_flagged_lines
 
         identity = parse_repo_identity(target)
@@ -401,7 +387,7 @@ class AuditQueueWorker:
             pass
         icon_url = None
         try:
-            rel_icon = discover_launcher_icon_relpath(packed_repo.source_path, list(packed_repo.files.keys()))
+            rel_icon = discover_launcher_icon_relpath(packed_repo.source_path, tracked_files(packed_repo.source_path))
             if rel_icon and identity.provider == "github":
                 icon_url = get_github_raw_icon_url(identity.owner, identity.repo_name, rel_icon)
         except Exception:

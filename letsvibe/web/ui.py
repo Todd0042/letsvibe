@@ -154,6 +154,31 @@ def _fill_live_tables(content: str) -> str:
         rows.append(f"<tr><th scope=\"row\">{escape(', '.join(others))}</th>{cells}</tr>")
         table = f'<div class="table-scroll"><table><thead><tr><th>Category</th>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
         content = content.replace("{{WEIGHT_TABLE}}", table)
+    if "{{POINTS_TABLE}}" in content:
+        # Rubric v8: every checklist answer and the points it earns, straight from evaluator/experience/scoring.py
+        from ..evaluator.experience.scoring import POINTS, WEIGHTS
+        titles = {"value": "Real-world value", "creativity": "Creativity", "journey": "User journey", "functionality": "Functionality", "ui_ux": "UI/UX"}
+        rows = []
+        for cat, fields in POINTS.items():
+            for field, table in fields.items():
+                if isinstance(table, dict):
+                    choices = ", ".join(f"{str(k).replace('_', ' ').lower()} {v:+g}" for k, v in table.items())
+                    rows.append(f"<tr><td>{titles[cat]}</td><td>{escape(field.replace('_', ' '))}</td><td>{escape(choices)}</td></tr>")
+            if cat == "value":
+                rows.append(f"<tr><td>{titles[cat]}</td><td>features beyond the basic idea (quoted from the dossier)</td>"
+                            f"<td>{fields['verified_twist_each']:+g} each, up to {fields['verified_twist_max']:+g}</td></tr>")
+            if cat == "functionality":
+                rows.append(f"<tr><td>{titles[cat]}</td><td>proven problems found by the code scan (for example endpoints nothing calls, "
+                            f"config files that don't parse)</td><td>&minus;{fields['proven_problem_rate_penalty']:g} per problem per 1,000 lines "
+                            f"of code, up to &minus;{fields['proven_problem_penalty_max']:g}</td></tr>")
+            if cat == "journey":
+                rows.append(f"<tr><td>{titles[cat]}</td><td>ads, paywalls, forced sign-in or wait timers found</td>"
+                            f"<td>{fields['hostile_penalty']:+g}</td></tr>")
+        weights = ", ".join(f"{titles[c]} {w:g}%" for c, w in WEIGHTS.items())
+        table = ('<div class="table-scroll"><table><thead><tr><th>Factor</th><th>Checklist item</th><th>Answers and points</th></tr></thead>'
+                 f'<tbody>{"".join(rows)}</tbody></table></div><p>Each factor scores the share of its points earned (0&ndash;100). '
+                 f'The overall score weights them: {escape(weights)}.</p>')
+        content = content.replace("{{POINTS_TABLE}}", table)
     if "{{GRADE_TABLE}}" in content:
         rows = []
         upper = 100.0

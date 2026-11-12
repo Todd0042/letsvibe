@@ -136,6 +136,30 @@ def bell_params(calibration: Dict[str, Any], cohort: List[float]) -> Tuple[float
     return mean, sd, w
 
 
+# The number shown with the letter comes from the same bell curve, on the familiar school scale, so an A always
+# reads 90-something: (z, shown number) points, linearly interpolated, clamped to 0-100.
+CURVED_SCALE: Tuple[Tuple[float, float], ...] = (
+    (-4.0, 0.0), (-1.5, 60.0), (-0.5, 70.0), (-0.17, 73.0), (0.17, 77.0), (0.5, 80.0), (0.83, 83.0),
+    (1.17, 87.0), (1.5, 90.0), (1.75, 93.0), (2.0, 97.0), (3.0, 100.0),
+)
+
+
+def curved_number(z: float, anchor_pos: float) -> float:
+    """Shown score for a bell-curve position; follows the same rails as the letter (F below the floor, no A without the anchor)."""
+    pts = CURVED_SCALE
+    if z <= pts[0][0]:
+        value = pts[0][1]
+    elif z >= pts[-1][0]:
+        value = pts[-1][1]
+    else:
+        value = next(y0 + (y1 - y0) * (z - x0) / (x1 - x0) for (x0, y0), (x1, y1) in zip(pts, pts[1:]) if x0 <= z <= x1)
+    if anchor_pos < F_BELOW_POSITION:
+        value = min(value, 59.0)          # an F always reads below 60
+    elif anchor_pos < A_REQUIRES_POSITION:
+        value = min(value, 89.0)          # without the anchor rail, never an A-range number
+    return round(max(0.0, min(100.0, value)), 1)
+
+
 def bell_grade(z: float, anchor_pos: float) -> str:
     if anchor_pos < F_BELOW_POSITION:
         return "F"
@@ -147,8 +171,10 @@ def bell_grade(z: float, anchor_pos: float) -> str:
 
 def curve_details(score: float, cohort: List[float], calibration: Dict[str, Any], all_scores: List[float]) -> Dict[str, float]:
     mean, sd, w = bell_params(calibration, cohort)
-    return {"z": round((score - mean) / sd, 3), "average": round(mean, 2), "sd": round(sd, 2), "peer_weight": round(w, 4),
-            "anchor_position": round(anchor_position(score, scale_ends(calibration, all_scores)), 4)}
+    z = (score - mean) / sd
+    a_pos = anchor_position(score, scale_ends(calibration, all_scores))
+    return {"z": round(z, 3), "average": round(mean, 2), "sd": round(sd, 2), "peer_weight": round(w, 4),
+            "anchor_position": round(a_pos, 4), "curved_score": curved_number(z, a_pos), "raw_score": round(score, 1)}
 
 
 def grade_for(score: float, cohort: List[float], all_scores: Optional[List[float]] = None) -> Tuple[str, str]:
@@ -208,7 +234,7 @@ def latest_reports_by_category(conn: sqlite3.Connection) -> Dict[str, List[sqlit
             SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.project_id ORDER BY r.id DESC) AS rn
             FROM reports r
         )
-        SELECT id, project_id, final_score, letter_grade, coalesce(general_category, 'other') AS cat, report_data_json
+        SELECT id, project_id, final_score, letter_grade, curved_score, coalesce(general_category, 'other') AS cat, report_data_json
         FROM latest WHERE rn = 1
         """
     ).fetchall()
@@ -235,7 +261,8 @@ def apply_peer_grades(conn: sqlite3.Connection) -> int:
                     data = json.loads(blob)
                 except ValueError:
                     data = None
-            needs = letter != r["letter_grade"] or (
+            curved = details["curved_score"] if details else round(float(r["final_score"]), 1)
+            needs = letter != r["letter_grade"] or r["curved_score"] != curved or (
                 data is not None and (data.get("grade_basis") != basis or data.get("letter_grade") != letter
                                       or data.get("curve") != details)
             )
@@ -246,7 +273,8 @@ def apply_peer_grades(conn: sqlite3.Connection) -> int:
                 data["grade_basis"] = basis
                 data["curve"] = details
                 blob = json.dumps(data)
-            conn.execute("UPDATE reports SET letter_grade = ?, report_data_json = ? WHERE id = ?", (letter, blob, r["id"]))
+            conn.execute("UPDATE reports SET letter_grade = ?, curved_score = ?, report_data_json = ? WHERE id = ?",
+                         (letter, curved, blob, r["id"]))
             changed += 1
     return changed
 
