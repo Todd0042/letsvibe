@@ -27,6 +27,11 @@ RUBRIC_CHANGELOG: List[Dict[str, object]] = [
             "The yes/no checklist went from 33 to 23 questions: duplicates were removed, and code-health questions "
             "that measurements already answer (tests, complexity, dependencies) or that AI-written code almost always "
             "passes (clear names) are no longer asked.",
+            "The README excerpt given to the reviewers now skips banners, badges, images and the table of contents, "
+            "so it holds the project's actual description.",
+            "Risky code patterns (eval, exec, shell=True, dangerouslySetInnerHTML) are now counted separately from "
+            "hard-coded secrets, only where they appear in actual code (not in comments, text or a project's own "
+            "detection rules), and cost less (-3 each, up to -9, versus -6 and up to -18 for a secret).",
             "Safety is always reviewed for code that makes network calls, runs other programs, uses threads or files, "
             "loops forever or silently ignores errors, and setup wizards built inside a page are now recognized.",
         ],

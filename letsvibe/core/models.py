@@ -105,6 +105,9 @@ class DeterministicMetrics(BaseModel):
     top_complex_functions: List[FunctionComplexity] = Field(default_factory=list)
     detected_secrets_count: int = 0
     secret_findings: List[str] = Field(default_factory=list)
+    # Risky code patterns (eval, exec, shell=True, ...) found in actual code; counted separately from secrets
+    risky_patterns_count: int = 0
+    risky_findings: List[str] = Field(default_factory=list)
     test_files_count: int = 0
     test_to_code_ratio: float = 0.0
     has_ci_cd: bool = False

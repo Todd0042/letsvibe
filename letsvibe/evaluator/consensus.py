@@ -162,9 +162,13 @@ def compute_deterministic_adjustments(metrics: DeterministicMetrics) -> Dict[str
         elif avg_cc <= 4.5:
             health_adj += 1.5
 
-    # Hardcoded secrets / dangerous patterns weigh on operational safety
+    # Hardcoded secrets weigh heavily on operational safety; risky code patterns (eval, exec, shell=True) less,
+    # since they can be legitimate. Both are counted only where they really occur (see analyzers/security.py).
     if metrics.detected_secrets_count > 0:
         ops_adj -= min(18.0, metrics.detected_secrets_count * 6.0)
+    risky = int(getattr(metrics, "risky_patterns_count", 0) or 0)
+    if risky > 0:
+        ops_adj -= min(9.0, risky * 3.0)
 
     test_ratio = float(metrics.test_to_code_ratio or 0.0)
     if test_ratio >= 0.15:
@@ -270,7 +274,8 @@ Deterministic Static AST Metrics:
 - Languages: {metrics.languages}
 - Avg Cyclomatic Complexity: {metrics.avg_cyclomatic_complexity} (<=3.0 is very clean; >=6.0 is complex)
 - Max Cyclomatic Complexity: {metrics.max_cyclomatic_complexity} (Top complex functions: {top_cc_str})
-- Hardcoded Secrets/Risks Found: {metrics.detected_secrets_count} ({metrics.secret_findings[:3]})
+- Hardcoded Secrets Found: {metrics.detected_secrets_count} ({metrics.secret_findings[:3]})
+- Risky Code Patterns Found (eval/exec/shell=True etc., in actual code only): {getattr(metrics, "risky_patterns_count", 0)} ({getattr(metrics, "risky_findings", [])[:3]})
 - Test Files Count: {metrics.test_files_count} (Test-to-Code Ratio: {metrics.test_to_code_ratio})
 - Native Standalone Packaging (Mobile APK/Desktop): {desktop_pkg_str}
 - Has License: {metrics.has_license}

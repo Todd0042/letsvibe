@@ -2,9 +2,37 @@
 Functionality, infrastructure, and test presence analyzer.
 """
 
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+
+
+_HTML_IMG_OR_TAG = re.compile(r"<img\b[^>]*>|</?[a-zA-Z][^>]*>")
+_URL = r"\((?:[^()\s]|\([^()\s]*\))*\)"  # a link target, allowing one level of parentheses inside it
+_MD_IMAGE = re.compile(r"!\[[^\]]*\]" + _URL)
+_MD_LINK = re.compile(r"\[([^\]]*)\]" + _URL)
+_TOC_LINE = re.compile(r"^\s*[*-]\s*\[.*\]\(#[^)]*\)\s*$", re.M)  # table-of-contents entries (anchor links)
+
+
+def readable_readme(text: str) -> str:
+    """
+    The README as reviewers should read it: banners, HTML, badges, images and table-of-contents link lists
+    removed and links reduced to their text, so a 3,000-character excerpt holds the actual description
+    instead of decoration (many READMEs open with a banner and a row of badges).
+    """
+    text = _TOC_LINE.sub("", text)
+    text = _MD_IMAGE.sub("", text)          # also removes badge images inside links: [![..](..)](..) -> [](..)
+    text = _MD_LINK.sub(lambda m: m.group(1), text)
+    text = _HTML_IMG_OR_TAG.sub("", text)
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln.strip() not in ("---", "***", "___")]
+    out, blank = [], 0
+    for ln in lines:
+        blank = blank + 1 if not ln.strip() else 0
+        if blank <= 1:
+            out.append(ln)
+    return "\n".join(out).strip()
 
 class FunctionalityAnalyzer:
     """Analyzes test coverage density, CI/CD, documentation, and infrastructure presence."""
@@ -93,7 +121,7 @@ class FunctionalityAnalyzer:
             is_any_readme = lower.endswith(("/readme.md", "/readme.txt", "/readme.rst", "/readme"))
             if (is_root_readme or is_any_readme) and (not readme_excerpt or is_root_readme):
                 has_readme = True
-                readme_excerpt = content[:3000].strip()
+                readme_excerpt = readable_readme(content)[:3000].strip()
 
         test_ratio = round((test_loc / total_loc), 3) if total_loc > 0 else 0.0
 

@@ -100,6 +100,7 @@ def render_terminal_report(report: VibeReport) -> None:
     stats_text.append(f"Files: {m.total_files}  |  ", style="dim")
     stats_text.append(f"Avg Complexity: {m.avg_cyclomatic_complexity}  |  ", style="dim")
     stats_text.append(f"Secrets Found: {m.detected_secrets_count}  |  ", style="dim")
+    stats_text.append(f"Risky Patterns: {m.risky_patterns_count}  |  ", style="dim")
     stats_text.append(f"Tests: {m.test_files_count} ({round(m.test_to_code_ratio*100, 1)}% ratio)  |  ", style="dim")
     stats_text.append(f"CI/CD: {'Yes' if m.has_ci_cd else 'No'}  |  Docker: {'Yes' if m.has_docker else 'No'}  |  ", style="dim")
     stats_text.append(f"Native Packaging (APK/Desktop): {'Yes' if m.has_desktop_packaging else 'No'}", style="dim")

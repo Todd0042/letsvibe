@@ -31,6 +31,7 @@ def gather_metrics(packed_repo) -> Tuple[DeterministicMetrics, Any]:
     file_paths = [packed_repo.source_path / p for p in packed_repo.files.keys()]
     avg_cc, max_cc, top_funcs = ComplexityAnalyzer.analyze_paths(file_paths)
     secret_count, secret_findings = SecurityAnalyzer.scan(packed_repo.files)
+    risky_count, risky_findings = SecurityAnalyzer.scan_risky(packed_repo.files)
     (test_count, test_ratio, has_ci_cd, has_docker, has_desktop_packaging, has_license, has_readme,
      readme_excerpt) = FunctionalityAnalyzer.evaluate(packed_repo.files, packed_repo.total_loc)
     has_cli_fw, has_tui, has_rich, cli_details = FunctionalityAnalyzer.evaluate_cli_ux(packed_repo.files)
@@ -39,6 +40,7 @@ def gather_metrics(packed_repo) -> Tuple[DeterministicMetrics, Any]:
         total_loc=packed_repo.total_loc, total_files=len(packed_repo.files), languages=packed_repo.language_stats,
         avg_cyclomatic_complexity=avg_cc, max_cyclomatic_complexity=max_cc, top_complex_functions=top_funcs,
         detected_secrets_count=secret_count, secret_findings=secret_findings,
+        risky_patterns_count=risky_count, risky_findings=risky_findings,
         test_files_count=test_count, test_to_code_ratio=test_ratio, has_ci_cd=has_ci_cd, has_docker=has_docker,
         has_desktop_packaging=has_desktop_packaging, has_license=has_license, has_readme=has_readme,
         readme_excerpt=readme_excerpt, detected_platforms=platform_info.platforms,

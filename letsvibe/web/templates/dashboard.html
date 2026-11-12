@@ -2812,6 +2812,7 @@
           <span class="stat-pill">Avg Complexity: <strong>${dm.avg_cyclomatic_complexity || 'N/A'}</strong></span>
           <span class="stat-pill">Max CC: <strong>${dm.max_cyclomatic_complexity || 'N/A'}</strong></span>
           <span class="stat-pill">Secrets Found: <strong>${dm.detected_secrets_count || 0}</strong></span>
+          <span class="stat-pill" title="eval, exec, shell=True and similar, counted in actual code only">Risky Patterns: <strong>${dm.risky_patterns_count || 0}</strong></span>
           <span class="stat-pill">Tests LOC Ratio: <strong>${dm.test_to_code_ratio || 0}</strong></span>
           <span class="stat-pill">CI/CD: <strong>${dm.has_ci_cd ? 'Yes' : 'No'}</strong></span>
           <span class="stat-pill">Native Packaging: <strong>${dm.has_desktop_packaging ? 'Yes' : 'No'}</strong></span>
