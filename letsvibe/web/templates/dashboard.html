@@ -1392,7 +1392,7 @@
           <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1.25rem;">
             <i class="fa-solid fa-chart-pie" style="color: var(--accent-cyan);"></i> Multi-Factor Balance Radar
           </h2>
-          <div style="height: 340px; display: flex; justify-content: center;">
+          <div style="height: 400px; display: flex; justify-content: center;">
             <canvas id="projectRadarCanvas"></canvas>
           </div>
         </div>
@@ -2035,6 +2035,122 @@
     let currentProjectSlug = null;
     let currentCreatorMode = 'peak';
     let currentRadarChart = null;
+
+    // Report radar: 0 at the centre, outer edge at the project's best factor (rounded up to 5), so the
+    // shape uses the whole chart. A dashed ring marks 62, the centre of the vibe-coded score bands.
+    const TYPICAL_SCORE = 62;
+    function radarPointColor(v) {
+      return v >= 75 ? '#39ff14' : v >= TYPICAL_SCORE ? '#00f0ff' : v >= 50 ? '#ffb703' : '#ff2a85';
+    }
+    const radarGlow = {
+      id: 'radarGlow',
+      beforeDatasetDraw(chart, args) {
+        if (args.index !== 0) return;
+        chart.ctx.save();
+        chart.ctx.shadowColor = 'rgba(0, 240, 255, 0.55)';
+        chart.ctx.shadowBlur = 18;
+      },
+      afterDatasetDraw(chart, args) {
+        if (args.index === 0) chart.ctx.restore();
+      },
+    };
+    function buildRadarChart(canvas, labels, scores) {
+      const top = Math.max(...scores, 1);
+      const max = Math.min(100, Math.max(20, Math.ceil(top / 5) * 5));
+      const step = max / 4;  // four evenly spaced rings; each factor's score is shown in its label
+      const showTypical = TYPICAL_SCORE <= max;
+      const datasets = [{
+        label: 'Score',
+        data: scores,
+        backgroundColor: (c) => {
+          const area = c.chart.chartArea;
+          if (!area) return 'rgba(0, 240, 255, 0.25)';
+          const cx = (area.left + area.right) / 2, cy = (area.top + area.bottom) / 2;
+          const g = c.chart.ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(area.width, area.height) / 2);
+          g.addColorStop(0, 'rgba(255, 42, 133, 0.10)');
+          g.addColorStop(0.65, 'rgba(0, 240, 255, 0.22)');
+          g.addColorStop(1, 'rgba(0, 240, 255, 0.38)');
+          return g;
+        },
+        borderColor: '#00f0ff',
+        borderWidth: 2.5,
+        pointBackgroundColor: scores.map(radarPointColor),
+        pointBorderColor: '#0b0f19',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 8,
+        order: 1,
+      }];
+      if (showTypical) {
+        datasets.push({
+          label: `Typical vibe-coded project (${TYPICAL_SCORE})`,
+          data: labels.map(() => TYPICAL_SCORE),
+          backgroundColor: 'transparent',
+          borderColor: 'rgba(255, 183, 3, 0.55)',
+          borderDash: [5, 5],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          order: 2,
+        });
+      }
+      return new Chart(canvas, {
+        type: 'radar',
+        data: { labels, datasets },
+        plugins: [radarGlow],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: 6 },
+          scales: {
+            r: {
+              min: 0,
+              max,
+              ticks: { stepSize: step, display: false },
+              grid: {
+                circular: false,
+                color: (c) => (c.index % 2 ? 'rgba(0, 240, 255, 0.10)' : 'rgba(255, 255, 255, 0.05)'),
+                lineWidth: 1,
+              },
+              angleLines: { color: 'rgba(0, 240, 255, 0.10)' },
+              pointLabels: {
+                color: '#e2e8f0',
+                font: { size: 11, weight: '600' },
+                padding: 10,
+                callback: (label, i) => [label, `${scores[i].toFixed(0)}`],
+              },
+            },
+          },
+          plugins: {
+            legend: {
+              display: showTypical,
+              position: 'bottom',
+              labels: {
+                color: '#94a3b8', boxWidth: 18, boxHeight: 1, font: { size: 10 },
+                filter: (item) => item.datasetIndex === 1,
+              },
+            },
+            tooltip: {
+              backgroundColor: 'rgba(11, 15, 25, 0.95)',
+              borderColor: 'rgba(0, 240, 255, 0.4)',
+              borderWidth: 1,
+              titleColor: '#fff',
+              bodyColor: '#e2e8f0',
+              padding: 10,
+              displayColors: false,
+              filter: (item) => item.datasetIndex === 0,
+              callbacks: {
+                label: (item) => {
+                  const v = item.raw;
+                  const vs = v >= TYPICAL_SCORE ? `${(v - TYPICAL_SCORE).toFixed(1)} above typical` : `${(TYPICAL_SCORE - v).toFixed(1)} below typical`;
+                  return `${v.toFixed(1)} / 100 (${vs})`;
+                },
+              },
+            },
+          },
+        },
+      });
+    }
     let currentHofCategory = 'overall';
     let allHofRecords = [];
     let searchDebounceTimer = null;
@@ -2730,36 +2846,8 @@
           const ctx = document.getElementById('projectRadarCanvas');
           if (ctx) {
             if (currentRadarChart) currentRadarChart.destroy();
-            currentRadarChart = new Chart(ctx, {
-              type: 'radar',
-              data: {
-                labels: RADAR_FACTORS.map(f => FACTOR_LABELS[f]),
-                datasets: [{
-                  label: 'Score (0-100)',
-                  data: RADAR_FACTORS.map(f => Number(p[f + '_score'] ?? ((rep.factor_evaluations || {})[f] || {}).score ?? 0)),
-                  backgroundColor: 'rgba(0, 240, 255, 0.22)',
-                  borderColor: '#00f0ff',
-                  pointBackgroundColor: '#ff2a85',
-                  pointBorderColor: '#fff',
-                  borderWidth: 2,
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  r: {
-                    suggestedMin: 50,
-                    suggestedMax: 100,
-                    ticks: { color: '#64748b', backdropColor: 'transparent', font: { size: 10 } },
-                    grid: { color: 'rgba(255, 255, 255, 0.08)' },
-                    angleLines: { color: 'rgba(255, 255, 255, 0.08)' },
-                    pointLabels: { color: '#e2e8f0', font: { size: 12, weight: 'bold' } }
-                  }
-                },
-                plugins: { legend: { display: false } }
-              }
-            });
+            const scores = RADAR_FACTORS.map(f => Number(p[f + '_score'] ?? ((rep.factor_evaluations || {})[f] || {}).score ?? 0));
+            currentRadarChart = buildRadarChart(ctx, RADAR_FACTORS.map(f => FACTOR_LABELS[f]), scores);
           }
         }, 60);
 

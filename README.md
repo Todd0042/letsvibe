@@ -20,6 +20,10 @@
 
 🌐 **Live site:** [letsvibe.todd0042.dev](https://letsvibe.todd0042.dev)
 
+<p align="center">
+  <img src="screenshots/podium.png" alt="LetsVibe leaderboard podium" width="100%">
+</p>
+
 ---
 
 ## 📖 Table of Contents
@@ -27,6 +31,7 @@
 * **Part 1 — Overview**
   * [🎨 What Is LetsVibe?](#-what-is-letsvibe)
   * [🚀 How It Works in 3 Steps](#-how-it-works-in-3-steps)
+  * [📸 Visual Tour](#-visual-tour)
   * [🧭 The 7 Factors](#-the-7-factors)
   * [🔔 Graded on a Published Bell Curve](#-graded-on-a-published-bell-curve)
   * [🔒 Privacy Promises](#-privacy-promises)
@@ -64,6 +69,35 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 1. **Sign in & submit**: Sign in with GitHub (public username, ID and avatar only — never your email) and submit a public repository **you own**. Nobody, including the site operator, can submit someone else's work.
 2. **Local AI review**: A temporary copy of the project is measured with plain code analysis, then reviewed by two open AI models on LetsVibe's own graphics card — a 7B model reads the code chunk by chunk, a 14B model reviews the project as a whole and answers 23 concrete yes/no questions. The copy is deleted afterwards. Your code never goes to an AI company.
 3. **Graded on a curve**: Your project gets a raw score and a letter grade from a published bell curve, plus its rank among similar projects. Delete it — or your whole account — yourself, at any time, from the live site and every backup.
+
+---
+
+## 📸 Visual Tour
+
+### 🏆 The Leaderboard
+A podium for the top three, then every graded project with its score, letter grade, rank in its category, platforms, a 7-factor balance strip and merit badges. Filter by grade, category and system, or sort by any single factor:
+
+<p align="center">
+  <img src="screenshots/leaderboard.png" alt="Leaderboard with filters, grades and 7-factor balance" width="100%">
+</p>
+
+### 📋 A Project Report
+Every report shows the letter grade from the bell curve with the exact reason for it, the target device the project was judged for, and its merit badges:
+
+<p align="center">
+  <img src="screenshots/report-header.png" alt="Report header with bell-curve grade" width="100%">
+</p>
+
+The radar is scaled to the project (0 at the centre, its best factor at the edge) with a dashed outline marking a typical vibe-coded project (62), next to the verdict, the reasoning behind the category's weights and the plain code measurements:
+
+<p align="center">
+  <img src="screenshots/report-radar.png" alt="Multi-factor radar, verdict and measurements" width="100%">
+</p>
+
+| 🧮 7-Factor Scorecard | 🛠️ What Works, What Needs Work & Next Steps |
+| :---: | :---: |
+| <img src="screenshots/report-scorecard.png" width="430"> | <img src="screenshots/report-findings.png" width="430"> |
+| *Weights, raw scores, contributions and the reviewers' observations* | *Strengths, gaps, and what a professional team would do next* |
 
 ---
 
