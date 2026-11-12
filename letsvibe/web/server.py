@@ -1134,6 +1134,29 @@ async def api_admin_projects_tree(search: Optional[str] = Query(None), admin: Di
     return {"status": "ok", "tree": tree}
 
 
+class ForceRescanRequest(BaseModel):
+    full_slug: str
+
+
+@app.post("/api/admin/project/force-rescan")
+async def api_admin_force_rescan(req: ForceRescanRequest, _admin: Dict[str, Any] = Depends(require_admin)):
+    """
+    Admin: re-grade a project that is already on the leaderboard, even if its latest commit was graded before
+    (the "already evaluated at this commit" check lives in the submit endpoints, not in the worker). Used after a
+    rubric change. The vibe-coded check still applies.
+    """
+    slug = urllib.parse.unquote(req.full_slug).strip()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT canonical_url FROM projects WHERE lower(full_slug) = lower(?)", (slug,)).fetchone()
+    finally:
+        conn.close()
+    if not row or not row["canonical_url"]:
+        raise HTTPException(status_code=404, detail=f"Project '{slug}' not found")
+    task_id = enqueue_task(target=row["canonical_url"], mode="blend", requested_by="admin_force_rescan")
+    return {"status": "ok", "task_id": task_id, "message": f"Queued a fresh grade of '{slug}' (same-commit check skipped)."}
+
+
 @app.delete("/api/admin/project/{full_slug:path}")
 async def api_admin_delete_project(full_slug: str, _admin: Dict[str, Any] = Depends(require_admin)):
     """Admin endpoint: Deletes project, historical badges, and records from database."""

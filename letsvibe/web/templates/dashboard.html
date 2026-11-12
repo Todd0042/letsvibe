@@ -129,7 +129,10 @@
       display: flex;
       align-items: center;
       gap: 1rem;
+      flex: 1 1 100%;              /* its own row under the brand and tabs */
     }
+    /* Ollama status on the left; the user pill, Support and Submit Repo pushed to the right (Submit at the edge) */
+    .header-actions #user-auth-capsule { margin-left: auto; }
     .engine-badge {
       display: flex;
       align-items: center;
@@ -986,6 +989,26 @@
     .scorecard-table td {
       padding: 1rem;
     }
+    /* Phones: each factor becomes one card. Name on top, weight / score / contribution on one line,
+       "What we found" underneath, full width, inside the same card. */
+    @media (max-width: 640px) {
+      .scorecard-table, .scorecard-table tbody { display: block; width: 100%; min-width: 0; }
+      .scorecard-table thead { display: none; }
+      .scorecard-table tr {
+        display: grid; grid-template-columns: repeat(3, auto); justify-content: start; gap: 0.35rem 1.1rem;
+        padding: 0.85rem 0.9rem; margin-bottom: 0.7rem; border: 1px solid var(--card-border); border-radius: 12px;
+        background: rgba(15, 23, 42, 0.55);
+      }
+      .scorecard-table td { padding: 0; border: none; }
+      .scorecard-table td:first-child { grid-column: 1 / -1; font-size: 0.95rem; }
+      .scorecard-table td[data-label] { font-size: 0.85rem; white-space: nowrap; }
+      .scorecard-table td[data-label]::before {
+        content: attr(data-label) " "; color: var(--text-muted); font-weight: 600; font-size: 0.75rem;
+      }
+      .scorecard-table td.scorecard-found {
+        grid-column: 1 / -1; margin-top: 0.35rem; padding-top: 0.55rem; border-top: 1px dashed var(--card-border);
+      }
+    }
 
     /* Accordion for Historical Merits */
     .accordion-toggle {
@@ -1155,6 +1178,21 @@
        phone    < 600px  : single-column cards, compact header, full-width filters */
     .report-grid-2 > *, .podium-grid > * { min-width: 0; }  /* stop wide tables/charts blowing out grid columns */
 
+    /* Admin console: two columns on desktop. On phones one column, with the Ollama card right below
+       Queue Controls, then the task list, then everything else. */
+    .admin-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 1.5rem; }
+    .admin-grid > .admin-col { min-width: 0; }
+    @media (max-width: 860px) {
+      .admin-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      .admin-grid > .admin-col { display: contents; }
+      .admin-grid > .admin-col > * { order: 4; min-width: 0; }
+      .admin-grid .admin-queue-card { order: 1; }
+      .admin-grid .admin-ollama-card { order: 2; }
+      .admin-grid .admin-tasks-card { order: 3; }
+      /* developer list: let names, pills and delete buttons wrap instead of running off the screen */
+      .dev-info, .dev-repo-row, .dev-repo-row > div { flex-wrap: wrap; row-gap: 0.4rem; min-width: 0; }
+    }
+
     @media (max-width: 1279px) {
       .rankings-table-card table,
       .rankings-table-card tbody { display: block; }
@@ -1189,8 +1227,20 @@
       .brand-logo { font-size: 1.5rem; }
       .nav-tabs { width: 100%; gap: 0.25rem; }
       .nav-tab { flex: 1 1 0; justify-content: center; padding: 0.55rem 0.4rem; font-size: 0.8rem; white-space: nowrap; min-width: 0; }
-      .header-actions { width: 100%; flex-wrap: wrap; gap: 0.5rem; }
-      .header-actions .btn-primary { margin-left: auto; }
+      /* Phones: tabs, then the user card, then Support + Submit Repo on one row, then the Ollama status */
+      .header-actions { display: contents; }
+      .brand { order: 0; }
+      .nav-tabs { order: 1; }
+      .header-actions #user-auth-capsule { order: 2; flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; min-width: 0; }
+      .header-actions .support-link { order: 3; }
+      .header-actions .btn-primary { order: 3; margin-left: auto; }
+      .header-actions .engine-badge { order: 4; flex: 0 1 auto; }
+      /* tabs wrap into tidy rows (an admin's five tabs: 3 + 2) instead of running off the screen */
+      .nav-tabs { flex-wrap: wrap; }
+      .nav-tabs .nav-tab { flex: 1 1 30%; }
+      /* user card: name and badges on the left, the account icons kept together on the right */
+      .user-profile-capsule { flex: 1 1 100%; flex-wrap: wrap; row-gap: 0.4rem; min-width: 0; }
+      .user-profile-capsule .my-projects-link { margin-left: auto; }
       .podium-title { font-size: 1.25rem; }
       .podium-card.rank-1 { transform: none; }
 
@@ -1594,11 +1644,11 @@
         </p>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 1.5rem;">
+      <div class="admin-grid">
         <!-- Left: Queue Control & Tasks -->
-        <div>
+        <div class="admin-col">
           <!-- Queue Controls Card -->
-          <div class="report-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <div class="report-card admin-queue-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
               <span style="font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
                 <i class="fa-solid fa-list-check" style="color: var(--accent-cyan);"></i> Queue Controls
@@ -1632,7 +1682,7 @@
           </div>
 
           <!-- Active & Queued Tasks -->
-          <div class="report-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <div class="report-card admin-tasks-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
               <span style="font-weight: 700; font-size: 1.1rem;"><i class="fa-solid fa-clock-rotate-left"></i> Evaluation Tasks</span>
               <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
@@ -1652,8 +1702,8 @@
         </div>
 
         <!-- Right: Engine & Diagnostics -->
-        <div>
-          <div class="report-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="admin-col">
+          <div class="report-card admin-ollama-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
               <span style="font-weight: 700; font-size: 1.1rem;"><i class="fa-solid fa-brain" style="color: var(--accent-magenta);"></i> Ollama AI Daemon</span>
               <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -2872,10 +2922,10 @@
           .map(([fname, fe]) => `
           <tr>
             <td><strong>${escapeHtml((FACTOR_LABELS[fname] || fname.replace(/_/g, ' ')).toUpperCase())}</strong></td>
-            <td>${Number(fe.weight).toFixed(1)}%</td>
-            <td><strong style="color: var(--accent-cyan);">${fe.score}/100</strong></td>
-            <td style="color: var(--accent-green); font-weight: 700;">+${Number(fe.weighted_score).toFixed(2)}</td>
-            <td style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.5;">${escapeHtml(fe.reasoning || '')}</td>
+            <td data-label="Weight">${Number(fe.weight).toFixed(1)}%</td>
+            <td data-label="Score"><strong style="color: var(--accent-cyan);">${fe.score}/100</strong></td>
+            <td data-label="Adds" style="color: var(--accent-green); font-weight: 700;">+${Number(fe.weighted_score).toFixed(2)}</td>
+            <td class="scorecard-found" style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.5;">${escapeHtml(fe.reasoning || '')}</td>
           </tr>
         `).join('');
 
@@ -3080,9 +3130,16 @@
                       <span style="font-size: 0.85rem; color: var(--accent-cyan); font-weight: 700;">${p.final_score ? p.final_score.toFixed(1) : ''} pts</span>
                       <span style="font-size: 0.78rem; color: var(--text-muted);">Graded: ${p.graded_at ? new Date(p.graded_at).toLocaleDateString() : 'N/A'}</span>
                     </div>
-                    <button class="btn btn-danger" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;" onclick="confirmDeleteProject('${p.full_slug}')">
-                      <i class="fa-solid fa-trash"></i> Delete Project
-                    </button>
+                    <span style="display: inline-flex; gap: 0.4rem; flex-wrap: wrap;">
+                      <button class="btn btn-secondary" style="padding: 0.3rem 0.7rem; font-size: 0.78rem; border-color: var(--accent-cyan); color: var(--accent-cyan);"
+                              title="Queue a fresh grade even if this commit was graded before (for example after a rubric change)"
+                              onclick="forceRescan(this, '${p.full_slug}')">
+                        <i class="fa-solid fa-rotate"></i> Force re-scan
+                      </button>
+                      <button class="btn btn-danger" style="padding: 0.3rem 0.7rem; font-size: 0.78rem;" onclick="confirmDeleteProject('${p.full_slug}')">
+                        <i class="fa-solid fa-trash"></i> Delete Project
+                      </button>
+                    </span>
                   </div>
                 `;
               }).join('')}
@@ -3105,6 +3162,26 @@
         repos.style.display = 'none';
         chevron.className = 'fa-solid fa-chevron-right';
       }
+    }
+
+    // Admin: queue a fresh grade even if the latest commit was graded before (the server re-checks admin rights)
+    async function forceRescan(btn, fullSlug) {
+      const label = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Queuing...';
+      try {
+        const res = await fetch('/api/admin/project/force-rescan', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ full_slug: fullSlug }),
+        });
+        const data = await res.json();
+        btn.innerHTML = res.ok ? '<i class="fa-solid fa-check"></i> Queued' : '<i class="fa-solid fa-triangle-exclamation"></i> Failed';
+        btn.title = res.ok ? (data.message || 'Queued') : (data.detail || 'Could not queue the re-scan');
+        if (res.ok && typeof fetchQueue === 'function') fetchQueue();
+      } catch (err) {
+        btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Failed';
+        btn.title = err.message;
+      }
+      setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 4000);
     }
 
     async function confirmDeleteProject(fullSlug) {
