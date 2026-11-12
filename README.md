@@ -16,6 +16,8 @@
 [![Models](https://img.shields.io/badge/Models-Qwen2.5--Coder%207B%20%2B%2014B-teal.svg)]()
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Creator-F16061?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/todd0042)
 
+> 🤖 *LetsVibe is itself vibe-coded: directed by [Todd0042](https://github.com/Todd0042), written by Antigravity (Gemini) and then Claude Code. [Who did what](#-3-how-letsvibe-itself-was-made).*
+
 > **An independent, privacy-first leaderboard that grades vibe-coded software — programs written by AI from someone's prompts — against other vibe-coded software, never against professional developers. Every grade is produced by open AI models running on one local graphics card, anchored by plain code measurements, and placed on a fully published bell curve.**
 
 🌐 **Live site:** [letsvibe.todd0042.dev](https://letsvibe.todd0042.dev)
@@ -357,7 +359,15 @@ LetsVibe is built around three commitments: **honest grading, user privacy, and 
 * No email addresses, analytics, ads, trackers or third-party scripts; code is graded locally and the copy deleted; users delete their own data from the live site and every backup, with nobody notified.
 
 ### 🤖 3. How LetsVibe itself was made
-* LetsVibe is vibe-coded too: its creator directed the project and AI assistants wrote the code. The reference projects that anchor the grading curve were written by Claude (Anthropic) from prompts by the creator, as documented in their `PROVENANCE.md` files.
+LetsVibe is vibe-coded too: by this site's own definition, it is exactly the kind of project it grades. Its creator directed every decision and wrote none of the code.
+
+| Contributor | Role |
+| :--- | :--- |
+| **[Todd0042](https://github.com/Todd0042)** | Creator: the idea, product direction, the privacy rules, the grading philosophy ("vibe-coded software graded as vibe-coded software", the bell curve), testing against real projects, and every review and decision |
+| **Antigravity** (Google, Gemini models) | Wrote the original version, 2026-11-08 to 2026-11-11: the dual-model local analyzer and CLI, git-aware ingestion and chunking, archetype detection, the first web leaderboard with GitHub sign-in, quotas and 7-factor scoring, fail-closed scoring and the yes/no evidence checklist |
+| **Claude Code** (Anthropic, Claude Opus 5.5) | Took over from 2026-11-11 to v1.0.0: the fix for silently truncated prompts, rubrics v6 and v7 (the vibe-coded reference class, user journey, the name-based file filter, the bell curve and its calibration), privacy and self-service deletion everywhere, terms acceptance, the admin tools, the model bake-off, the README, and the two reference projects ([letsvibe-good](https://github.com/Todd0042/letsvibe-good), [letsvibe-bad](https://github.com/Todd0042/letsvibe-bad)), as documented in their `PROVENANCE.md` files |
+
+This public repository starts at v1.0.0 as a single commit. The earlier development history, including the trial and error behind rubrics v1 to v7, is summarized on the site's [rubric changelog](https://letsvibe.todd0042.dev/changelog).
 
 ### ⚖️ 4. License
 * **[PolyForm Shield License 1.0.0](LICENSE)**: you may read, use, modify and share LetsVibe — for personal, educational, nonprofit or commercial purposes — as long as you don't use it to provide a product or service that competes with LetsVibe (for example, running a rival leaderboard for vibe-coded software). See the [LICENSE](LICENSE) for the exact terms.
