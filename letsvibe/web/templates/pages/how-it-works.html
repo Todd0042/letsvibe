@@ -1,0 +1,83 @@
+<h1>How LetsVibe grades a project</h1>
+<p class="lede">LetsVibe ranks vibe-coded projects: programs written by AI from someone's prompts, usually by people who are not programmers. Every grade is produced by open AI models running on LetsVibe's own computer, combined with plain measurements of the code. Your code is never sent to an AI company. This page explains every step, including what the grades do <em>not</em> mean.</p>
+<p class="updated">Current rubric: {{RUBRIC_VERSION}} &middot; <a href="/changelog">see what changed</a></p>
+
+<div class="callout">
+  <p><strong>In short:</strong> we classify the project, measure its code, have a smaller model review all of the program's code, have a larger model review it as a whole, check concrete yes/no facts, then combine everything with weights that suit the kind of project it is and the device it runs on.</p>
+  <p><strong>LetsVibe grades on a curve (a bell curve).</strong> AI reviewers hedge toward the middle, so a raw score says little on its own. Your letter grade comes from where your project sits between two published reference projects and, as your category grows, how it compares with the projects in it. <a href="/grading-curve">Everything behind the curve, every number included</a>.</p>
+  <p><strong>Vibe-coded software is graded as vibe-coded software.</strong> Every project is compared with other vibe-coded projects, never with software written by professional developers. Developers who use AI assistance in their everyday work are a different group, and LetsVibe does not grade against them. What users experience carries most of the weight; engineering habits are reported as "what a pro team would do next".</p>
+</div>
+
+<h2 id="pipeline">Step by step</h2>
+<ol class="steps">
+  <li><strong>You submit your own public GitHub repository.</strong> You sign in with GitHub so we can confirm the repository belongs to your account; you cannot submit someone else's work. If the latest commit has already been graded, nothing runs again.</li>
+  <li><strong>Vibe-coded check.</strong> LetsVibe is for projects written by AI. We look for signs such as AI-assistant configuration files (Cursor, Copilot, Windsurf, Cline, Aider and similar) and AI co-author lines or prompts in the commit history. If none are found the project is not graded, and you can <a href="/faq#appeals">appeal</a>.</li>
+  <li><strong>A temporary copy is made.</strong> The repository is cloned into a temporary folder on LetsVibe's server. Bundled third-party libraries, binaries, lock files and large data tables are set aside so the project is judged on its own code. Images, audio, video, fonts and 3D models are listed by file name only, so the reviewers know they exist; their contents are never read. The copy is deleted when the evaluation ends.</li>
+  <li><strong>Plain measurements (no AI).</strong> Lines of code, cyclomatic complexity (how tangled each function is), the ratio of test code, continuous integration, packaging, licence, and patterns that look like hard-coded secrets. Reports only ever show the <em>type</em> of a possible secret, never where it is or any part of it.</li>
+  <li><strong>User-journey evidence (no AI).</strong> We look through the repository for how a user gets from start to finish: installers, packages and launch scripts, a README quick start, setup wizards and permission requests, the screens or commands and how deep settings are buried, messages confirming that something worked, and clear error and empty states. The reviewers use this as evidence.</li>
+  <li><strong>Classification.</strong> Build files (for example <code>platformio.ini</code>, an Android manifest or an Xcode project) tell us which platforms and hardware the project targets, including chip, memory and screen size where available. A 7-billion-parameter model then reads the README, the file layout and the main entry file to pick a category. The project is graded against <em>that</em> device: a fast, glanceable screen on a microcontroller is good design, not a missing feature.</li>
+  <li><strong>Choosing what the models read (no AI).</strong> Files are sorted by name and folder. Documentation, licences, build and configuration files, and tests are not sent to the models; they reach the reviewers as measurements, the README and the file layout instead. Story, dialogue, level and other content files are sampled rather than read in full, so content-heavy projects are judged on what they contain, not on their length. Every other file (program logic, screens, setup, input/output) is read.</li>
+  <li><strong>Part-by-part review.</strong> That code is split into chunks that fit the model's memory, each listing its own files, and a 7B model (Qwen2.5-Coder 7B) reviews every one. For user journey, user interface, operational safety and real-world value, a chunk only counts if it actually contains relevant code, so a Bluetooth driver does not count against a project's UI.</li>
+  <li><strong>Whole-project review.</strong> A larger 14B model (Qwen2.5-Coder 14B) reviews the project as a whole using the README, a code sample, the measurements and the part-by-part findings, and writes the verdict you see on the report.</li>
+  <li><strong>Evidence checklist.</strong> The 14B model also answers 23 concrete yes/no questions, phrased for vibe-coded projects (for example "Can common settings be reached in one or two steps, rather than menus inside menus?"). Questions that cannot apply to the project or its hardware are skipped. The checklist is blended 50/50 with the model scores so grades rest on facts, not impressions.</li>
+  <li><strong>Final score and grade.</strong> The seven factor scores are combined using the weights for the project's category (table below) and adjusted by the plain measurements. The letter grade then comes from the <strong>grading curve</strong> (see <a href="#grades">What the grades mean</a>).</li>
+  <li><strong>Owner input, when needed.</strong> Occasionally the review needs more context about what specific lines of code do. The report is then not published until the owner has explained those lines on <a href="/my-projects">My Projects</a> and the explanation has been reviewed. Requests left unanswered for 7 days are deleted along with the report.</li>
+</ol>
+<p>If any stage fails or returns incomplete results, <strong>no grade is published at all</strong>. We would rather show nothing than a misleading number.</p>
+
+<h2 id="factors">The seven factors</h2>
+<p>Five factors cover what users experience and carry most of the weight. Two cover engineering; they count for less, and their findings are framed as next steps.</p>
+<div class="table-scroll"><table>
+  <thead><tr><th>Factor</th><th>What it measures</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Functionality</strong></td><td>Does it do what the README promises? Are the features wired together, and does it handle bad or missing input with a message instead of crashing?</td></tr>
+    <tr><td><strong>User journey</strong></td><td>The user's path from start to finish: getting it running (installer, package, launch script or a README quick start; code signing is never expected), first-run setup where needed (a setup wizard, permission requests with an explanation), finding your way (menus and screens that feel like one product, a way back from every screen, and common settings reachable in one or two steps rather than menus inside menus), finishing the main task without dead ends, a clear confirmation that it worked, and clear error and empty states.</td></tr>
+    <tr><td><strong>UI / UX</strong></td><td>The quality of the individual screens or output <em>for its device</em>: clarity, layout, feedback, and fit with touch, keyboard, buttons, a small display or a terminal.</td></tr>
+    <tr><td><strong>Real-world value</strong></td><td>Does it solve a real problem or delight real people, and is it meaningfully different from what already exists? Judged independently of code quality.</td></tr>
+    <tr><td><strong>Creativity</strong></td><td>Custom mechanics, algorithms, hardware or protocol work and inventive ideas beyond templates and wrappers.</td></tr>
+    <tr><td><strong>Code health</strong> <em>(engineering)</em></td><td>Readable names, code organized into sensible files, not dominated by giant tangled functions, some tests or self-checks, declared dependencies. A few large functions are normal in vibe-coded projects.</td></tr>
+    <tr><td><strong>Operational safety</strong> <em>(engineering)</em></td><td>Does not hang, lose data or leave files and devices open; validates input; does not silently ignore errors. Not having Docker or CI is never counted as a defect.</td></tr>
+  </tbody>
+</table></div>
+
+<p><strong>Size never counts against a project.</strong> Total lines of code and number of files are not quality signals. Many vibe-coded projects are deliberately content-heavy (story and visual-novel apps, games with dialogue, lyrics, level data or translations), and that content is the point, not bloat. Code health is judged on the program logic only.</p>
+
+<h2 id="weights">How much each factor counts</h2>
+<p>Different kinds of projects should be judged on different things: a game lives or dies by its experience, a library by how easy it is to build on. The model proposes weights for each project, and they are always kept within these published ranges for its category (weights always add up to 100%). Engineering factors carry roughly 10&ndash;25% in most categories:</p>
+{{WEIGHT_TABLE}}
+
+<h2 id="combining">How the scores are combined</h2>
+<ul>
+  <li><strong>Across chunks:</strong> for code health, functionality and operational safety the weakest chunk pulls the score down (65% average, 35% weakest), so tidy configuration files cannot hide a messy core. For real-world value the strongest feature counts more (60% average, 40% best).</li>
+  <li><strong>Between models:</strong> the part-by-part 7B review carries 55% for code health, functionality and operational safety; the whole-project 14B review carries 70% for user journey, UI/UX, real-world value and creativity.</li>
+  <li><strong>Checklist:</strong> each factor is then blended 50/50 with its yes/no checklist result.</li>
+  <li><strong>Measurements:</strong> clean, low-complexity code earns up to +4 code health; consistently complex code (a high <em>average</em>) costs up to &minus;8, while a few large functions on their own cost little, as they are normal in vibe-coded projects. Having any automated tests earns +2 code health and a little functionality. Each possible hard-coded secret costs 6 operational-safety points (up to &minus;18).</li>
+  <li><strong>Spread:</strong> factor scores are spread slightly around 65 so ordinary differences are visible instead of clustering.</li>
+</ul>
+
+<h2 id="grades">What the grades mean</h2>
+<p>Scores use bands written for vibe-coded projects: 55&ndash;69 is a typical working project (62 is the centre), 70&ndash;79 a strong one, 80&ndash;89 among the best vibe-coded projects, and 90+ would impress even by professional standards.</p>
+<p><strong>Letter grades are given on a curve, often called a bell curve.</strong> AI reviewers are good at comparing projects but poor at absolute scores: they hedge toward the middle. In LetsVibe's own testing, a deliberately terrible app and a carefully built one averaged about 28 and 68, never near 0 or 100. So the raw score is not turned into a letter directly. Your letter depends on how far your score sits above or below the average, measured in standard deviations; on a full bell that gives about 7% A, 24% B, 38% C, 24% D and 7% F.</p>
+<ul>
+  <li><strong>Two public reference projects set the ends of the curve.</strong> A small app written to satisfy every factor and one written to ignore every factor were each graded several times with exactly the pipeline your project goes through. Until your category has projects of its own, the bell's average is the midpoint between them and one standard deviation is a quarter of the gap, so the good one sits two standard deviations above average and the bad one two below.</li>
+  <li><strong>Your category takes over as it grows.</strong> Each project added to your category shifts the bell toward that category's own average and spread, and from 30 projects on, the bell comes entirely from your category.</li>
+  <li><strong>Two rules keep it honest:</strong> an A also needs a score near the top reference, so the best of a weak group is not an A just for being first, and a project about as weak as the bottom reference is an F whatever its ranking.</li>
+</ul>
+<p>Reference projects never appear in the rankings. The <a href="/grading-curve">Grading curve</a> page shows both of them, their exact prompts, every grading run and every number used. Every report also shows its rank in its category (for example "#3 of 41 in Games"), and your raw score is always shown unchanged.</p>
+<p>If the curve is ever unavailable (for example while it is being rebuilt after a rubric change), letters temporarily come from this table, which matches the score bands:</p>
+{{GRADE_TABLE}}
+
+<h2 id="limits">What a LetsVibe grade is not</h2>
+<ul>
+  <li><strong>Not a security audit.</strong> A published report never certifies that software is safe to run.</li>
+  <li><strong>Not an endorsement</strong> of a project, its author or its fitness for any purpose.</li>
+  <li><strong>Not perfectly repeatable.</strong> AI models vary slightly from run to run, so the same code can score a few points differently. Treat small differences between projects as a tie.</li>
+  <li><strong>Not a judgement of a person.</strong> Grades describe a repository at one commit, under one <a href="/changelog">rubric version</a>.</li>
+</ul>
+
+<h2 id="corrections">Corrections</h2>
+<p>AI reviews can get facts wrong. A project's owner can report an error in any statement of their review, pointing to the relevant code. The statement is checked once against the code; if the check confirms the error, the statement is corrected (in live data and backups) and the report shows that it was corrected. Otherwise it is reviewed by hand. Scores are not changed by a correction; the owner can request a fresh grade after pushing a new commit.</p>
+
+<h2 id="hardware">Why everything runs locally</h2>
+<p>The models run through <a href="https://ollama.com" rel="noopener noreferrer">Ollama</a> on a single consumer graphics card owned by LetsVibe. Nothing you submit is sent to OpenAI, Anthropic, Google or any other AI provider, and nothing is used to train models. The trade-off is speed: an evaluation takes several minutes and runs one at a time.</p>
+<p>Questions? See the <a href="/faq">FAQ</a> or <a href="/support">contact us</a>.</p>

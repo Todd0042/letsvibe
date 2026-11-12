@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "letsvibe"
+version = "1.0.0"
+description = "100% Local, Dual-Model Repository Vibe & Health Analyzer"
+readme = "README.md"
+authors = [{ name = "Todd" }]
+license = { text = "PolyForm-Shield-1.0.0" }
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.15.0",
+    "rich>=13.9.0",
+    "pydantic>=2.10.0",
+    "lizard>=1.17.10",
+    "jinja2>=3.1.5",
+    "httpx>=0.28.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Browser layout tests: pip install -e .[dev] && python -m playwright install chromium
+dev = [
+    "pytest>=8.0",
+    "playwright>=1.48",
+]
+
+[project.scripts]
+letsvibe = "letsvibe.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["letsvibe*"]

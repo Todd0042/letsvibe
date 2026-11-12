@@ -1,0 +1,27 @@
+<h1>Sign in</h1>
+<p class="lede">Signing in with GitHub creates your LetsVibe account, so please read and accept the terms first.</p>
+
+<div class="callout">
+  <p>LetsVibe asks GitHub for your public username, numeric ID and avatar only. It never asks for or stores your email address.</p>
+  <p>Before continuing, read the <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+</div>
+
+<form id="signin-form" action="/api/auth/github/login" method="get" class="signin-form">
+  <input type="hidden" name="accept_terms" value="{{TERMS_VERSION}}">
+  <label class="signin-accept">
+    <input type="checkbox" id="signin-accept" required>
+    <span>I am <strong>18 or older</strong> (or the age of majority where I live, if that is higher), and I agree to the
+      <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and the
+      <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> (version {{TERMS_VERSION}}).</span>
+  </label>
+  <p><button type="submit" class="pbtn primary" id="signin-go" disabled><i class="fa-brands fa-github"></i> Continue with GitHub</button></p>
+</form>
+<p class="updated">Your acceptance (which version, and when) is stored with your account, included in your data export, and deleted with your account. If the terms change, you'll be asked to accept them again the next time you sign in.</p>
+<!--SCRIPT-->
+<script>
+(() => {
+  const box = document.getElementById('signin-accept');
+  const go = document.getElementById('signin-go');
+  box.addEventListener('change', () => { go.disabled = !box.checked; });
+})();
+</script>

@@ -1,0 +1,223 @@
+<h1>My Data</h1>
+<p class="lede">Everything LetsVibe holds about your account, and full control over it. Deleting is immediate and nobody is notified.</p>
+
+<div id="signed-out" class="data-card" hidden>
+  <h2>Sign in to manage your data</h2>
+  <p>Sign in with the GitHub account that owns your projects. LetsVibe only requests your public username, ID and avatar.</p>
+  <p><a class="pbtn primary" href="/sign-in"><i class="fa-brands fa-github"></i> Continue with GitHub</a></p>
+  <p style="font-size: 0.85rem; color: var(--text-muted);">Lost access to that GitHub account? See <a href="/remove#no-access">Remove my project</a>.</p>
+</div>
+
+<div id="signed-in" hidden>
+  <section class="data-card" aria-labelledby="acct-h">
+    <h2 id="acct-h">Your account</h2>
+    <p>Signed in as <strong id="acct-name"></strong>. LetsVibe stores your GitHub ID, username, avatar link, sign-in dates, submission allowance, and which version of the terms you accepted and when. No email address.</p>
+    <p><a class="pbtn" id="export-link" href="/api/me/export" download><i class="fa-solid fa-download"></i> Download all my data (JSON)</a></p>
+  </section>
+
+  <section class="data-card" aria-labelledby="proj-h">
+    <h2 id="proj-h">Your projects</h2>
+    <p id="proj-empty" hidden>You have no projects on LetsVibe.</p>
+    <ul class="project-list" id="proj-list"></ul>
+    <div id="delete-all-box" hidden style="margin-top: 1rem;">
+      <div id="delete-all-ask">
+        <button class="pbtn danger" type="button" id="delete-all-btn"><i class="fa-solid fa-trash"></i> Delete all my projects</button>
+      </div>
+      <div id="delete-all-confirm" class="inline-confirm" hidden>
+        <span>Remove <strong id="delete-all-count"></strong> from LetsVibe? This cannot be undone.</span>
+        <button class="pbtn danger small" type="button" id="delete-all-yes">Yes, delete them</button>
+        <button class="pbtn small" type="button" id="delete-all-no">Cancel</button>
+      </div>
+    </div>
+    <div id="job-box" hidden>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="job-bar-wrap"><div class="progress-fill" id="job-bar"></div></div>
+    </div>
+    <p class="status-line" id="proj-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="data-card" aria-labelledby="appeal-h">
+    <h2 id="appeal-h">Your appeals</h2>
+    <p id="appeal-empty">No appeals.</p>
+    <div id="appeal-list"></div>
+  </section>
+
+  <section class="data-card danger-zone" aria-labelledby="del-h">
+    <h2 id="del-h">Delete my account</h2>
+    <p>Deletes every project above, your appeals and queue history, and your account itself, then signs you out on every device. You can sign up again later if slots are available.</p>
+    <div id="admin-note" hidden><p>This is the site administrator account and cannot be deleted from here.</p></div>
+    <div id="acct-delete-form">
+      <div class="field">
+        <label for="confirm-name">Type your GitHub username <strong id="confirm-hint"></strong> to confirm</label>
+        <input id="confirm-name" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <button class="pbtn danger" type="button" id="acct-delete-btn" disabled><i class="fa-solid fa-user-xmark"></i> Permanently delete my account</button>
+    </div>
+    <div id="acct-job-box" hidden>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="acct-bar-wrap"><div class="progress-fill" id="acct-bar"></div></div>
+    </div>
+    <p class="status-line" id="acct-status" role="status" aria-live="polite"></p>
+  </section>
+</div>
+
+<div id="account-gone" class="data-card" hidden>
+  <h2>Your account has been deleted</h2>
+  <p>All of your projects, reports, appeals and account data have been removed from LetsVibe, and you have been signed out everywhere. Thank you for trying LetsVibe.</p>
+  <p><a class="pbtn" href="/">Back to the leaderboard</a></p>
+</div>
+<!--SCRIPT-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let me = null;
+
+  async function api(url, opts = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', ...opts });
+    let body = {};
+    try { body = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+    return body;
+  }
+
+  function setStatus(el, text, kind) {
+    el.textContent = text;
+    el.className = 'status-line' + (kind ? ' ' + kind : '');
+  }
+
+  async function pollJob(jobId, bar, wrap, statusEl) {
+    for (;;) {
+      const st = await api(`/api/me/jobs/${encodeURIComponent(jobId)}`);
+      bar.style.width = st.percent + '%';
+      wrap.setAttribute('aria-valuenow', String(st.percent));
+      setStatus(statusEl, `${st.message} (${st.done} of ${st.total})`);
+      if (st.status === 'done' || st.status === 'failed') return st;
+      await new Promise(r => setTimeout(r, 600));
+    }
+  }
+
+  function renderProjects(items) {
+    const list = $('proj-list');
+    $('proj-empty').hidden = items.length > 0;
+    $('delete-all-box').hidden = items.length === 0;
+    $('delete-all-count').textContent = `${items.length} project${items.length === 1 ? '' : 's'}`;
+    list.innerHTML = items.map((p, i) => `
+      <li data-slug="${esc(p.full_slug)}">
+        <div>
+          <div class="name"><a href="/project/${esc(p.full_slug)}">${esc(p.full_slug)}</a></div>
+          <div class="meta">${p.final_score != null ? `${Number(p.final_score).toFixed(1)} (${esc(p.letter_grade)})` : 'Not graded'}
+            &middot; ${p.report_count} report${p.report_count === 1 ? '' : 's'}${p.graded_at ? ' &middot; last graded ' + esc(String(p.graded_at).slice(0, 10)) : ''}</div>
+        </div>
+        <div class="row-actions">
+          <button class="pbtn danger small" type="button" data-ask="${i}">Delete</button>
+          <span class="inline-confirm" data-confirm="${i}" hidden>Delete this project?
+            <button class="pbtn danger small" type="button" data-yes="${i}">Delete</button>
+            <button class="pbtn small" type="button" data-no="${i}">Cancel</button>
+          </span>
+        </div>
+      </li>`).join('');
+  }
+
+  async function loadProjects() {
+    const data = await api('/api/me/projects');
+    renderProjects(data.items || []);
+    return data.items || [];
+  }
+
+  async function loadAppeals() {
+    const data = await api('/api/me/appeals');
+    const items = data.items || [];
+    $('appeal-empty').hidden = items.length > 0;
+    $('appeal-list').innerHTML = items.map(a => `
+      <div class="appeal-item">
+        <div><strong>${esc(a.full_slug || a.target)}</strong> <span class="pill ${esc(a.status)}">${esc(String(a.status).toUpperCase())}</span></div>
+        <div class="meta" style="font-size: 0.8rem; color: var(--text-muted);">Submitted ${esc(String(a.created_at).slice(0, 10))}${a.reviewed_at ? ' &middot; decided ' + esc(String(a.reviewed_at).slice(0, 10)) : ''}</div>
+        ${a.admin_response ? `<p style="margin: 0.4rem 0 0;"><strong>Decision note:</strong> ${esc(a.admin_response)}</p>` : ''}
+      </div>`).join('');
+  }
+
+  $('proj-list').addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    const li = t.closest('li');
+    const ask = li.querySelector('[data-ask]');
+    const confirmBox = li.querySelector('[data-confirm]');
+    if (t.dataset.ask !== undefined) { ask.hidden = true; confirmBox.hidden = false; confirmBox.querySelector('[data-yes]').focus(); return; }
+    if (t.dataset.no !== undefined) { ask.hidden = false; confirmBox.hidden = true; ask.focus(); return; }
+    if (t.dataset.yes !== undefined) {
+      const slug = li.dataset.slug;
+      t.disabled = true;
+      setStatus($('proj-status'), `Deleting ${slug}...`);
+      try {
+        const r = await api(`/api/me/projects/${slug.split('/').map(encodeURIComponent).join('/')}`, { method: 'DELETE' });
+        await loadProjects();  // refresh the list before announcing success
+        setStatus($('proj-status'), r.message, 'ok');
+      } catch (err) {
+        setStatus($('proj-status'), err.message, 'err');
+        t.disabled = false;
+      }
+    }
+  });
+
+  $('delete-all-btn').addEventListener('click', () => { $('delete-all-ask').hidden = true; $('delete-all-confirm').hidden = false; $('delete-all-yes').focus(); });
+  $('delete-all-no').addEventListener('click', () => { $('delete-all-ask').hidden = false; $('delete-all-confirm').hidden = true; });
+  $('delete-all-yes').addEventListener('click', async () => {
+    $('delete-all-confirm').hidden = true;
+    $('job-box').hidden = false;
+    setStatus($('proj-status'), 'Starting...');
+    document.querySelectorAll('#proj-list button').forEach(b => { b.disabled = true; });
+    try {
+      const job = await api('/api/me/projects/delete-all', { method: 'POST' });
+      const st = await pollJob(job.job_id, $('job-bar'), $('job-bar-wrap'), $('proj-status'));
+      await loadProjects();
+      setStatus($('proj-status'), st.message, st.status === 'done' ? 'ok' : 'err');
+    } catch (err) {
+      await loadProjects().catch(() => {});
+      setStatus($('proj-status'), err.message, 'err');
+    }
+    $('delete-all-ask').hidden = false;
+  });
+
+  $('confirm-name').addEventListener('input', (e) => {
+    $('acct-delete-btn').disabled = !me || e.target.value.trim().toLowerCase() !== me.username.toLowerCase();
+  });
+  $('acct-delete-btn').addEventListener('click', async () => {
+    $('acct-delete-btn').disabled = true;
+    $('acct-delete-form').hidden = true;
+    $('acct-job-box').hidden = false;
+    try {
+      const job = await api('/api/me/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm_username: $('confirm-name').value.trim() }),
+      });
+      try { localStorage.removeItem('letsvibe_active_tracker_id'); } catch (e) {}
+      const st = await pollJob(job.job_id, $('acct-bar'), $('acct-bar-wrap'), $('acct-status'));
+      if (st.status === 'done') {
+        $('signed-in').hidden = true;
+        $('account-gone').hidden = false;
+        $('account-gone').querySelector('h2').focus?.();
+      } else {
+        setStatus($('acct-status'), st.message, 'err');
+        $('acct-delete-form').hidden = false;
+      }
+    } catch (err) {
+      setStatus($('acct-status'), err.message, 'err');
+      $('acct-delete-form').hidden = false;
+    }
+  });
+
+  async function init() {
+    let auth = {};
+    try { auth = await api('/api/auth/me'); } catch (e) {}
+    if (!auth.authenticated) { $('signed-out').hidden = false; return; }
+    me = { username: auth.username || (auth.user && auth.user.username) || '', isAdmin: !!auth.is_admin };
+    $('acct-name').textContent = '@' + me.username;
+    $('confirm-hint').textContent = '(' + me.username + ')';
+    $('admin-note').hidden = !me.isAdmin;
+    $('acct-delete-form').hidden = me.isAdmin;
+    $('signed-in').hidden = false;
+    await Promise.all([loadProjects(), loadAppeals()]).catch(err => setStatus($('proj-status'), err.message, 'err'));
+  }
+  init();
+})();
+</script>

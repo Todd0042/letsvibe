@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Output, state and database storage
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+# Only the published curve calibration may live in the package data folder (never a database or backup)
+letsvibe/data/*
+!letsvibe/data/curve_calibration.json
+reports/
+temp_repos/
+*.html
+!letsvibe/web/templates/*.html
+!letsvibe/web/templates/pages/*.html
+!letsvibe/web/templates/partials/*.html
+VIBE_REPORT.md
+
+# Secrets, tokens and environment variables
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+*credentials*.json
+.netrc
+.cloudflared/
+secrets/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local dev launcher (server + Cloudflare tunnel)
+start-dev.sh
+
+# Browser test output
+test-results/
+
+# Local notes
+to-do.md
+legal-plan.md
+analyzing-model-direction.md
+model-bakeoff.md
+bakeoff-v2.md
