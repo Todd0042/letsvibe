@@ -365,7 +365,7 @@ def render(d: dict) -> str:
             f"- Environment variables the code reads: {', '.join(j['env_keys']) or '(none)'}",
             f"- Example config / .env files: {', '.join(j['env_or_example_config_files']) or '(none)'}",
             f"- API keys or tokens the code can read (may be optional; check the README): {', '.join(j['needs_api_key']) or '(none found)'}",
-            f"- Saving: {'; '.join(f'{k} in {', '.join(v)}' for k, v in j['save_mechanisms'].items()) or 'no saving found'}",
+            "- Saving: " + ("; ".join(k + " in " + ", ".join(v) for k, v in j["save_mechanisms"].items()) or "no saving found"),
             f"- Auto-save hints: {', '.join(j['autosave_hints']) or '(none)'}",
             f"- Dialog/modal mentions: {j['modal_dialog_mentions']}; deepest route: {j['max_route_depth']} levels; settings files: {', '.join(j['settings_files']) or '(none)'}",
             f"- Setup burden: setup screens {', '.join(d['setup']['setup_files']) or '(none found)'}; {d['setup']['setup_inputs']} input fields "
@@ -373,7 +373,7 @@ def render(d: dict) -> str:
             f"{(': ' + '; '.join(d['setup']['technical_labels'][:12])) if d['setup']['technical_labels'] else ''}; setup forced before first use: "
             f"{('yes (' + ', '.join(d['setup']['setup_forced_before_use']) + ')') if d['setup']['setup_forced_before_use'] else 'no'}",
             f"- Hostile patterns (ads, paywalls, forced login, nags, wait timers): "
-            f"{'; '.join(f'{k}: {', '.join(v)}' for k, v in j['hostile_patterns'].items()) or 'none found'}", "",
+            + ("; ".join(k + ": " + ", ".join(v) for k, v in j["hostile_patterns"].items()) or "none found"), "",
             "## 5b. Screen and feedback facts (Python counts)",
             f"- Loading indicators: {d['ui']['loading_indicators']}; empty-state messages: {d['ui']['empty_states']}; error messages shown "
             f"to the user: {d['ui']['error_messages']}; success or confirmation messages: {d['ui']['success_messages']}",
