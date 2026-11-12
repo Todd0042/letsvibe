@@ -127,7 +127,12 @@ AI reviewers are good at *comparing* projects but poor at absolute scores — th
 * **As a category grows**, its own average and spread take over, fully at 30 projects.
 * **Two rails keep it honest**: an A also needs a score near the top reference, and a score about as weak as the bottom reference is an F, whatever the ranking.
 
-The reference projects never appear in the rankings. Their exact prompts, the AI model that wrote them, every grading run and every number used are on the [Grading curve](https://letsvibe.todd0042.dev/grading-curve) page.
+The reference projects never appear in the rankings. Their exact prompts, the AI model that wrote them, every grading run and every number used are on the [Grading curve](https://letsvibe.todd0042.dev/grading-curve) page, generated directly from the calibration file the grader uses:
+
+| 🔔 Why a Curve & How It Works | 📐 The Reference Projects & Every Run |
+| :---: | :---: |
+| <img src="screenshots/curve-method.png" width="400"> | <img src="screenshots/curve-reference.png" width="400"> |
+| *The method, the grade bands and each grade's share of a full bell* | *The exact prompt, the model that wrote it, and all three grading runs* |
 
 ---
 
@@ -268,6 +273,10 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 * **Owner input & corrections ([storage/integrity.py](letsvibe/storage/integrity.py))**: when the review needs context about specific lines, the report is held privately until the owner explains them (deleted after 7 days without an answer). Owners can report factual errors in a review; each is checked against the code and corrected or reviewed by hand.
 * **Privacy & deletion ([storage/backups.py](letsvibe/storage/backups.py), [web/privacy_jobs.py](letsvibe/web/privacy_jobs.py))**: weekly backups, only the two newest kept; every deletion is applied to the live database and every backup together, and a backup that cannot be cleaned is destroyed.
 * **Admin console**: queue control, held reports, error reports, appeals, a developer tree with per-project deletion and a **"Delete all user data"** action for removal requests that arrive by email.
+
+<p align="center">
+  <img src="screenshots/admin-console.png" alt="Admin queue and engine console" width="90%">
+</p>
 * **Content pages ([web/templates/pages/](letsvibe/web/templates/pages/))**: How grading works, Grading curve, FAQ, rubric changelog, Privacy, Cookies, Terms, Remove my project, My Data and My Projects.
 
 ---
