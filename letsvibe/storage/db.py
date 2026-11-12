@@ -199,6 +199,10 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         );
         """)
         # Safe migrations for existing databases
+        try:  # a task stopped by the admin runs first when the queue resumes (web/worker.py)
+            conn.execute("ALTER TABLE queue_settings ADD COLUMN front_task_id INTEGER;")
+        except sqlite3.OperationalError:
+            pass
         for col in ("terms_version TEXT", "terms_accepted_at TEXT"):  # Terms of Use acceptance (core/legal.py)
             try:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {col};")
@@ -983,12 +987,14 @@ def get_task_status_with_position(task_id: int, db_path: Path = DEFAULT_DB_PATH)
 
     position = None
     if task["status"] == "queued":
-        ahead = conn.execute(
+        front = conn.execute("SELECT front_task_id FROM queue_settings WHERE id = 1").fetchone()
+        front_id = front["front_task_id"] if front else None
+        ahead = 0 if front_id == task_id else conn.execute(
             """
             SELECT COUNT(*) as c FROM audit_queue
-            WHERE status = 'queued' AND id < ?
+            WHERE status = 'queued' AND (id < ? OR id = ?)
             """,
-            (task_id,),
+            (task_id, front_id if front_id is not None else -1),
         ).fetchone()["c"]
         position = ahead + 1
 
@@ -1013,8 +1019,9 @@ def get_queue_items(limit: int = 50, db_path: Path = DEFAULT_DB_PATH) -> List[Di
                 WHEN 'queued' THEN 2
                 ELSE 3
             END,
-            -- Waiting tasks are listed in the order they will run (oldest first, as the worker takes them);
-            -- finished ones newest first.
+            -- Waiting tasks are listed in the order they will run: a task stopped by the admin first, then
+            -- oldest first (as the worker takes them); finished ones newest first.
+            CASE WHEN status = 'queued' AND id = (SELECT front_task_id FROM queue_settings WHERE id = 1) THEN 0 ELSE 1 END,
             CASE WHEN status = 'queued' THEN id END ASC,
             id DESC
         LIMIT ?

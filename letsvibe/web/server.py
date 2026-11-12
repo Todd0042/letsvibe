@@ -930,6 +930,16 @@ async def api_task_status(task_id: int):
     return {"status": "ok", "task": task_info}
 
 
+@app.post("/api/admin/queue/stop/{task_id}")
+async def api_stop_task(task_id: int, _admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin: stops the running task. The queue is paused and the task stays first in line for when it resumes."""
+    if not worker:
+        raise HTTPException(status_code=500, detail="Worker not initialized")
+    if not worker.request_stop(task_id):
+        raise HTTPException(status_code=400, detail="Only the running task can be stopped.")
+    return {"status": "ok", "message": f"Stopping task #{task_id}. The queue is paused; it runs first when you resume."}
+
+
 @app.post("/api/admin/queue/run-now/{task_id}")
 async def api_run_now(task_id: int, _admin: Dict[str, Any] = Depends(require_admin)):
     """Admin endpoint: Forces execution of a specific task immediately."""

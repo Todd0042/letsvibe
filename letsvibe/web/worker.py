@@ -36,6 +36,10 @@ from ..storage.manager import ReportStorageManager
 logger = logging.getLogger("letsvibe.worker")
 
 
+class TaskStopped(CpuSpilloverError):
+    """Raised inside a running task when the admin presses Stop (a CpuSpilloverError so the pipeline halts at once)."""
+
+
 class AuditQueueWorker:
     """Background worker processing repo audits from SQLite queue."""
 
@@ -46,6 +50,7 @@ class AuditQueueWorker:
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
         self.current_task_info: Optional[dict] = None
+        self._stop_task_id: Optional[int] = None  # set by request_stop(); checked at every safe point
 
     def start(self) -> None:
         """Starts worker background thread."""
@@ -105,11 +110,16 @@ class AuditQueueWorker:
                 if next_id is not None:  # admin "Run next" goes first, even while paused
                     row = conn.execute("SELECT * FROM audit_queue WHERE id = ? AND status = 'queued'", (next_id,)).fetchone()
                 if row is None:
-                    settings = conn.execute("SELECT is_paused, auto_process FROM queue_settings WHERE id = 1").fetchone()
+                    settings = conn.execute("SELECT * FROM queue_settings WHERE id = 1").fetchone()
                     if not settings or settings["is_paused"] or not settings["auto_process"]:
                         return None
-                    # First come, first served: the oldest waiting task runs next
-                    row = conn.execute("SELECT * FROM audit_queue WHERE status = 'queued' ORDER BY id ASC LIMIT 1").fetchone()
+                    # A task the admin stopped resumes first; otherwise first come, first served (oldest first)
+                    front = settings["front_task_id"] if "front_task_id" in settings.keys() else None
+                    if front is not None:
+                        row = conn.execute("SELECT * FROM audit_queue WHERE id = ? AND status = 'queued'", (front,)).fetchone()
+                        conn.execute("UPDATE queue_settings SET front_task_id = NULL WHERE id = 1")
+                    if row is None:
+                        row = conn.execute("SELECT * FROM audit_queue WHERE status = 'queued' ORDER BY id ASC LIMIT 1").fetchone()
                 if not row:
                     return None
 
@@ -143,7 +153,50 @@ class AuditQueueWorker:
         self._next_task_id = task_id
         return True
 
+    def request_stop(self, task_id: int) -> bool:
+        """
+        Admin "Stop": pauses the queue at once (so nothing else starts), then the running task stops at its
+        next safe point -- before its next AI call or progress step; an AI call already under way finishes
+        first. The task goes back to the queue, first in line, and runs when the queue is resumed.
+        """
+        conn = get_db_connection(self.db_path)
+        try:
+            row = conn.execute("SELECT status FROM audit_queue WHERE id = ?", (task_id,)).fetchone()
+            if not row or row["status"] != "running":
+                return False
+            with conn:
+                conn.execute("UPDATE queue_settings SET is_paused = 1, front_task_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+                             (task_id,))
+                conn.execute("UPDATE audit_queue SET progress_message = ? WHERE id = ?",
+                             ("Stopping... (finishing the current AI step)", task_id))
+        finally:
+            conn.close()
+        current = (self.current_task_info or {}).get("id")
+        if current == task_id:
+            self._stop_task_id = task_id
+        else:  # marked running but not being worked on (e.g. left over from a restart): requeue it now
+            self._requeue_stopped(task_id)
+        return True
+
+    def _check_stop(self, task_id: int) -> None:
+        if self._stop_task_id is not None and self._stop_task_id == task_id:
+            raise TaskStopped(f"Task {task_id} stopped by the admin.")
+
+    def _requeue_stopped(self, task_id: int) -> None:
+        self._stop_task_id = None
+        conn = get_db_connection(self.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE audit_queue SET status = 'queued', started_at = NULL, progress_message = ? WHERE id = ?",
+                    ("Stopped by the admin. It runs first when the queue is resumed.", task_id),
+                )
+                conn.execute("UPDATE queue_settings SET is_paused = 1, front_task_id = ? WHERE id = 1", (task_id,))
+        finally:
+            conn.close()
+
     def _update_task_progress(self, task_id: int, message: str, pct: Optional[int] = None) -> None:
+        self._check_stop(task_id)
         formatted = f"[PROGRESS:{pct}%] {message}" if pct is not None else message
         conn = get_db_connection(self.db_path)
         try:
@@ -195,6 +248,14 @@ class AuditQueueWorker:
                 logger.info(f"Task #{task_id} has force_override=1: bypassing AI/vibe-coding gatekeeper.")
 
             client = OllamaClient()
+            # Every AI call first checks whether the admin pressed Stop
+            _generate = client.generate_json
+
+            def _guarded_generate(*args, **kwargs):
+                self._check_stop(task_id)
+                return _generate(*args, **kwargs)
+
+            client.generate_json = _guarded_generate
             if not client.is_running():
                 last_step_msg = "Starting local Ollama daemon..."
                 self._update_task_progress(task_id, last_step_msg, pct=12)
@@ -281,6 +342,9 @@ class AuditQueueWorker:
             finally:
                 conn.close()
 
+        except TaskStopped:
+            logger.info(f"Task {task_id} stopped by the admin; requeued first in line, queue paused.")
+            self._requeue_stopped(task_id)
         except CpuSpilloverError as spill_exc:
             logger.error(f"Task {task_id} aborted by CPU spillover / hang protection: {spill_exc}")
             self._abort_and_route_to_approval_inbox(

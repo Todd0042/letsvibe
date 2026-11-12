@@ -3808,9 +3808,13 @@
                     <i class="fa-solid fa-forward"></i> Run Next
                   </button>
                 ` : ''}
+${t.status === 'running' ? `
+                <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Stop this task: the queue pauses and it runs first when you resume" onclick="stopQueueTask(${t.id}, this)">
+                  <i class="fa-solid fa-stop"></i> Stop
+                </button>` : `
                 <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="deleteQueueTask(${t.id})">
                   <i class="fa-solid fa-trash"></i>
-                </button>
+                </button>`}
               </div>
             </div>
           `;
@@ -3860,6 +3864,17 @@
 
     async function runTaskNow(taskId) {
       await fetch(`/api/admin/queue/run-now/${taskId}`, { method: 'POST' });
+      fetchQueue();
+    }
+
+    async function stopQueueTask(taskId, button) {
+      button.disabled = true;
+      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Stopping';
+      const res = await fetch(`/api/admin/queue/stop/${taskId}`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || 'Could not stop that task.');
+      }
       fetchQueue();
     }
 
