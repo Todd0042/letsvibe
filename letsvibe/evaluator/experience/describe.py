@@ -15,7 +15,7 @@ PLAIN = {
     "has_distinct_voice": {True: "its on-screen text has personality", False: "its on-screen text is plain and generic"},
     "subverts_standard_ui": {True: "people use it in an unusual way", False: "it uses a standard layout"},
     "mechanical_synergy": {True: "its features work together as one experience", False: "its features feel separate"},
-    "hostile_monetization": {True: "it has ads, paywalls, forced sign-in or wait timers", False: "no ads, paywalls, forced sign-in or wait timers"},
+    "hostile_monetization": {True: "the code includes ads, payments or a required sign-in service", False: "no ads, paywalls, forced sign-in or wait timers"},
     "clarity": {"CLEAR": "the screens are clear and easy to understand", "MIXED": "the screens are partly clear and partly confusing",
                 "CLUTTERED_OR_TECHNICAL": "the screens are cluttered or use too many technical terms"},
     "consistency": {"CONSISTENT": "the screens share one consistent look", "MOSTLY_CONSISTENT": "the screens mostly share one look",
@@ -60,7 +60,7 @@ def facts_for(answers: Dict[str, Any]) -> List[str]:
     return lines
 
 
-def problems(cat: str, answers: Dict[str, Any]) -> List[str]:
+def problems(cat: str, answers: Dict[str, Any], hostile: List[str] = ()) -> List[str]:
     out = []
     for k in POINTS[cat]:
         bad = PROBLEM_ANSWERS.get(k)
@@ -68,8 +68,8 @@ def problems(cat: str, answers: Dict[str, Any]) -> List[str]:
             continue
         ev = "; ".join(f'"{q[:100]}"' for q in answers[k].get("evidence", [])[:1] if q.strip())
         out.append(f"{TITLES[cat]}: {k.replace('_', ' ')} is '{_meaning(k, answers[k]['answer'])}'" + (f" (evidence: {ev})" if ev else ""))
-    if cat == "journey" and answers.get("hostile_monetization", {}).get("answer") is True:
-        out.append(f"{TITLES[cat]}: {_meaning('hostile_monetization', True)}")
+    if cat == "journey" and hostile:
+        out.append(f"{TITLES[cat]}: the code includes " + ", ".join(hostile))
     return out
 
 
@@ -91,12 +91,16 @@ def summarize(generate: Callable[..., Dict[str, Any]], model: str, repo: str, te
 
 
 def write(generate: Callable[..., Dict[str, Any]], model: str, repo: str, results: Dict[str, Dict[str, Any]],
-          proven: List[str] = ()) -> Tuple[Dict[str, str], List[str]]:
+          proven: List[str] = (), hostile: List[str] = ()) -> Tuple[Dict[str, str], List[str]]:
     """`proven` are problems found by the code scan (certain), added to the functionality findings and to "needs work"."""
     texts: Dict[str, str] = {}
     needs: List[str] = [f"Functionality: {p}" for p in proven]
     for cat, answers in results.items():
         extra = [f"- Found by an automatic scan (certain): {p}" for p in proven] if cat == "functionality" else []
+        if cat == "journey":
+            answers = {k: v for k, v in answers.items() if k != "hostile_monetization"}   # stated exactly below instead
+            extra = ([f"- The code includes {', '.join(hostile)} (found by an automatic scan)"] if hostile
+                     else ["- No ads, payments, required sign-in or review prompts were found in the code"])
         prompt = (f"These are checked findings about the {TITLES[cat]} of a project called {repo}:\n" + "\n".join(facts_for(answers) + extra) +
                   f"\n\nWrite 2-3 plain-English sentences about its {TITLES[cat]} for someone who does not write code. Every finding above "
                   "is true: your sentences must agree with each one and never say the opposite. Use only these findings and their "
@@ -108,7 +112,7 @@ def write(generate: Callable[..., Dict[str, Any]], model: str, repo: str, result
             raise
         except (ValueError, RuntimeError):
             texts[cat] = ""
-        needs += problems(cat, answers)
+        needs += problems(cat, answers, hostile)
     bullets: List[str] = []
     if needs:
         prompt = ("These checked findings about a project are problems:\n" + "\n".join(f"- {n}" for n in needs) +

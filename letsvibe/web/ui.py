@@ -172,7 +172,7 @@ def _fill_live_tables(content: str) -> str:
                             f"config files that don't parse)</td><td>&minus;{fields['proven_problem_rate_penalty']:g} per problem per 1,000 lines "
                             f"of code, up to &minus;{fields['proven_problem_penalty_max']:g}</td></tr>")
             if cat == "journey":
-                rows.append(f"<tr><td>{titles[cat]}</td><td>ads, paywalls, forced sign-in or wait timers found</td>"
+                rows.append(f"<tr><td>{titles[cat]}</td><td>ads, payments or a paywall, or a required sign-in service found in the code (a library or code name; never words in story or on-screen text)</td>"
                             f"<td>{fields['hostile_penalty']:+g}</td></tr>")
         weights = ", ".join(f"{titles[c]} {w:g}%" for c, w in WEIGHTS.items())
         table = ('<div class="table-scroll"><table><thead><tr><th>Factor</th><th>Checklist item</th><th>Answers and points</th></tr></thead>'

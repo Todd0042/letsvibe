@@ -92,13 +92,18 @@ def evaluate(client, packed_repo, repo_source: str, metrics: DeterministicMetric
     timing.update(t)
 
     hostile = list(data["journey"].get("hostile_patterns", {}).keys())
+    # The model's own hostile answer only counts with evidence from elsewhere in the dossier, never the scan's line
+    hm = results["journey"].get("hostile_monetization") or {}
+    scan_line = next((l for l in md.splitlines() if l.startswith("- Ads, payments, required sign-in")), "")
+    if hm.get("answer") is True and all((q or "").strip() and (q.strip() in scan_line) for q in hm.get("evidence", [])):
+        hm["verified"] = False
     cats = {c: scoring.category(c, results[c], hostile, len(found["functionality"]), found["lines_of_code"]) for c in scoring.WEIGHTS}
     scores = {c: v["score"] for c, v in cats.items()}
     final = scoring.overall(scores)
 
     t0 = time.perf_counter()
     emit("Writing the descriptions (14B)...", 85)
-    texts, needs = describe.write(client.generate_json, MODEL, packed_repo.repo_name, results, proven[:5])
+    texts, needs = describe.write(client.generate_json, MODEL, packed_repo.repo_name, results, proven[:5], hostile)
     summary = describe.summarize(client.generate_json, MODEL, packed_repo.repo_name, texts)
     timing["descriptions_sec"] = round(time.perf_counter() - t0, 2)
     client.unload_all_models()
@@ -114,7 +119,8 @@ def evaluate(client, packed_repo, repo_source: str, metrics: DeterministicMetric
         w = scoring.WEIGHTS[cat]
         factor_evals[fname] = FactorEvaluation(
             factor=FactorType(fname), score=scores[cat], weight=w, weighted_score=round(scores[cat] * w / 100, 2),
-            strengths=_strengths(cat, results[cat]), weaknesses=describe.problems(cat, results[cat]), reasoning=texts.get(cat, ""))
+            strengths=_strengths(cat, results[cat]), weaknesses=describe.problems(cat, results[cat], hostile if cat == "journey" else ()),
+            reasoning=texts.get(cat, ""))
 
     from ..consensus import calculate_letter_grade
     langs = metrics.languages or {}

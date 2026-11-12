@@ -87,7 +87,7 @@ accessibility_labels: are there labels for screen readers (aria labels, alt text
 navigation_friction: STRAIGHT_TO_CORE = the user lands on the main thing. A_FEW_STEPS = a short setup or menu first. BURIED = the core is behind splash screens, sign-ins or nested menus.
 setup_burden: how much a person must fill in or understand before they can first use it (see "Setup burden" in the dossier). NONE = nothing. LIGHT = a few plain choices. MODERATE = several fields, or some technical terms. HEAVY = many fields or mostly technical terms, required before first use.
 state_and_save: AUTO_SAVE = progress or data is kept automatically. MANUAL_SAVE = the user must save. NO_SAVE = closing it loses everything that matters. NOT_NEEDED = nothing needs keeping.
-hostile_monetization: true only if the dossier shows ads, paywalled core actions, forced sign-in or energy/wait timers.""",
+hostile_monetization: true only if the dossier shows ads, a paywall or payments, or a required sign-in service in the code (see the line about ads, payments and sign-in). Words in on-screen or story text do not count.""",
     },
 }
 

@@ -21,11 +21,27 @@ path file files line lines count total size len length width height x y i j k n 
 setup start stop run update render draw handle callback cb fn func function method model view controller component element node
 child children parent root id ids url uri str string num number int float bool flag flags status message msg info debug log
 logger output input buffer stream client server db conn cursor query row rows col cols table field fields default defaults""".split())
-ADS = r"admob|googleads|adsbygoogle|adsense|unityads|unity\.ads|applovin|ironsource|chartboost|vungle|mopub|interstitial|rewarded_?ad"
-PAY = r"loadStripe|@stripe/|stripe\.(checkout|paymentIntents|subscriptions|customers)|import stripe|@paypal/|paypal-js|paypalobjects|PayPalButtons|billingclient|in_?app_?purchase|purchasesupdated|revenuecat|paddle|lemonsqueezy|checkout\.session|paywall|subscribe_?now|premium_?only"
-LOGIN = r"login_required|requireauth|require_auth|signinwith|firebase\.auth|auth0|clerk|supabase\.auth|nextauth|must (be )?log(ged)? ?in|sign in to continue"
-NAG = r"rate (this|our) app|leave a review|requestreview|enjoying .{0,20}\? rate"
-ENERGY = r"\benergy\b.{0,30}(refill|regen|wait)|stamina.{0,20}refill|lives.{0,20}(refill|wait)|come back in \d"
+# Hostile patterns need code-level evidence: an ads, payment or sign-in library (in the dependencies or an import) or a
+# code name such as showPaywall. Words in on-screen, story or asset text never count (a story chapter called "The
+# Software Paywall" or a character who is a store clerk is not a paywall or a sign-in service). Energy/wait timers are
+# not checked: games use stamina and timers legitimately, and a pattern cannot tell them from pay-to-skip timers.
+HOSTILE = {
+    "ads (an advertising library)": r"play-services-ads|google-mobile-ads|com\.google\.android\.gms\.ads|\bAdMob\b|adsbygoogle\.js|"
+                                     r"\bUnityAds\b|unity\.ads|com\.applovin|\bAppLovin\w*|com\.ironsource|chartboost|vungle|mopub|"
+                                     r"\b(Interstitial|Rewarded)Ad\b",
+    "payments or a paywall": r"@stripe/|loadStripe\(|^\s*import stripe\b|[\"']stripe[\"']\s*:|stripe\.(checkout|paymentIntents|subscriptions)\.|"
+                             r"@paypal/|paypal-js|PayPalButtons|com\.android\.billingclient|\bBillingClient\b|purchases_flutter|"
+                             r"react-native-purchases|\bRevenueCat\b|\bin_app_purchase\b|\bSKPaymentQueue\b|"
+                             r"\b(show|open|present)Paywall\b|\bPaywall(Screen|View|Dialog|Modal)\b",
+    "a required sign-in service": r"@clerk/|\bClerkProvider\b|\bSignedIn\b.{0,40}\bSignedOut\b|firebase/auth|firebase-auth|"
+                                  r"com\.google\.firebase:firebase-auth|@auth0/|auth0-|next-auth|\bsupabase\.auth\.|"
+                                  r"@login_required\b|\bProtectedRoute\b|\bRequireAuth\b",
+    "a review prompt": r"\bReviewManagerFactory\b|\brequestReviewFlow\b|\bSKStoreReviewController\b|\bInAppReview\b",
+}
+CONTENT_FILE = re.compile(r"(^|/)(assets?|res/raw|story|stories|dialogues?|lore|locales?|i18n|l10n|translations?|content|levels?|"
+                          r"chapters?|scripts?/data|data)(/|$)|\.(txt|md|csv|tsv|po|pot|srt|vtt|lrc)$", re.I)
+MANIFEST_FILE = re.compile(r"(^|/)(package\.json|requirements[^/]*\.txt|pyproject\.toml|Pipfile|build\.gradle(\.kts)?|"
+                           r"libs\.versions\.toml|Podfile|Package\.swift|pubspec\.yaml|Cargo\.toml|go\.mod|composer\.json|Gemfile)$")
 SAVE = [("localStorage", r"localStorage\."), ("sessionStorage", r"sessionStorage\."), ("IndexedDB", r"indexedDB|idb\.|Dexie"),
         ("SQLite", r"sqlite3|SQLite|\.db['\"]|Room\.databaseBuilder|@Entity|better-sqlite3"),
         ("JSON/file save", r"json\.dump\(|JSON\.stringify\(.{0,60}(writeFile|save)|writeFileSync|write_text\(|open\([^)]*['\"]w"),
@@ -194,9 +210,13 @@ def journey_of(files: dict, readme: str, quick_blocks: int) -> dict:
     modals = sum(len(re.findall(r"\b(?:Modal|Dialog|AlertDialog|Popup|Toplevel|messagebox|BottomSheet)\b", c)) for f, c in files.items() if f.endswith(CODE))
     depth = max([r.count("/") for r in re.findall(r"['\"](/[a-z0-9_\-/{}:<>]+)['\"]", " ".join(c for f, c in files.items() if f.endswith(CODE)))] or [0])
     settings = sorted({f for f in files if re.search(r"setting|preference|option|config", f, re.I) and f.endswith(CODE)})[:6]
-    allc = "\n".join(c for f, c in files.items() if f.endswith(CODE) or f.endswith((".json", ".xml", ".gradle", ".kts")))
-    hostile = {name: sorted(set(m.group(0)[:40] for m in re.finditer(rx, allc, re.I)))[:4]
-               for name, rx in (("ads", ADS), ("payment/paywall", PAY), ("forced login", LOGIN), ("review nag", NAG), ("energy/wait timers", ENERGY))}
+    evidence_files = {f: c for f, c in files.items()
+                      if MANIFEST_FILE.search(f) or (f.endswith(CODE) and not TEST.search(f) and not CONTENT_FILE.search(f))}
+    hostile = {}
+    for name, rx in HOSTILE.items():
+        where = sorted({f for f, c in evidence_files.items() if re.search(rx, c, re.M)})
+        if where:
+            hostile[name] = where[:3]
     return {"launch_files": launch[:12], "package_scripts": scripts[:10], "android_app": bool(apk), "env_keys": env_keys[:15],
             "env_or_example_config_files": env_files[:6], "needs_api_key": api_key[:8], "readme_install_commands": readme_cmds[:8],
             "readme_command_blocks": quick_blocks, "save_mechanisms": saves, "autosave_hints": autosave[:5],
@@ -372,8 +392,8 @@ def render(d: dict) -> str:
             f"({d['setup']['required_fields']} marked required); {round(d['setup']['technical_share'] * 100)}% of setup labels use technical terms"
             f"{(': ' + '; '.join(d['setup']['technical_labels'][:12])) if d['setup']['technical_labels'] else ''}; setup forced before first use: "
             f"{('yes (' + ', '.join(d['setup']['setup_forced_before_use']) + ')') if d['setup']['setup_forced_before_use'] else 'no'}",
-            f"- Hostile patterns (ads, paywalls, forced login, nags, wait timers): "
-            + ("; ".join(k + ": " + ", ".join(v) for k, v in j["hostile_patterns"].items()) or "none found"), "",
+            f"- Ads, payments, required sign-in or review prompts found in the code (library or code name; never story text): "
+            + ("; ".join(k + " (in " + ", ".join(v) + ")" for k, v in j["hostile_patterns"].items()) or "none found"), "",
             "## 5b. Screen and feedback facts (Python counts)",
             f"- Loading indicators: {d['ui']['loading_indicators']}; empty-state messages: {d['ui']['empty_states']}; error messages shown "
             f"to the user: {d['ui']['error_messages']}; success or confirmation messages: {d['ui']['success_messages']}",
