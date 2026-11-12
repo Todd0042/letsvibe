@@ -228,7 +228,6 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 | :--- | :--- | :--- |
 | Cyclomatic complexity (average, max, worst functions) | [analyzers/complexity.py](letsvibe/analyzers/complexity.py) (Lizard) | Code-health adjustments |
 | Possible hard-coded secrets (**type and count only**) | [analyzers/security.py](letsvibe/analyzers/security.py) | Safety adjustments; locations are never stored |
-| Risky code patterns (`eval`, `exec`, `shell=True`, `dangerouslySetInnerHTML`), counted only in actual code, not comments or text | [analyzers/security.py](letsvibe/analyzers/security.py) | Smaller safety adjustment; locations are never stored |
 | Tests, CI, packaging, licence, README | [analyzers/functionality.py](letsvibe/analyzers/functionality.py) | Evidence for reviewers and code-health credit |
 | Platforms, hardware & device profile | [core/platforms.py](letsvibe/core/platforms.py) | Device-relative grading |
 | User-journey evidence | [analyzers/journey_signals.py](letsvibe/analyzers/journey_signals.py) | Installers & launch scripts, README quick start, setup wizards (including in-page wizards), permission requests, screens/commands, settings depth, confirmations, error and empty states |
@@ -253,7 +252,7 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 
 ## 6. Scores, Letter Grades & the Bell Curve
 
-* **Score**: the factor scores are combined with the category's weights and adjusted by measurements ([evaluator/consensus.py](letsvibe/evaluator/consensus.py)): clean, low-complexity code earns code-health credit, widespread complexity costs it, and each possible secret costs operational safety (−6, up to −18) and each risky code pattern costs less (−3, up to −9).
+* **Score**: the factor scores are combined with the category's weights and adjusted by measurements ([evaluator/consensus.py](letsvibe/evaluator/consensus.py)): clean, low-complexity code earns code-health credit, widespread complexity costs it, and each possible secret costs operational safety.
 * **Bell curve ([storage/peer_grades.py](letsvibe/storage/peer_grades.py))**: `z = (score − average) / standard deviation`. The reference projects set the starting bell (average = their midpoint, one standard deviation = a quarter of the gap); each category's own scores take over as it grows, fully at 30 projects.
 
 | Grade | Standard deviations from the average | Share of a full bell |

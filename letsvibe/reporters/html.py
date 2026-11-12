@@ -137,7 +137,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <span class="stat-pill">Files: {{ report.deterministic_metrics.total_files }}</span>
                     <span class="stat-pill">Avg Complexity: {{ report.deterministic_metrics.avg_cyclomatic_complexity }}</span>
                     <span class="stat-pill">Secrets: {{ report.deterministic_metrics.detected_secrets_count }}</span>
-                    <span class="stat-pill">Risky patterns: {{ report.deterministic_metrics.risky_patterns_count }}</span>
                     <span class="stat-pill">CI/CD: {{ 'Yes' if report.deterministic_metrics.has_ci_cd else 'No' }}</span>
                     <span class="stat-pill">Docker: {{ 'Yes' if report.deterministic_metrics.has_docker else 'No' }}</span>
                     <span class="stat-pill">Native Packaging: {{ 'Yes' if report.deterministic_metrics.has_desktop_packaging else 'No' }}</span>

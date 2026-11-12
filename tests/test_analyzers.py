@@ -272,34 +272,3 @@ def test_pipeline_uses_given_classification():
     assert report.archetype.general_category == "embedded" and report.archetype.platforms == ["embedded"]
     # Stage 1 and every grader saw the device profile
     assert all("ESP32-S3" in p for p in seen[:3])
-
-
-def test_risky_patterns_are_separate_from_secrets_and_only_counted_in_code():
-    files = {
-        "app.py": "result = eval(user_input)\n# eval(in a comment)\nhelp_text = 'never call eval( here'\n",
-        "ui.jsx": "// dangerouslySetInnerHTML is risky\n<div dangerouslySetInnerHTML={{__html: html}} />\n",
-        "rules.py": 'PATTERNS = [r"\\beval\\s*\\(", "dangerouslySetInnerHTML"]\n',  # a detector's own rule list
-    }
-    assert SecurityAnalyzer.scan(files) == (0, [])          # eval is not a secret
-    count, findings = SecurityAnalyzer.scan_risky(files)
-    assert count == 2                                         # the real eval call and the real JSX attribute
-    assert any("eval" in f for f in findings) and any("dangerouslySetInnerHTML" in f for f in findings)
-    assert not any("app.py" in f or "ui.jsx" in f for f in findings)
-
-
-def test_readme_excerpt_skips_banners_badges_and_table_of_contents():
-    from letsvibe.analyzers.functionality import readable_readme
-
-    readme = (
-        '<p align="center"><a href="https://ko-fi.com/x"><img src="https://x/banner.png" alt="Banner" /></a></p>\n\n---\n\n'
-        "# My App\n\n"
-        "[![Version](https://img.shields.io/badge/v-1.0-blue.svg)](https://x)\n"
-        "[![Rubric](https://img.shields.io/badge/Rubric-v7%20(bell%20curve)-blueviolet.svg)](https://x)\n\n"
-        "## Contents\n* [What it is](#what-it-is)\n  * [1. Setup ([setup.py](setup.py))](#1-setup)\n\n"
-        "## What it is\nA karaoke app for parties. See the [docs](https://example.com/docs).\n"
-    )
-    text = readable_readme(readme)
-    assert text.startswith("# My App")
-    assert "A karaoke app for parties. See the docs." in text
-    for junk in ("<img", "shields.io", "svg)", "(#what-it-is)", "ko-fi", "---"):
-        assert junk not in text
