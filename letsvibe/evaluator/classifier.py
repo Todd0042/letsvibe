@@ -7,6 +7,7 @@ existing projects can be reclassified without a full regrade. Build-file detecti
 writes the human-readable device profile.
 """
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -108,12 +109,32 @@ FILE TREE (excerpt):
 """
 
 
+def _profile_for(platforms: List[str]) -> str:
+    """A plain device description that matches the detected platforms."""
+    p = set(platforms)
+    if p & {"android", "ios"}:
+        names = " and ".join(x for x, k in (("Android", "android"), ("iPhone/iPad", "ios")) if k in p)
+        return f"{names} phones and tablets (touch)"
+    if "embedded" in p:
+        return "Microcontroller or embedded board"
+    if "console" in p:
+        return "Game console or handheld"
+    if "web" in p:
+        return "Web browser"
+    return ""
+
+
 def merge_classification(raw: Dict[str, Any], detection: PlatformDetection) -> Classification:
     """Combines model output with build-file detection (detection wins on platforms unless it is only a weak guess)."""
     model_platforms = normalize_platforms(raw.get("platforms"))
     strong = [s for s in detection.signals if s not in WEAK_SIGNALS]
     if detection.platforms and strong:
-        platforms = normalize_platforms(detection.platforms + [p for p in model_platforms if p != "embedded"])
+        # The model may add platforms build files can miss (iOS, web), but never a desktop OS for a phone app or
+        # firmware with no desktop evidence (it used to guess "Windows" for Android apps).
+        pc = {"windows", "macos", "linux"}
+        no_desktop_evidence = not (set(detection.platforms) & pc)
+        extra = [p for p in model_platforms if p != "embedded" and not (no_desktop_evidence and p in pc)]
+        platforms = normalize_platforms(detection.platforms + extra)
         if "embedded" in detection.platforms:
             platforms = normalize_platforms(detection.platforms)  # firmware does not also run on a PC
     else:
@@ -121,6 +142,10 @@ def merge_classification(raw: Dict[str, Any], detection: PlatformDetection) -> C
     # A hardware profile read from build files and source is factual; the 7B's sentence is only used when
     # nothing was detected (it has been seen to copy prompt examples or call an ESP32 a "desktop PC").
     profile = detection.device_profile or str(raw.get("device_profile") or "").strip()
+    # The model's sentence must fit the platforms: never "desktop PC" for a phone app or firmware.
+    pc = {"windows", "macos", "linux"}
+    if not detection.device_profile and platforms and not (set(platforms) & pc) and re.search(r"desktop|\bpc\b|laptop|computer", profile, re.I):
+        profile = _profile_for(platforms)
     return Classification(
         general_category=normalize_category(raw.get("general_category")),
         platforms=platforms,

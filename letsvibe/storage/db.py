@@ -23,6 +23,8 @@ DEFAULT_DB_PATH = Path("data/letsvibe.db")
 # Factors shown on the site (rubric v8 grades value, creativity and the user journey). Older badges for other
 # factors stay in ranking_history but are not displayed.
 SHOWN_BADGE_CATEGORIES = ("overall", "resonance", "creativity", "user_journey", "functionality", "ui_ux")
+# Only #1 badges are awarded while few projects are graded; the leaderboard and project pages show only the current
+# #1s, the Hall of Fame also shows former #1s (#2/#3 and all history stay in ranking_history).
 _SHOWN_SQL = "(" + ", ".join(f"'{c}'" for c in SHOWN_BADGE_CATEGORIES) + ")"
 
 
@@ -220,6 +222,13 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             conn.execute("ALTER TABLE projects ADD COLUMN repo_icon_url TEXT;")
         except Exception:
             pass
+        # TEST MODE (remove before launch): projects the admin graded from someone else's GitHub account to build a
+        # larger evaluation dataset. They are shown only to the admin and never affect public grades, curves or badges.
+        for table in ("projects", "audit_queue"):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0;")
+            except sqlite3.OperationalError:
+                pass
         try:
             conn.execute("ALTER TABLE audit_queue ADD COLUMN force_override INTEGER DEFAULT 0;")
         except Exception:
@@ -326,10 +335,12 @@ def save_report_to_db(
     markdown_report_path: Optional[str] = None,
     commit_sha: Optional[str] = None,
     db_path: Path = DEFAULT_DB_PATH,
+    is_test: bool = False,
 ) -> int:
     """
     Saves a report and project entry, recalculating ranks and awarding badges.
-    Returns the report_id.
+    Returns the report_id. `is_test` marks a new project as an admin test grading (set only when the project is
+    first created; re-scans keep the project's original flag).
     """
     report_dict = strip_safety_details(report_dict)
     init_db(db_path)
@@ -394,8 +405,8 @@ def save_report_to_db(
         # Upsert project
         conn.execute(
             """
-            INSERT INTO projects (owner, repo_name, full_slug, canonical_url, provider, owner_avatar_url, repo_icon_url, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO projects (owner, repo_name, full_slug, canonical_url, provider, owner_avatar_url, repo_icon_url, updated_at, is_test)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(full_slug) DO UPDATE SET
                 canonical_url=excluded.canonical_url,
                 owner_avatar_url=excluded.owner_avatar_url,
@@ -411,6 +422,7 @@ def save_report_to_db(
                 identity.avatar_url,
                 identity.repo_icon_url,
                 now_iso,
+                1 if is_test else 0,
             ),
         )
         cur = conn.execute("SELECT id FROM projects WHERE full_slug = ?", (identity.full_slug,))
@@ -498,13 +510,13 @@ def recalculate_historical_ranks(db_path: Path = DEFAULT_DB_PATH) -> None:
             query = f"""
             WITH latest_reports AS (
                 SELECT r.*, ROW_NUMBER() OVER(PARTITION BY r.project_id ORDER BY r.id DESC) as rn
-                FROM reports r
+                FROM reports r JOIN projects p ON p.id = r.project_id AND p.is_test = 0
             )
             SELECT project_id, id as report_id, full_slug, {col_name} as score
             FROM latest_reports
             WHERE rn = 1 AND {col_name} IS NOT NULL
             ORDER BY score DESC, id ASC
-            LIMIT 3;
+            LIMIT 1;
             """
             cur = conn.execute(query)
             current_top_3 = cur.fetchall()
@@ -614,6 +626,7 @@ def get_leaderboard(
     categories: Optional[Any] = None,
     platforms: Optional[Any] = None,
     with_facets: bool = False,
+    include_test: bool = False,
 ) -> Any:
     """
     Retrieves ranked project listings with historical and current badges.
@@ -674,19 +687,21 @@ def get_leaderboard(
         r.resonance_score,
         r.creativity_score,
         r.ui_ux_score,
-        r.created_at as graded_at
+        r.created_at as graded_at,
+        p.is_test
     FROM projects p
     JOIN latest_reports r ON p.id = r.project_id AND r.rn = 1
+    WHERE (p.is_test = 0 OR ?)
     ORDER BY {order_col} DESC, r.final_score DESC
     """
-    cur = conn.execute(query)
+    cur = conn.execute(query, (1 if include_test else 0,))
     rows = [dict(row) for row in cur.fetchall()]
 
     # Collect badges for all projects
     badge_cur = conn.execute("""
         SELECT project_id, category, rank, badge_title, peak_score, achieved_at, superseded_at
         FROM ranking_history
-        WHERE category IN """ + _SHOWN_SQL + """
+        WHERE rank = 1 AND superseded_at IS NULL AND category IN """ + _SHOWN_SQL + """
         ORDER BY superseded_at IS NULL DESC, rank ASC, achieved_at DESC
     """)
     badges_by_project: Dict[int, List[Dict[str, Any]]] = {}
@@ -782,9 +797,9 @@ def get_hall_of_fame(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
         r.letter_grade,
         r.archetype_name
     FROM ranking_history h
-    JOIN projects p ON h.project_id = p.id
+    JOIN projects p ON h.project_id = p.id AND p.is_test = 0
     JOIN reports r ON h.report_id = r.id
-    WHERE h.category IN """ + _SHOWN_SQL + """
+    WHERE h.rank = 1 AND h.category IN """ + _SHOWN_SQL + """
     ORDER BY h.category = 'overall' DESC, h.rank ASC, h.superseded_at IS NULL DESC, h.achieved_at DESC
     """
     cur = conn.execute(query)
@@ -843,7 +858,8 @@ def factor_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
     """
     cols = ", ".join(f"r.{f}_score AS {f}" for f in RADAR_FACTOR_COLUMNS)
     rows = [dict(x) for x in conn.execute(f"""
-        WITH latest AS (SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.project_id ORDER BY r.id DESC) AS rn FROM reports r)
+        WITH latest AS (SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.project_id ORDER BY r.id DESC) AS rn
+                        FROM reports r JOIN projects p ON p.id = r.project_id AND p.is_test = 0)
         SELECT {cols} FROM latest r WHERE r.rn = 1
     """).fetchall()]
     avg, best = {}, {}
@@ -855,8 +871,17 @@ def factor_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
     return {"count": len(rows), "average": avg, "best": best}
 
 
-def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optional[Dict[str, Any]]:
-    """Returns project details, latest report, parsed JSON, and historical achievements."""
+def get_project_detail(
+    full_slug: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    report_id: Optional[int] = None,
+    include_test: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Returns project details, a report (the latest, or `report_id` when it belongs to this project), parsed JSON,
+    current achievements and the project's scan history (newest first). Test projects are returned only with
+    `include_test` (the admin).
+    """
     init_db(db_path)
     conn = get_db_connection(db_path)
 
@@ -871,11 +896,11 @@ def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optio
                r.markdown_report_path, r.report_data_json, r.created_at as graded_at
         FROM projects p
         JOIN reports r ON p.id = r.project_id
-        WHERE p.full_slug = ?
+        WHERE p.full_slug = ? AND (p.is_test = 0 OR ?) AND (? IS NULL OR r.id = ?)
         ORDER BY r.id DESC
         LIMIT 1
         """,
-        (full_slug,),
+        (full_slug, 1 if include_test else 0, report_id, report_id),
     )
     row = cur.fetchone()
     if not row:
@@ -888,6 +913,18 @@ def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optio
             data["full_report"] = json.loads(data["report_data_json"])
         except Exception:
             data["full_report"] = None
+
+    # Every scan of this project, newest first (for the report page's scan picker)
+    data["history"] = [dict(h) for h in conn.execute(
+        """
+        SELECT id AS report_id, created_at AS graded_at, final_score,
+               COALESCE(curved_score, final_score) AS curved_score, letter_grade, commit_sha,
+               json_extract(report_data_json, '$.rubric_version') AS rubric_version
+        FROM reports WHERE project_id = ? ORDER BY id DESC
+        """,
+        (data["id"],),
+    ).fetchall()]
+    data["is_latest"] = bool(data["history"]) and data["history"][0]["report_id"] == data["report_id"]
     from .peer_grades import category_standing
     data["standing"] = category_standing(conn, data["id"])
     data["factor_stats"] = factor_stats(conn)
@@ -897,7 +934,7 @@ def get_project_detail(full_slug: str, db_path: Path = DEFAULT_DB_PATH) -> Optio
         """
         SELECT category, rank, badge_title, peak_score, achieved_at, superseded_at
         FROM ranking_history
-        WHERE project_id = ? AND category IN """ + _SHOWN_SQL + """
+        WHERE project_id = ? AND rank = 1 AND superseded_at IS NULL AND category IN """ + _SHOWN_SQL + """
         ORDER BY superseded_at IS NULL DESC, rank ASC, achieved_at DESC
         """,
         (data["id"],),
@@ -936,8 +973,9 @@ def enqueue_task(
     requested_by: str = "user",
     force_override: bool = False,
     db_path: Path = DEFAULT_DB_PATH,
+    is_test: bool = False,
 ) -> int:
-    """Adds a repository evaluation task to the queue."""
+    """Adds a repository evaluation task to the queue (`is_test`: an admin test grading, shown only to the admin)."""
     init_db(db_path)
     conn = get_db_connection(db_path)
 
@@ -946,10 +984,11 @@ def enqueue_task(
     with conn:
         cur = conn.execute(
             """
-            INSERT INTO audit_queue (target, owner, repo_name, full_slug, mode, status, requested_by_user, force_override)
-            VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+            INSERT INTO audit_queue (target, owner, repo_name, full_slug, mode, status, requested_by_user, force_override, is_test)
+            VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?)
             """,
-            (target, identity.owner, identity.repo_name, identity.full_slug, mode, requested_by, 1 if force_override else 0),
+            (target, identity.owner, identity.repo_name, identity.full_slug, mode, requested_by,
+             1 if force_override else 0, 1 if is_test else 0),
         )
         task_id = cur.lastrowid
     conn.close()
@@ -1100,7 +1139,8 @@ def get_projects_tree(search: Optional[str] = None, db_path: Path = DEFAULT_DB_P
             r.letter_grade,
             r.archetype_name,
             r.primary_language,
-            r.created_at as graded_at
+            r.created_at as graded_at,
+            p.is_test
         FROM projects p
         LEFT JOIN latest_reports r ON p.id = r.project_id AND r.rn = 1
         ORDER BY p.owner ASC, r.final_score DESC
@@ -1354,6 +1394,7 @@ def get_creators_leaderboard(sort_by: str = "peak", db_path: Path = DEFAULT_DB_P
             r.total_loc
         FROM projects p
         JOIN latest_reports r ON p.id = r.project_id AND r.rn = 1
+        WHERE p.is_test = 0
     """)
     rows = [dict(r) for r in cur.fetchall()]
 

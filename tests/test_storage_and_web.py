@@ -107,16 +107,16 @@ def test_db_persistence_and_historical_badges(tmp_path):
     assert board2[1]["full_slug"] == "user1/project-alpha"
     assert board2[1]["rank"] == 2
 
-    # Verify historical merit retention!
-    # Project 1 must retain its historical badge ("Former #1 Overall Champion")
+    # Verify historical merit retention! The project page shows only current #1 badges, so project 1's
+    # overtaken "#1 Overall Champion" is kept as a former #1 in the Hall of Fame (and in ranking_history).
     p1_detail = get_project_detail("user1/project-alpha", db_path=test_db)
     assert p1_detail is not None
-    p1_badge_titles = [b["badge_title"] for b in p1_detail["badges"]]
-    assert any("Former #1" in b for b in p1_badge_titles)
+    assert not any(b["category"] == "overall" for b in p1_detail["badges"])
 
-    # Hall of fame includes both
+    # Hall of fame includes both: the reigning #1 and the former #1
     hof = get_hall_of_fame(db_path=test_db)
     assert len(hof) >= 2
+    assert any(r["full_slug"] == "user1/project-alpha" and r["category"] == "overall" and r["superseded_at"] for r in hof)
 
     # Test developer tree
     tree = get_projects_tree(db_path=test_db)

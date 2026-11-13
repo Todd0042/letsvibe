@@ -49,6 +49,10 @@ def test_merge_keeps_build_file_platforms_authoritative():
     # Strong detection plus extra model platforms are combined
     android = PlatformDetection(platforms=["android"], signals=["AndroidManifest.xml"])
     assert merge_classification({"platforms": ["ios"]}, android).platforms == ["android", "ios"]
+    # ...but never a desktop OS for a phone app with no desktop evidence
+    assert merge_classification({"platforms": ["windows", "android"]}, android).platforms == ["android"]
+    # ...and the model's device sentence cannot call a phone app a desktop PC
+    assert merge_classification({"device_profile": "Standard desktop PC"}, android).device_profile == "Android phones and tablets (touch)"
 
     # Garbage category falls back to "other"
     assert merge_classification({"general_category": "spaceship"}, android).general_category == "other"

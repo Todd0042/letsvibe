@@ -227,16 +227,18 @@ def basis_for(category_size: int) -> str:
     return "peers" if category_size >= PEER_MIN_PROJECTS else "curve"
 
 
-def latest_reports_by_category(conn: sqlite3.Connection) -> Dict[str, List[sqlite3.Row]]:
+def latest_reports_by_category(conn: sqlite3.Connection, test: bool = False) -> Dict[str, List[sqlite3.Row]]:
+    """Latest report of every public project (or, with `test`, of every admin test project), grouped by category."""
     rows = conn.execute(
         """
         WITH latest AS (
             SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.project_id ORDER BY r.id DESC) AS rn
-            FROM reports r
+            FROM reports r JOIN projects p ON p.id = r.project_id AND p.is_test = ?
         )
         SELECT id, project_id, final_score, letter_grade, curved_score, coalesce(general_category, 'other') AS cat, report_data_json
         FROM latest WHERE rn = 1
-        """
+        """,
+        (1 if test else 0,),
     ).fetchall()
     groups: Dict[str, List[sqlite3.Row]] = {}
     for r in rows:
@@ -249,39 +251,49 @@ def apply_peer_grades(conn: sqlite3.Connection) -> int:
     changed = 0
     groups = latest_reports_by_category(conn)
     all_scores = [float(r["final_score"]) for rows in groups.values() for r in rows]
+    # Admin test projects are graded as if each were the only extra project: against the public projects plus
+    # itself, so they never move a public project's grade.
+    jobs = []
     for cat, rows in groups.items():
         cohort = [float(r["final_score"]) for r in rows]
-        ordered = sorted(rows, key=lambda r: -float(r["final_score"]))
-        for rank, r in enumerate(ordered, start=1):
-            letter, basis, details = grade_with_details(float(r["final_score"]), cohort, all_scores)
-            blob = r["report_data_json"]
-            data = None
-            if blob:
-                try:
-                    data = json.loads(blob)
-                except ValueError:
-                    data = None
-            curved = details["curved_score"] if details else round(float(r["final_score"]), 1)
-            needs = letter != r["letter_grade"] or r["curved_score"] != curved or (
-                data is not None and (data.get("grade_basis") != basis or data.get("letter_grade") != letter
-                                      or data.get("curve") != details)
-            )
-            if not needs:
-                continue
-            if data is not None:
-                data["letter_grade"] = letter
-                data["grade_basis"] = basis
-                data["curve"] = details
-                blob = json.dumps(data)
-            conn.execute("UPDATE reports SET letter_grade = ?, curved_score = ?, report_data_json = ? WHERE id = ?",
-                         (letter, curved, blob, r["id"]))
-            changed += 1
+        jobs += [(r, cohort, all_scores) for r in rows]
+    for cat, rows in latest_reports_by_category(conn, test=True).items():
+        public = [float(r["final_score"]) for r in groups.get(cat, [])]
+        jobs += [(r, public + [float(r["final_score"])], all_scores + [float(r["final_score"])]) for r in rows]
+    for r, cohort, scores in jobs:
+        letter, basis, details = grade_with_details(float(r["final_score"]), cohort, scores)
+        blob = r["report_data_json"]
+        data = None
+        if blob:
+            try:
+                data = json.loads(blob)
+            except ValueError:
+                data = None
+        curved = details["curved_score"] if details else round(float(r["final_score"]), 1)
+        needs = letter != r["letter_grade"] or r["curved_score"] != curved or (
+            data is not None and (data.get("grade_basis") != basis or data.get("letter_grade") != letter
+                                  or data.get("curve") != details)
+        )
+        if not needs:
+            continue
+        if data is not None:
+            data["letter_grade"] = letter
+            data["grade_basis"] = basis
+            data["curve"] = details
+            blob = json.dumps(data)
+        conn.execute("UPDATE reports SET letter_grade = ?, curved_score = ?, report_data_json = ? WHERE id = ?",
+                     (letter, curved, blob, r["id"]))
+        changed += 1
     return changed
 
 
 def category_standing(conn: sqlite3.Connection, project_id: int) -> Optional[Dict[str, object]]:
-    """{rank, count, category, basis} for a project's latest report within its category."""
-    for cat, rows in latest_reports_by_category(conn).items():
+    """{rank, count, category, basis} for a project's latest report within its category (public projects, plus the
+    project itself when it is an admin test project)."""
+    public = latest_reports_by_category(conn)
+    for cat, rows in latest_reports_by_category(conn, test=True).items():
+        public[cat] = public.get(cat, []) + [r for r in rows if r["project_id"] == project_id]
+    for cat, rows in public.items():
         ordered = sorted(rows, key=lambda r: -float(r["final_score"]))
         for i, r in enumerate(ordered, start=1):
             if r["project_id"] == project_id:

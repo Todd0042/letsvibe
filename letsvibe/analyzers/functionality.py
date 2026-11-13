@@ -2,6 +2,7 @@
 Functionality, infrastructure, and test presence analyzer.
 """
 
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -93,7 +94,13 @@ class FunctionalityAnalyzer:
             is_any_readme = lower.endswith(("/readme.md", "/readme.txt", "/readme.rst", "/readme"))
             if (is_root_readme or is_any_readme) and (not readme_excerpt or is_root_readme):
                 has_readme = True
-                readme_excerpt = content[:3000].strip()
+                # README digest (analyzers/readme_digest.py) when switched on; otherwise the first 3,000
+                # characters as written. Off by default until compared with the old excerpt.
+                if os.environ.get("LETSVIBE_README_DIGEST", "0") == "1":
+                    from .readme_digest import build_readme_digest
+                    readme_excerpt = build_readme_digest(content)
+                else:
+                    readme_excerpt = content[:3000].strip()
 
         test_ratio = round((test_loc / total_loc), 3) if total_loc > 0 else 0.0
 

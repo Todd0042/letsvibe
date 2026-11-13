@@ -157,7 +157,9 @@ class PlatformDetection:
 def _list_paths(root: Path) -> List[str]:
     paths: List[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        # also skip Python virtual environments of any name (they hold activate.bat / Activate.ps1)
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.lower().startswith((".venv", "venv"))
+                       and not os.path.exists(os.path.join(dirpath, d, "pyvenv.cfg"))]
         rel_dir = os.path.relpath(dirpath, root)
         for d in dirnames:  # directory markers such as Foo.xcodeproj
             paths.append(os.path.normpath(os.path.join(rel_dir, d)) + "/")
@@ -282,19 +284,34 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
     if any(m in mk_text for m in console_markers) or any_path(lambda p: p.endswith((".p8", ".nds", ".gba", ".nro"))):
         hit(["console"], "console/handheld homebrew toolchain")
 
-    # Desktop packaging
-    if any_path(lambda p: p.endswith((".iss", ".msi", ".nsi", ".bat", ".ps1"))):
+    # Desktop packaging. Build-tool wrappers (gradlew.bat, mvnw.cmd) only say where a project can be BUILT
+    # (every Android project ships gradlew.bat), not where it runs, so they never count.
+    # Bundled third-party code and virtual-environment scripts belong to someone else's project and never count.
+    build_wrappers = ("gradlew.bat", "gradlew", "mvnw.cmd", "mvnw", "activate.bat", "deactivate.bat", "activate.ps1")
+    not_own = ("third_party/", "third-party/", "vendor/", "external/", "node_modules/", "/libs/", "site-packages/")
+    if any_path(lambda p: p.endswith((".iss", ".msi", ".nsi", ".bat", ".ps1", ".cmd")) and os.path.basename(p) not in build_wrappers
+                and not any(x in p for x in not_own)):
         hit(["windows"], "Windows packaging/scripts")
-    if any_path(lambda p: p.endswith((".desktop", "pkgbuild", ".appimage", ".service")) or p.endswith("appimagebuilder.yml")):
+    if any_path(lambda p: p.endswith((".desktop", "pkgbuild", ".appimage", ".service", "snapcraft.yaml", ".flatpakref"))
+                or p.endswith("appimagebuilder.yml") or "appimage" in os.path.basename(p) or "flatpak" in os.path.basename(p)):
         hit(["linux"], "Linux packaging")
     if any_path(lambda p: p.endswith(("info.plist", ".dmg"))) and "ios" not in found:
         hit(["macos"], "macOS bundle")
 
     # Web servers / sites
     if any_path(lambda p: p in ("index.html", "public/index.html", "static/index.html")) or any_path(
-        lambda p: "/templates/" in p and p.endswith(".html")
+        lambda p: ("/templates/" in p or p.startswith("templates/")) and p.endswith(".html")
     ):
         hit(["web"], "web pages/templates")
+
+    # Raspberry Pi and similar single-board computers: Linux, not "any PC"
+    pi_files = [p for p in paths if p.lower().endswith((".py", ".sh", ".service", ".txt", ".md", ".cfg"))][:400]
+    pi_text = " ".join(_read(root, p, 20_000).lower() for p in pi_files if any(k in p.lower() for k in ("pi", "kiosk", "install", "setup", "start", "readme", "requirements", ".service")))
+    if any(k in pi_text for k in ("raspberry pi", "raspberrypi", "raspios", "raspbian", "rpi.gpio", "gpiozero", "/boot/config.txt",
+                                  "chromium-browser --kiosk", "chromium --kiosk", "pigpio")):
+        hit(["linux"], "Raspberry Pi (Linux single-board computer)")
+        if "Raspberry Pi" not in profile:
+            profile.append("Raspberry Pi")
 
     # Plain cross-platform desktop code (Python/Go/Rust/Node CLIs) when nothing more specific was found
     if not found and any_path(lambda p: p.endswith((".py", ".go", ".rs", ".js", ".ts", ".java", ".cs", ".cpp", ".c", ".rb"))):

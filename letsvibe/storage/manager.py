@@ -28,6 +28,7 @@ class ReportStorageManager:
         db_path: Path = DEFAULT_DB_PATH,
         commit_sha: Optional[str] = None,
         repo_icon_url: Optional[str] = None,
+        is_test: bool = False,
     ) -> Tuple[RepoIdentity, Path, Path, Path, int]:
         """
         Persists report to structured storage:
@@ -112,6 +113,7 @@ class ReportStorageManager:
             markdown_report_path=str(md_path),
             commit_sha=commit_sha,
             db_path=db_path,
+            is_test=is_test,
         )
 
         return identity, json_path, html_path, md_path, report_id

@@ -225,6 +225,35 @@ def owns_repo(user: Dict[str, Any], owner: str) -> bool:
     return bool(owner) and owner.strip().lower() == str(user.get("username", "")).strip().lower()
 
 
+def is_admin_request(request: Request) -> bool:
+    """True when the visitor is signed in as the configured admin (re-checked, never just trusted from the session)."""
+    user = get_current_user(request)
+    return bool(user and user.get("is_admin") and is_admin_user(user.get("username", ""), user.get("github_id")))
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# TEST MODE (remove before launch). With LETSVIBE_ADMIN_TEST_SUBMISSIONS=1 in .env, the admin may submit repositories
+# owned by other GitHub accounts to build a larger evaluation dataset. Those projects are flagged is_test: only the
+# admin sees them, and they never affect public grades, curves, ranks or badges (storage/db.py, peer_grades.py).
+# Everyone else, the admin's own submissions included, still follows owns_repo().
+# ------------------------------------------------------------------------------------------------------------------
+def admin_test_submissions_enabled() -> bool:
+    return os.getenv("LETSVIBE_ADMIN_TEST_SUBMISSIONS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+_TEST_TASK_FIELDS = ("target", "owner", "repo_name", "full_slug", "progress_message", "error_message",
+                     "requested_by_user", "rejection_reason", "report_id")
+
+
+def _hide_test_task(task: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Public view of a queue entry: an admin test grading keeps its place in line but shows no repository details."""
+    if not task or not task.get("is_test"):
+        return task
+    hidden = {k: v for k, v in task.items() if k not in _TEST_TASK_FIELDS}
+    hidden.update(target="Admin test grading", repo_name="Admin test grading", progress_message="Grading...")
+    return hidden
+
+
 def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     """Inspects signed session cookie to authenticate the user."""
     cookie = request.cookies.get(SESSION_COOKIE_NAME)
@@ -448,6 +477,30 @@ async def api_maintainer_notes(owner: str, repo: str, request: Request):
         return {"available": False, "notes": []}
     data = json.loads(f.read_text())
     return {"available": True, "lines_of_code": data.get("lines_of_code", 0), "notes": data.get("notes", [])}
+
+
+@app.get("/badge/{owner}/{repo_file}", include_in_schema=False)
+async def api_badge(owner: str, repo_file: str, style: str = Query("classic", max_length=20)):
+    """
+    "Badge of honor" image (web/badges.py) for READMEs and websites: the project's latest public grade, drawn as SVG.
+    Public like the project page; admin test gradings and unknown projects get a neutral "not graded" badge. It sets no
+    cookies and reads nothing about the viewer. GitHub fetches README images through its own proxy and caches them,
+    so a new grade can take a while to show there.
+    """
+    import re
+    from .badges import STYLES, render
+
+    repo = repo_file[:-4] if repo_file.lower().endswith(".svg") else repo_file
+    project = None
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) and re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
+        project = get_project_detail(f"{owner}/{repo}")  # public projects only (never admin test gradings)
+    svg = render(style if style in STYLES else "classic", project)
+    headers = {
+        "Cache-Control": "public, max-age=1800",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    }
+    return Response(content=svg, media_type="image/svg+xml", headers=headers)
 
 
 @app.get("/icons/{owner}/{repo}", include_in_schema=False)
@@ -723,6 +776,7 @@ async def api_admin_dismiss_error(error_id: int, _admin: Dict[str, Any] = Depend
 
 @app.get("/api/leaderboard")
 async def api_leaderboard(
+    request: Request,
     sort_by: str = Query("overall", description="Category to sort by"),
     tier: Optional[str] = Query(None, description="Comma-separated grade tiers (A,B,C,D,F)"),
     category: Optional[str] = Query(None, description="Comma-separated general categories"),
@@ -733,6 +787,7 @@ async def api_leaderboard(
     items, facets = get_leaderboard(
         sort_by=sort_by, tier_filter=tier, search=search,
         categories=category, platforms=platform, with_facets=True,
+        include_test=is_admin_request(request),  # TEST MODE: admin test gradings are listed for the admin only
     )
     return {"status": "ok", "count": len(items), "items": items, "facets": facets}
 
@@ -764,18 +819,18 @@ async def api_hall_of_fame():
 
 
 @app.get("/api/project/{full_slug:path}")
-async def api_project(full_slug: str):
-    """Retrieves full evaluation report, factor scores, and radar metrics for a repository."""
-    data = get_project_detail(full_slug)
+async def api_project(full_slug: str, request: Request, report: Optional[int] = Query(None, ge=1)):
+    """Full evaluation report, factor scores and radar metrics: the latest scan, or an earlier one with ?report=<id>."""
+    data = get_project_detail(full_slug, report_id=report, include_test=is_admin_request(request))
     if not data:
         raise HTTPException(status_code=404, detail="Project report not found")
     return {"status": "ok", "project": data}
 
 
 @app.get("/api/project-html/{full_slug:path}")
-async def api_project_html(full_slug: str):
+async def api_project_html(full_slug: str, request: Request):
     """Serves the standalone HTML report for embedding or direct viewing."""
-    data = get_project_detail(full_slug)
+    data = get_project_detail(full_slug, include_test=is_admin_request(request))
     if not data or not data.get("html_report_path"):
         raise HTTPException(status_code=404, detail="HTML report not found")
 
@@ -787,11 +842,15 @@ async def api_project_html(full_slug: str):
 
 
 @app.get("/api/queue")
-async def api_queue():
+async def api_queue(request: Request):
     """Returns queue status, current worker activity, and list of queued items."""
     status = get_queue_status()
     items = get_queue_items(limit=30)
     worker_current = worker.current_task_info if worker else None
+    if not is_admin_request(request):  # TEST MODE: the public never sees which repo an admin test grading is
+        items = [_hide_test_task(t) for t in items]
+        status["running_task"] = _hide_test_task(status.get("running_task"))
+        worker_current = _hide_test_task(worker_current)
     return {
         "status": "ok",
         "queue_status": status,
@@ -840,14 +899,19 @@ async def api_enqueue(req: EnqueueRequest, request: Request):
                 status_code=400,
                 detail="Invalid repository address. Currently only public GitHub repositories (https://github.com/owner/repo) are supported.",
             )
+        is_test = False
         if not owns_repo(user, parse_repo_identity(target).owner):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"You can only submit repositories owned by your GitHub account (@{username}). "
-                    "To rank work from another GitHub account, sign in with that account."
-                ),
-            )
+            # TEST MODE (remove before launch): the admin may grade other accounts' repos, shown only to the admin
+            if admin_test_submissions_enabled() and is_admin_request(request):
+                is_test = True
+            else:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"You can only submit repositories owned by your GitHub account (@{username}). "
+                        "To rank work from another GitHub account, sign in with that account."
+                    ),
+                )
 
         # Pre-flight check via git ls-remote (fast check to verify repo exists and is public)
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
@@ -882,8 +946,9 @@ async def api_enqueue(req: EnqueueRequest, request: Request):
                 detail="Connection to GitHub repository timed out. Please verify the URL and try again.",
             )
 
-    task_id = enqueue_task(target=target, mode=req.mode, requested_by=username)
-    return {"status": "ok", "task_id": task_id, "message": "Enqueued successfully.", "quota": quota}
+    task_id = enqueue_task(target=target, mode=req.mode, requested_by=username, is_test=is_test)
+    message = ("Enqueued as an admin test grading (only you can see it)." if is_test else "Enqueued successfully.")
+    return {"status": "ok", "task_id": task_id, "message": message, "quota": quota, "is_test": is_test}
 
 
 class ReanalyzeRequest(BaseModel):
@@ -966,11 +1031,13 @@ async def api_queue_settings(req: QueueControlRequest, _admin: Dict[str, Any] = 
 
 
 @app.get("/api/queue/task/{task_id}")
-async def api_task_status(task_id: int):
+async def api_task_status(task_id: int, request: Request):
     """Returns live task progress, exact queue position, pause status, and the admin's pause reason."""
     task_info = get_task_status_with_position(task_id)
     if not task_info:
         raise HTTPException(status_code=404, detail="Task not found")
+    if not is_admin_request(request):
+        task_info = _hide_test_task(task_info)
     return {"status": "ok", "task": task_info}
 
 
@@ -1047,6 +1114,77 @@ async def api_admin_rescan_all(_admin: Dict[str, Any] = Depends(require_admin)):
         "requeued_count": requeued_count,
         "message": f"Successfully re-queued {requeued_count} repositories for prompt re-evaluation."
     }
+
+@app.post("/api/admin/queue/find-random")
+async def api_admin_find_random(admin: Dict[str, Any] = Depends(require_admin)):
+    """
+    TEST MODE (remove before launch): finds 5 random vibe-coded GitHub repos (4 small, 1 slightly larger, each from a
+    different random project type where possible; web/repo_finder.py) and queues them as admin test gradings,
+    submitted by the admin. Skips anything already graded or queued here. Needs LETSVIBE_ADMIN_TEST_SUBMISSIONS=1.
+    """
+    from fastapi.concurrency import run_in_threadpool
+    from .repo_finder import SearchLimitReached, find_random_repos
+
+    if not admin_test_submissions_enabled():
+        raise HTTPException(status_code=403, detail="Test mode is off. Set LETSVIBE_ADMIN_TEST_SUBMISSIONS=1 in .env and restart.")
+    username = admin.get("username", "")
+    conn = get_db_connection()
+    try:
+        seen = {r[0] for r in conn.execute("SELECT full_slug FROM projects")}
+        seen |= {r[0] for r in conn.execute("SELECT full_slug FROM audit_queue WHERE full_slug IS NOT NULL")}
+    finally:
+        conn.close()
+    try:
+        found = await run_in_threadpool(find_random_repos, seen)
+    except SearchLimitReached as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Couldn't reach GitHub search. Try again in a moment.")
+    queued = []
+    for repo in found["repos"]:
+        if repo["full_slug"].split("/", 1)[0].lower() == username.lower():
+            continue  # your own repos go through the normal submit form
+        repo["task_id"] = enqueue_task(target=repo["url"], mode="blend", requested_by=username, is_test=True)
+        queued.append(repo)
+    return {"status": "ok", "queued": queued, "notes": found["notes"], "searches": found["queries"],
+            "message": f"Queued {len(queued)} random vibe-coded repo{'' if len(queued) == 1 else 's'} as admin test gradings."}
+
+
+@app.post("/api/admin/queue/find-good")
+async def api_admin_find_good(admin: Dict[str, Any] = Depends(require_admin)):
+    """
+    TEST MODE (remove before launch): finds one vibe-coded GitHub repo that is likely to be good (the best-starred
+    apps tagged vibecoded / vibe-coded; web/repo_finder.py find_good_repo) and queues it as an admin test grading,
+    submitted by the admin. Skips anything already graded or queued here. Needs LETSVIBE_ADMIN_TEST_SUBMISSIONS=1.
+    """
+    from fastapi.concurrency import run_in_threadpool
+    from .repo_finder import SearchLimitReached, find_good_repo
+
+    if not admin_test_submissions_enabled():
+        raise HTTPException(status_code=403, detail="Test mode is off. Set LETSVIBE_ADMIN_TEST_SUBMISSIONS=1 in .env and restart.")
+    username = admin.get("username", "")
+    conn = get_db_connection()
+    try:
+        seen = {r[0] for r in conn.execute("SELECT full_slug FROM projects")}
+        seen |= {r[0] for r in conn.execute("SELECT full_slug FROM audit_queue WHERE full_slug IS NOT NULL")}
+    finally:
+        conn.close()
+    try:
+        found = await run_in_threadpool(find_good_repo, seen)
+    except SearchLimitReached as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Couldn't reach GitHub search. Try again in a moment.")
+    queued = []
+    for repo in found["repos"]:
+        if repo["full_slug"].split("/", 1)[0].lower() == username.lower():
+            continue  # your own repos go through the normal submit form
+        repo["task_id"] = enqueue_task(target=repo["url"], mode="blend", requested_by=username, is_test=True)
+        queued.append(repo)
+    message = ("Queued 1 well-starred vibe-coded repo as an admin test grading." if queued
+               else "Nothing new to queue.")
+    return {"status": "ok", "queued": queued, "notes": found["notes"], "searches": found["queries"], "message": message}
+
 
 @app.post("/api/admin/queue/clear-finished")
 async def api_admin_clear_finished(_admin: Dict[str, Any] = Depends(require_admin)):
@@ -1148,12 +1286,13 @@ async def api_admin_force_rescan(req: ForceRescanRequest, _admin: Dict[str, Any]
     slug = urllib.parse.unquote(req.full_slug).strip()
     conn = get_db_connection()
     try:
-        row = conn.execute("SELECT canonical_url FROM projects WHERE lower(full_slug) = lower(?)", (slug,)).fetchone()
+        row = conn.execute("SELECT canonical_url, is_test FROM projects WHERE lower(full_slug) = lower(?)", (slug,)).fetchone()
     finally:
         conn.close()
     if not row or not row["canonical_url"]:
         raise HTTPException(status_code=404, detail=f"Project '{slug}' not found")
-    task_id = enqueue_task(target=row["canonical_url"], mode="blend", requested_by="admin_force_rescan")
+    task_id = enqueue_task(target=row["canonical_url"], mode="blend", requested_by="admin_force_rescan",
+                           is_test=bool(row["is_test"]))
     return {"status": "ok", "task_id": task_id, "message": f"Queued a fresh grade of '{slug}' (same-commit check skipped)."}
 
 

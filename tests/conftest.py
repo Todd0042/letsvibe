@@ -17,6 +17,7 @@ os.environ.update({
     "GITHUB_CLIENT_ID": "mock_client_id_for_tests",
     "GITHUB_CLIENT_SECRET": "mock_client_secret_for_tests",
     "MAX_REGISTERED_USERS": "5",
+    "LETSVIBE_ADMIN_TEST_SUBMISSIONS": "",  # test mode off unless a test turns it on
 })
 
 import pytest  # noqa: E402
@@ -43,6 +44,7 @@ def isolate_test_database(tmp_path, monkeypatch):
     monkeypatch.setattr(_server, "ADMIN_GITHUB_USER", "Todd0042", raising=False)
     monkeypatch.setattr(_server, "ADMIN_GITHUB_ID", "", raising=False)
     monkeypatch.setenv("MAX_REGISTERED_USERS", "5")
+    monkeypatch.setenv("LETSVIBE_ADMIN_TEST_SUBMISSIONS", "")
     # Keep simulated emails and image caches out of the real data/ directory
     from letsvibe.core import mailer
     from letsvibe.web import image_proxy

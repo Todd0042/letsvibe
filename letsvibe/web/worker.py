@@ -213,7 +213,7 @@ class AuditQueueWorker:
         target = task["target"]
         mode = task.get("mode", "blend")
         force_override = bool(task.get("force_override", 0))
-        self.current_task_info = {"id": task_id, "target": target, "mode": mode}
+        self.current_task_info = {"id": task_id, "target": target, "mode": mode, "is_test": bool(task.get("is_test"))}
         packed_repo = None
         last_step_msg = "Initialization"
 
@@ -307,6 +307,7 @@ class AuditQueueWorker:
                 source_path=packed_repo.source_path,
                 file_list=tracked_files(packed_repo.source_path),
                 db_path=self.db_path,
+                is_test=bool(task.get("is_test")),  # TEST MODE: admin grading of someone else's repo (admin-only)
             )
 
             # 6. Complete task

@@ -34,6 +34,7 @@ share/python-wheels/
 letsvibe/data/*
 !letsvibe/data/curve_calibration.json
 !letsvibe/data/archetypes.json
+!letsvibe/data/complexity_forms.json
 reports/
 temp_repos/
 *.html
@@ -83,4 +84,5 @@ bakeoff-v2.md
 bakesale-summary.md
 factor-scoring.md
 deep-dive.md
+engine-comparison.md
 writer-test/

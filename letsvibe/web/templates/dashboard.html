@@ -209,7 +209,7 @@
     .podium-subtitle {
       color: var(--text-muted);
       font-size: 0.9rem;
-      margin-bottom: 2rem;
+      margin-bottom: 3.5rem; /* room for the medals that rise above the cards */
     }
     .podium-grid {
       display: grid;
@@ -220,7 +220,7 @@
       margin: 0 auto;
     }
     @media (max-width: 860px) {
-      .podium-grid { grid-template-columns: 1fr; }
+      .podium-grid { grid-template-columns: 1fr; row-gap: 3.75rem; } /* stacked: keep each medal clear of the card above */
       .podium-card.rank-1 { order: -1; }
     }
 
@@ -256,32 +256,35 @@
       box-shadow: 0 0 20px rgba(217, 119, 6, 0.15);
     }
 
+    /* Podium medals (static/medals/medal-N.svg): a ribboned medal hanging over the top edge of the card. */
     .podium-trophy {
       position: absolute;
-      top: -24px;
+      top: -42px;
       left: 50%;
-      transform: translateX(-50%);
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.3rem;
-      font-weight: 800;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      width: 56px;
+      height: 70px;
+      margin-left: -28px;
+      pointer-events: none;
+      transform-origin: 50% 0;
+      filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
     }
+    .podium-trophy img { width: 100%; height: 100%; display: block; }
     .rank-1 .podium-trophy {
-      background: linear-gradient(135deg, #fbbf24, #d97706);
-      color: #78350f;
+      top: -50px;
+      width: 64px;
+      height: 80px;
+      margin-left: -32px;
+      filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 14px rgba(251, 191, 36, 0.35));
     }
-    .rank-2 .podium-trophy {
-      background: linear-gradient(135deg, #e2e8f0, #94a3b8);
-      color: #1e293b;
+    /* a small swing when the card is hovered */
+    @keyframes medal-swing {
+      0%, 100% { transform: rotate(0deg); }
+      30% { transform: rotate(5deg); }
+      65% { transform: rotate(-3deg); }
     }
-    .rank-3 .podium-trophy {
-      background: linear-gradient(135deg, #f59e0b, #b45309);
-      color: #fff;
+    .podium-card:hover .podium-trophy { animation: medal-swing 0.9s ease-in-out; }
+    @media (prefers-reduced-motion: reduce) {
+      .podium-card:hover .podium-trophy { animation: none; }
     }
 
     .podium-avatar {
@@ -535,6 +538,7 @@
       padding: 0.1rem 0.25rem;
     }
     /* Category / platform tags in rows and on the project page */
+    .podium-platforms { justify-content: center; margin: 0.4rem 0 0.2rem; }
     .meta-tags {
       display: flex;
       flex-wrap: wrap;
@@ -904,6 +908,7 @@
 
     /* Dedicated Project Report View Styling */
     .project-header-card {
+      position: relative;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
@@ -920,6 +925,8 @@
       display: flex;
       align-items: center;
       gap: 1.25rem;
+      flex: 1 1 0;      /* shrink (badges wrap) so the grade box keeps its place on the right */
+      min-width: 0;
     }
     .project-large-avatar {
       width: 72px;
@@ -931,6 +938,91 @@
       padding: 4px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
     }
+    /* Scan picker: earlier grades of the same project, in the header card's top-right corner */
+    .project-header-card.has-scans { padding-top: 3.1rem; }
+    .scan-picker {
+      position: absolute;
+      top: 0.85rem;
+      right: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+    .scan-picker select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(15, 23, 42, 0.85) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.7rem center / 0.6rem;
+      color: #e2e8f0;
+      border: 1px solid var(--card-border);
+      border-radius: 9999px;
+      padding: 0.32rem 1.9rem 0.32rem 0.8rem;
+      font: inherit;
+      font-size: 0.78rem;
+      max-width: 300px;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+    }
+    .scan-picker select:hover, .scan-picker select:focus-visible { border-color: var(--accent-cyan); outline: none; }
+    .older-scan-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+      font-size: 0.8rem;
+      color: var(--accent-gold);
+      background: rgba(251, 191, 36, 0.08);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      border-radius: 8px;
+      padding: 0.3rem 0.6rem;
+    }
+    .older-scan-note button { background: none; border: none; color: var(--accent-cyan); font: inherit; cursor: pointer; text-decoration: underline; padding: 0; }
+    /* Badge of honor generator (owner and admin only): README / website badges from /badge/{owner}/{repo}.svg */
+    .badge-gen { border-left: 4px solid var(--accent-gold); }
+    .badge-gen-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin: 0.4rem 0 0.9rem; }
+    .badge-gen-controls label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+    .badge-gen-controls select {
+      appearance: none; -webkit-appearance: none;
+      background: rgba(15, 23, 42, 0.85) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 0.75rem center / 0.6rem;
+      color: #e2e8f0; border: 1px solid var(--card-border); border-radius: 10px;
+      padding: 0.45rem 2rem 0.45rem 0.8rem; font: inherit; font-size: 0.88rem; cursor: pointer; min-width: 0;
+    }
+    .badge-gen-controls select:focus-visible { border-color: var(--accent-gold); outline: none; }
+    .seg { display: inline-flex; border: 1px solid var(--card-border); border-radius: 9999px; overflow: hidden; }
+    .seg button { background: transparent; border: 0; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 600; padding: 0.3rem 0.75rem; cursor: pointer; }
+    .seg button.active { background: rgba(251, 191, 36, 0.15); color: var(--accent-gold); }
+    .badge-stage {
+      display: flex; align-items: center; justify-content: center; min-height: 170px; padding: 1.5rem 1rem;
+      border-radius: 12px; border: 1px solid var(--card-border); transition: background 0.25s ease;
+      background: radial-gradient(circle at 50% 40%, rgba(251, 191, 36, 0.08), transparent 60%), #0d1117;
+    }
+    .badge-stage.light { background: radial-gradient(circle at 50% 40%, rgba(251, 191, 36, 0.12), transparent 60%), #ffffff; }
+    .badge-stage img { max-width: 100%; height: auto; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35)); }
+    .badge-code { position: relative; margin-top: 0.75rem; }
+    .badge-code pre {
+      background: #0b1020; border: 1px solid var(--card-border); border-radius: 10px; padding: 0.75rem 6rem 0.75rem 0.85rem;
+      font-size: 0.78rem; color: #cbd5e1; white-space: pre-wrap; word-break: break-all; margin: 0;
+    }
+    .badge-code .btn { position: absolute; top: 0.45rem; right: 0.45rem; padding: 0.3rem 0.7rem; font-size: 0.78rem; }
+
+    /* TEST MODE (remove before launch): admin-only tag on test gradings of other people's repos */
+    .test-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #f0abfc;
+      background: rgba(217, 70, 239, 0.12);
+      border: 1px solid rgba(217, 70, 239, 0.4);
+      border-radius: 9999px;
+      padding: 0.08rem 0.5rem;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
     .project-big-grade {
       text-align: center;
       background: rgba(15, 23, 42, 0.9);
@@ -938,6 +1030,8 @@
       border-radius: 16px;
       padding: 1rem 1.75rem;
       box-shadow: 0 0 25px rgba(0, 240, 255, 0.2);
+      flex: 0 0 auto;
+      max-width: 320px;
     }
     .grade-letter-huge {
       font-size: 2.8rem;
@@ -1262,6 +1356,11 @@
 
       .report-card { padding: 1.1rem; }
       .project-header-card { padding: 1.1rem; flex-direction: column; align-items: stretch; gap: 1rem; }
+      .project-big-grade { max-width: none; }
+      .project-header-card.has-scans { padding-top: 1.1rem; }
+      .scan-picker { position: static; order: -1; width: 100%; }
+      .scan-picker label { white-space: nowrap; }
+      .scan-picker select { flex: 1; min-width: 0; width: 100%; max-width: none; font-size: 16px; text-overflow: ellipsis; } /* 16px stops iOS zooming on focus */
       .project-title-area { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
       .project-title-area > div { min-width: 0; }
       .project-large-avatar { width: 56px; height: 56px; }
@@ -1331,7 +1430,7 @@
     <main id="tab-leaderboard">
       <!-- 3D Podium Display (#1, #2, #3) -->
       <section class="podium-container">
-        <h1 class="podium-title">🏆 Top Graded Repositories</h1>
+        <h1 class="podium-title">🏆 Top Graded Vibe-Coded Repositories</h1>
         <p class="podium-subtitle">Graded 100% locally on what people experience: value, creativity and the user journey</p>
         <div class="podium-grid" id="podium-cards">
           <div style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">Loading podium rankings...</div>
@@ -1402,7 +1501,11 @@
       </div>
 
       <!-- Executive Header -->
-      <div class="project-header-card">
+      <div class="project-header-card" id="project-header-card">
+        <div class="scan-picker" id="scan-picker-wrap" hidden>
+          <label for="scan-picker" style="white-space: nowrap;"><i class="fa-solid fa-clock-rotate-left"></i> Scan</label>
+          <select id="scan-picker" onchange="pickScan(this.value)" aria-label="Show an earlier scan of this project"></select>
+        </div>
         <div class="project-title-area">
           <img id="project-avatar" src="" class="project-large-avatar" alt="Launcher Icon">
           <div>
@@ -1424,6 +1527,7 @@
             <div id="project-current-badges" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem;">
               <!-- Rendered via JS -->
             </div>
+            <div id="project-older-scan-note" class="older-scan-note" hidden></div>
           </div>
         </div>
 
@@ -1507,6 +1611,43 @@
           <ul id="project-attention-features" style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.7; color: #e2e8f0;">
           </ul>
         </div>
+      </div>
+
+      <div id="project-badge-card" class="report-card badge-gen" hidden>
+        <h3 style="color: var(--accent-gold); font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem;">
+          <i class="fa-solid fa-award"></i> Badge of honor <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">(only you can see this generator)</span>
+        </h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted);">Show your grade in your README or on your website. The badge always shows your latest grade and links to this report.</p>
+        <div id="badge-gen-body">
+          <div class="badge-gen-controls">
+            <label for="badge-style">Badge style</label>
+            <select id="badge-style" onchange="renderBadgeGenerator()">
+              <option value="card" selected>Score card: name, grade and all five factors</option>
+              <option value="classic">Classic: a small README badge</option>
+              <option value="for-the-badge">Bold: a larger, uppercase badge</option>
+              <option value="medal">Medal: a round seal with your grade</option>
+            </select>
+            <span class="seg" role="group" aria-label="Preview background">
+              <button type="button" id="badge-bg-dark" class="active" onclick="setBadgeBackground(false)">Dark</button>
+              <button type="button" id="badge-bg-light" onclick="setBadgeBackground(true)">Light</button>
+            </span>
+          </div>
+          <div id="badge-stage" class="badge-stage"><img id="badge-preview" alt="Badge preview"></div>
+          <div class="badge-gen-controls" style="margin: 0.9rem 0 0;">
+            <span class="seg" role="tablist" aria-label="Code format">
+              <button type="button" class="active" data-fmt="markdown" onclick="setBadgeFormat('markdown')">Markdown (README)</button>
+              <button type="button" data-fmt="html" onclick="setBadgeFormat('html')">HTML (website)</button>
+              <button type="button" data-fmt="url" onclick="setBadgeFormat('url')">Image URL</button>
+            </span>
+          </div>
+          <div class="badge-code">
+            <pre id="badge-code"></pre>
+            <button type="button" class="btn btn-secondary" onclick="copyBadgeCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+          </div>
+        </div>
+        <p id="badge-gen-test-note" style="font-size: 0.85rem; color: #f0abfc; margin-top: 0.5rem;" hidden>
+          <i class="fa-solid fa-flask"></i> This is an admin test grading, so it has no public badge.
+        </p>
       </div>
 
       <div id="project-maintainer-card" class="report-card" style="border-left: 4px solid var(--accent-cyan);" hidden>
@@ -1679,6 +1820,19 @@
                 </button>
               </div>
             </div>
+            <!-- TEST MODE (remove before launch): queue random vibe-coded repos from GitHub as admin-only test gradings -->
+            <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--card-border);">
+              <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <button id="btn-find-random" class="btn btn-secondary" onclick="findRandomRepos()" style="border-color: rgba(217, 70, 239, 0.5); color: #f0abfc;">
+                  <i class="fa-solid fa-shuffle"></i> Find &amp; queue 5 random vibe-coded repos
+                </button>
+                <button id="btn-find-good" class="btn btn-secondary" onclick="findRandomRepos('good')" style="border-color: rgba(251, 191, 36, 0.5); color: var(--accent-gold);">
+                  <i class="fa-solid fa-star"></i> Find &amp; queue 1 likely-good vibe-coded repo
+                </button>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">Test mode: GitHub topic vibecoded / vibe-coded. Random: 0-100 stars, 4 small + 1 larger, random project types. Likely good: one of the best-starred apps. Only you see them.</span>
+              </div>
+              <div id="find-random-result" style="margin-top: 0.6rem; font-size: 0.82rem;" hidden></div>
+            </div>
           </div>
 
           <!-- Active & Queued Tasks -->
@@ -1842,7 +1996,7 @@
 
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem 1.15rem; margin-bottom: 1.25rem; font-size: 0.85rem; line-height: 1.5; color: var(--text-main);">
           <p style="margin-top: 0; margin-bottom: 0.75rem;">
-            Welcome to the early access preview of <strong>LetsVibe</strong>! By auditing projects during this Community Beta, you are stress-testing the dual-model AI scoring engine. All early beta contributors receive:
+            Welcome to the early access preview of <strong>LetsVibe</strong>! By auditing projects during this Community Beta, you are helping test the local AI grading engine, which grades what people experience when they use a project. All early beta contributors receive:
           </p>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div style="background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 0.75rem;">
@@ -2390,10 +2544,11 @@
     // Rubric v8 factors, in order of weight. Code health is shared with each project's owner only.
     const RADAR_FACTORS = ['resonance', 'creativity', 'user_journey', 'functionality', 'ui_ux'];
     const MINI_BARS = [['resonance', 'VAL'], ['creativity', 'CRT'], ['user_journey', 'JRN'], ['functionality', 'FNC'], ['ui_ux', 'UI']];
+    // Leaderboard rows: the big rank number already says where it stands, so only the curve link is shown here
+    // (the project page still shows its rank within its category).
     function standingText(item) {
-      if (!item.category_rank) return '';
-      const curve = item.grade_basis === 'rubric' ? '' : ' · <a href="/grading-curve" onclick="event.stopPropagation()">on a curve</a>';
-      return `<div class="standing-note">#${item.category_rank} of ${item.category_count} in ${escapeHtml(categoryLabel(item.general_category))}${curve}</div>`;
+      if (item.grade_basis === 'rubric') return '';
+      return '<div class="standing-note"><a href="/grading-curve" onclick="event.stopPropagation()">on a curve</a></div>';
     }
 
     function curveNote(basis, curve) {
@@ -2656,14 +2811,17 @@
 
         return `
           <div class="podium-card rank-${rank}">
-            <div class="podium-trophy">${rank === 1 ? '👑' : (rank === 2 ? '🥈' : '🥉')}</div>
+            <div class="podium-trophy"><img src="/static/medals/medal-${rank}.svg" alt="#${rank}" width="64" height="80"></div>
             <img src="${appIcon}" class="podium-avatar" alt="${item.repo_name}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
-            <div class="podium-repo">${item.repo_name}</div>
+            <div class="podium-repo">${escapeHtml(item.repo_name)}${item.is_test ? ' <span class="test-tag" title="Admin test grading: only you can see this project"><i class="fa-solid fa-flask"></i> Test</span>' : ''}</div>
             <div class="podium-owner">
               <img src="${creatorAvatar}" class="creator-mini-avatar" alt="${item.owner}" onerror="this.src='/static/avatar-placeholder.svg'">@${item.owner}
             </div>
             <div>${scorePill(item, false)}</div>
             <div class="podium-archetype">${item.archetype_name || 'Software Project'}</div>
+            <div class="meta-tags podium-platforms">
+              ${(item.platforms || []).map(p => `<span class="meta-tag" title="${escapeHtml(platformLabel(p))}"><i class="${PLATFORM_ICONS[p] || 'fa-solid fa-display'}"></i>${escapeHtml(platformLabel(p))}</span>`).join('')}
+            </div>
             <div class="badge-pill-list">
               ${(item.badges || []).slice(0, 2).map(b => `
                 <span class="merit-badge ${b.superseded_at ? 'former' : ''}">
@@ -2701,7 +2859,7 @@
               <div class="repo-cell">
                 <img src="${appIcon}" class="repo-avatar" alt="${escapeHtml(item.repo_name)}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
                 <div class="repo-info">
-                  <span class="repo-title" title="${escapeHtml(item.full_slug)}" onclick="navigateTo('project', '${item.full_slug}')">${escapeHtml(item.repo_name)}</span>
+                  <span class="repo-title" title="${escapeHtml(item.full_slug)}" onclick="navigateTo('project', '${item.full_slug}')">${escapeHtml(item.repo_name)}${item.is_test ? ' <span class="test-tag" title="Admin test grading: only you can see this project"><i class="fa-solid fa-flask"></i> Test</span>' : ''}</span>
                   <span class="repo-meta">
                     <img src="${creatorAvatar}" class="creator-micro-avatar" alt="${item.owner}" onerror="this.src='/static/avatar-placeholder.svg'">@${item.owner} • ${item.primary_language || 'Code'} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC
                   </span>
@@ -2748,19 +2906,115 @@
     }
 
     // Load Dedicated Project Report View
-    async function loadProjectReport(fullSlug) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Badge of honor generator: shown to the project's owner and the admin
+    let badgeProject = null, badgeFormat = 'markdown';
+    function setupBadgeGenerator(p) {
+      const mine = currentUser && currentUser.username && p.owner && currentUser.username.toLowerCase() === String(p.owner).toLowerCase();
+      const card = document.getElementById('project-badge-card');
+      card.hidden = !(mine || (currentUser && currentUser.is_admin));
+      if (card.hidden) { badgeProject = null; return; }
+      // The badge always shows the latest scan, even while an earlier one is open
+      const latest = (p.history || [])[0] || { report_id: p.report_id, letter_grade: p.letter_grade, curved_score: shownScore(p) };
+      badgeProject = { owner: p.owner, repo_name: p.repo_name, letter_grade: latest.letter_grade,
+                       score: Number(latest.curved_score), report_id: latest.report_id };
+      document.getElementById('badge-gen-body').hidden = !!p.is_test;
+      document.getElementById('badge-gen-test-note').hidden = !p.is_test;
+      if (!p.is_test) renderBadgeGenerator();
+    }
+    function badgeUrls() {
+      const p = badgeProject;
+      const style = document.getElementById('badge-style').value;
+      const path = `${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo_name)}`;
+      const img = `${location.origin}/badge/${path}.svg` + (style === 'classic' ? '' : `?style=${style}`);
+      return { img, link: `${location.origin}/project/${path}`, style };
+    }
+    function renderBadgeGenerator() {
+      if (!badgeProject) return;
+      const { img, link } = badgeUrls();
+      const alt = `LetsVibe grade: ${badgeProject.letter_grade} (${badgeProject.score.toFixed(1)})`;
+      document.getElementById('badge-preview').src = img + (img.includes('?') ? '&' : '?') + `v=${badgeProject.report_id}`;
+      document.getElementById('badge-preview').alt = alt;
+      const code = {
+        markdown: `[![${alt}](${img})](${link})`,
+        html: `<a href="${link}"><img src="${img}" alt="${alt}"></a>`,
+        url: img,
+      }[badgeFormat];
+      document.getElementById('badge-code').textContent = code;
+    }
+    function setBadgeFormat(fmt) {
+      badgeFormat = fmt;
+      document.querySelectorAll('#project-badge-card [data-fmt]').forEach(b => b.classList.toggle('active', b.dataset.fmt === fmt));
+      renderBadgeGenerator();
+    }
+    function setBadgeBackground(light) {
+      document.getElementById('badge-stage').classList.toggle('light', light);
+      document.getElementById('badge-bg-light').classList.toggle('active', light);
+      document.getElementById('badge-bg-dark').classList.toggle('active', !light);
+    }
+    async function copyBadgeCode(btn) {
+      const text = document.getElementById('badge-code').textContent;
+      const label = btn.innerHTML;
       try {
-        const res = await fetch(`/api/project/${encodeURIComponent(fullSlug)}`);
+        await navigator.clipboard.writeText(text);
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+      } catch (e) {
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById('badge-code'));
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        btn.innerHTML = 'Press Ctrl+C';
+      }
+      setTimeout(() => { btn.innerHTML = label; }, 1800);
+    }
+
+    // Scan picker: show an earlier grade of the same project (the latest is the default)
+    function pickScan(reportId) {
+      loadProjectReport(currentProjectSlug, reportId ? Number(reportId) : null);
+    }
+
+    function scanLabel(h, isLatest) {
+      const when = h.graded_at ? new Date(String(h.graded_at).replace(' ', 'T')) : null;
+      const date = when && !isNaN(when)
+        ? when.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' +
+          when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+        : `Scan ${h.report_id}`;
+      const score = h.curved_score != null ? `${Number(h.curved_score).toFixed(1)} ${h.letter_grade || ''}`.trim() : '';
+      const rubric = h.rubric_version ? ` · rubric ${h.rubric_version}` : '';
+      return `${date} · ${score}${rubric}${isLatest ? ' (latest)' : ''}`;
+    }
+
+    function renderScanPicker(p) {
+      const wrap = document.getElementById('scan-picker-wrap');
+      const card = document.getElementById('project-header-card');
+      const history = p.history || [];
+      const many = history.length > 1;
+      wrap.hidden = !many;
+      card.classList.toggle('has-scans', many);
+      const sel = document.getElementById('scan-picker');
+      sel.innerHTML = history.map((h, i) =>
+        `<option value="${i === 0 ? '' : h.report_id}" ${h.report_id === p.report_id ? 'selected' : ''}>${escapeHtml(scanLabel(h, i === 0))}</option>`
+      ).join('');
+      const note = document.getElementById('project-older-scan-note');
+      note.hidden = p.is_latest !== false;
+      if (!note.hidden) {
+        note.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> You're viewing an earlier scan. <button type="button" onclick="pickScan('')">Show the latest</button>`;
+      }
+    }
+
+    async function loadProjectReport(fullSlug, reportId = null) {
+      if (!reportId) window.scrollTo({ top: 0, behavior: 'smooth' });
+      try {
+        const res = await fetch(`/api/project/${encodeURIComponent(fullSlug)}` + (reportId ? `?report=${encodeURIComponent(reportId)}` : ''));
         const json = await res.json();
         const p = json.project;
         const rep = p.full_report || {};
         currentProjectSlug = p.full_slug;
+        renderScanPicker(p);
 
         const appIcon = (p.repo_icon_url ? px(p.repo_icon_url) : '/static/project-placeholder.svg');
         const creatorAvatar = px(p.owner_avatar_url || `https://github.com/${p.owner}.png`);
 
-        document.getElementById('project-full-slug').textContent = p.full_slug;
+        document.getElementById('project-full-slug').innerHTML = escapeHtml(p.full_slug) +
+          (p.is_test ? ' <span class="test-tag" title="Admin test grading: only you can see this project"><i class="fa-solid fa-flask"></i> Test · admin only</span>' : '');
         document.getElementById('project-github-link').href = p.canonical_url;
         document.getElementById('project-avatar').src = appIcon;
         document.getElementById('project-avatar').onerror = () => { document.getElementById('project-avatar').src = creatorAvatar; };
@@ -2857,7 +3111,7 @@
           ? `<strong>${corr.length} correction${corr.length === 1 ? '' : 's'} after review:</strong> ` +
             corr.map(c => c.corrected ? `"${escapeHtml(c.original)}" was corrected to "${escapeHtml(c.corrected)}"` : `"${escapeHtml(c.original)}" was removed`).join('; ') + '.'
           : '';
-        document.getElementById('report-error-wrap').hidden =
+        document.getElementById('report-error-wrap').hidden = p.is_latest === false ||  // disputes are for the latest scan
           !(currentUser && p.owner && currentUser.username && currentUser.username.toLowerCase() === String(p.owner).toLowerCase());
 
         const rubricNote = document.getElementById('project-rubric-note');
@@ -2880,11 +3134,13 @@
         const peerEl = document.getElementById('project-peer-summary');
         peerEl.textContent = peerSummary;
         peerEl.hidden = !peerSummary;
-        const st = p.standing;
+        const st = p.is_latest === false ? null : p.standing;  // standing describes the latest scan only
         document.getElementById('project-standing').innerHTML = st
           ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>${curveNote(st.basis, rep.curve)} Raw score: ${p.final_score.toFixed(1)}. <a href="/grading-curve">How the curve works</a></span>`
           : '';
-        loadMaintainerNotes(p);
+        setupBadgeGenerator(p);
+        if (p.is_latest === false) document.getElementById('project-maintainer-card').hidden = true;  // notes are for the latest scan
+        else loadMaintainerNotes(p);
         const nextSteps = rep.pro_next_steps || [];
         document.getElementById('project-next-steps-card').hidden = nextSteps.length === 0;
         document.getElementById('project-next-steps').innerHTML = nextSteps.map(x => `<li>${escapeHtml(x)}</li>`).join('');
@@ -3125,7 +3381,7 @@
                   <div class="dev-repo-row">
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                       <i class="fa-solid fa-code-branch" style="color: var(--accent-cyan); font-size: 0.85rem;"></i>
-                      <span style="font-weight: 700; color: #fff; cursor: pointer;" onclick="navigateTo('project', '${p.full_slug}')">${p.repo_name}</span>
+                      <span style="font-weight: 700; color: #fff; cursor: pointer;" onclick="navigateTo('project', '${p.full_slug}')">${escapeHtml(p.repo_name)}</span>${p.is_test ? ' <span class="test-tag"><i class="fa-solid fa-flask"></i> Test</span>' : ''}
                       <span class="grade-badge ${gradeClass}">${p.letter_grade}</span>
                       <span style="font-size: 0.85rem; color: var(--accent-cyan); font-weight: 700;">${p.final_score ? p.final_score.toFixed(1) : ''} pts</span>
                       <span style="font-size: 0.78rem; color: var(--text-muted);">Graded: ${p.graded_at ? new Date(p.graded_at).toLocaleDateString() : 'N/A'}</span>
@@ -4004,6 +4260,40 @@ ${t.status === 'running' ? `
       if (confirm("Remove this task from the queue?")) {
         await fetch(`/api/admin/queue/${taskId}`, { method: 'DELETE' });
         fetchQueue();
+      }
+    }
+
+    // TEST MODE (remove before launch): find 5 random vibe-coded repos on GitHub and queue them as admin test gradings
+    async function findRandomRepos(kind = 'random') {
+      const good = kind === 'good';
+      const btn = document.getElementById(good ? 'btn-find-good' : 'btn-find-random');
+      const other = document.getElementById(good ? 'btn-find-random' : 'btn-find-good');
+      const out = document.getElementById('find-random-result');
+      btn.disabled = true;
+      if (other) other.disabled = true;
+      const label = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching GitHub...';
+      out.hidden = false;
+      out.innerHTML = `<span style="color: var(--text-muted);">Searching (${good ? '2' : 'up to 9'} GitHub searches)...</span>`;
+      try {
+        const res = await fetch(good ? '/api/admin/queue/find-good' : '/api/admin/queue/find-random', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Search failed');
+        const rows = (data.queued || []).map(r => `
+          <li style="margin: 0.25rem 0;">
+            <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" style="color: var(--accent-cyan); font-weight: 600;">${escapeHtml(r.full_slug)}</a>
+            <span style="color: var(--text-muted);"> · ${escapeHtml(r.type_topic || (r.size_class === 'well-starred' ? 'top-starred' : 'any type'))} · ${escapeHtml(r.language || 'n/a')} · ★${r.stars} · ${(r.size_kb / 1024).toFixed(1)} MB (${escapeHtml(r.size_class)})</span>
+          </li>`).join('');
+        const notes = (data.notes || []).map(n => `<div style="color: var(--accent-gold);">${escapeHtml(n)}</div>`).join('');
+        out.innerHTML = `<div style="color: var(--accent-green); font-weight: 600;">${escapeHtml(data.message)}</div>` +
+          (rows ? `<ul style="margin: 0.35rem 0 0 1.1rem; padding: 0;">${rows}</ul>` : '') + notes;
+        fetchQueue();
+      } catch (e) {
+        out.innerHTML = `<span style="color: var(--accent-red, #f87171);">${escapeHtml(e.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+        if (other) other.disabled = false;
+        btn.innerHTML = label;
       }
     }
 
