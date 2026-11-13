@@ -679,12 +679,13 @@ class RepositoryIngestor:
             clone_path = Path(temp_dir)
 
             env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-            # Depth 50 allows git log pre-scan to distinguish initial SDK drops from subsequent developer edits
+            # Every commit, but no file contents from old commits (--filter=blob:none): the vibe-coded check needs the
+            # first commit's date (November 2022 rule) and who wrote the commits (forks), and the git log pre-scan below
+            # distinguishes initial SDK drops from later developer edits. Only the current files are downloaded in full.
             cmd = [
                 "git",
                 "clone",
-                "--depth",
-                "50",
+                "--filter=blob:none",
                 "--no-recurse-submodules",
                 "-c",
                 "core.hooksPath=/dev/null",
@@ -696,12 +697,12 @@ class RepositoryIngestor:
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=60,
+                    timeout=180,
                     env=env,
                 )
             except subprocess.TimeoutExpired:
                 shutil.rmtree(temp_dir, ignore_errors=True)
-                raise RuntimeError(f"Git clone timed out after 60 seconds: {target}")
+                raise RuntimeError(f"Git clone timed out after 180 seconds: {target}")
 
             if result.returncode != 0:
                 shutil.rmtree(temp_dir, ignore_errors=True)

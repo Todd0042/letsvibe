@@ -140,3 +140,25 @@ def test_my_data_delete_flow(browser, live_server):
     others_after = [i["full_slug"] for i in get_leaderboard(db_path=db) if not i["full_slug"].startswith(owner)]
     assert others_after == others_before
     ctx.close()
+
+
+def test_my_projects_shows_a_vibe_review_hold_without_asking_anything(browser, live_server):
+    """A graded project the vibe-coded check could not confirm: the owner is told it waits for review, nothing more."""
+    from letsvibe.storage.integrity import hold_report
+
+    owner, gid = "ui-vibe-review", "880099"
+    hold_report({"repo_name": "chat-pasted"}, owner, "chat-pasted", f"{owner}/chat-pasted", f"https://github.com/{owner}/chat-pasted",
+                [{"file": "What the vibe-coded check found", "start_line": None, "end_line": None, "code": "- <script>x</script>"}],
+                db_path=UI_STATE["db"], kind="vibe_review")
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    ctx.add_cookies([session_cookie_for(live_server, owner, gid)])
+    page = ctx.new_page()
+    page.goto(live_server + "/my-projects")
+    card = page.locator("[data-held]")
+    card.first.wait_for()
+    text = card.first.inner_text()
+    assert "Waiting for review" in text and "Nothing is needed from you" in text
+    assert card.first.locator("textarea").count() == 0          # no explanation is asked for
+    assert "<script>" not in text                                # what the check found is for the admin only
+    assert_no_horizontal_scroll(page)
+    ctx.close()

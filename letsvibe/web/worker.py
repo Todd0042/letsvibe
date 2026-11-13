@@ -236,12 +236,17 @@ class AuditQueueWorker:
                 self._review_error(task, packed_repo)
                 return
 
-            # 1.5 Pre-Flight AI/Vibe-Coding Gatekeeper Check (10% -> 14%)
+            # 1.5 Vibe-coded check (10% -> 14%): rejected projects (history before November 2022, forks) are not graded;
+            # projects the check cannot confirm are graded, then held for the admin before publishing (step 4.7).
+            vibe_verdict = None
             if not force_override:
-                last_step_msg = f"Checking vibe-coding signatures{vendor_note}..."
+                last_step_msg = f"Checking that the project is vibe-coded{vendor_note}..."
                 self._update_task_progress(task_id, last_step_msg, pct=10)
-                vibe_verdict = VibeDetector.evaluate(packed_repo.source_path, packed_repo.files)
-                if not vibe_verdict.is_vibe:
+                ident = parse_repo_identity(target)
+                vibe_verdict = VibeDetector.evaluate(
+                    packed_repo.source_path, packed_repo.files, owner=ident.owner if ident.provider == "github" else "",
+                    full_slug=ident.full_slug if ident.provider == "github" else "")
+                if vibe_verdict.rejected:
                     self._reject_non_vibe_task(task_id, vibe_verdict)
                     return
             else:
@@ -296,6 +301,11 @@ class AuditQueueWorker:
             # 4.6 Integrity hold: never publish; ask the owner to explain specific lines instead.
             if report.integrity_hold:
                 self._hold_for_explanation(task, target, report, packed_repo)
+                return
+
+            # 4.7 Vibe review: the check could not confirm the project is vibe-coded. Graded, but only the admin can publish it.
+            if vibe_verdict is not None and vibe_verdict.needs_review:
+                self._hold_for_vibe_review(task, target, report, packed_repo, vibe_verdict)
                 return
 
             # 5. Persist to Disk and Database (96% -> 100%)
@@ -401,6 +411,40 @@ class AuditQueueWorker:
             task["id"],
             "Action required: before this report can be published, please explain a few lines of code on My Projects.",
             status="action_required",
+        )
+
+    def _hold_for_vibe_review(self, task: dict, target: str, report, packed_repo, verdict) -> None:
+        """Stores the graded report privately until the admin confirms the project is vibe-coded (nothing asked of the owner)."""
+        import subprocess
+
+        from ..core.icons import discover_launcher_icon_relpath, get_github_raw_icon_url, tracked_files
+        from ..storage.integrity import hold_report
+
+        identity = parse_repo_identity(target)
+        commit_sha = None
+        try:
+            res = subprocess.run(["git", "-C", str(packed_repo.source_path), "rev-parse", "HEAD"],
+                                 capture_output=True, text=True, timeout=3)
+            commit_sha = res.stdout.strip() or None
+        except Exception:
+            pass
+        icon_url = None
+        try:
+            rel_icon = discover_launcher_icon_relpath(packed_repo.source_path, tracked_files(packed_repo.source_path))
+            if rel_icon and identity.provider == "github":
+                icon_url = get_github_raw_icon_url(identity.owner, identity.repo_name, rel_icon)
+        except Exception:
+            pass
+        found = [{"file": "What the vibe-coded check found", "start_line": None, "end_line": None,
+                  "code": "\n".join(f"- {r}" for r in verdict.reasons)}]
+        hold_report(
+            report.model_dump(mode="json"), identity.owner, identity.repo_name, identity.full_slug, identity.canonical_url,
+            found, commit_sha=commit_sha, repo_icon_url=icon_url, db_path=self.db_path, kind="vibe_review",
+        )
+        self._complete_task(
+            task["id"],
+            "Graded. Waiting for review: LetsVibe could not confirm this project was vibe-coded, so the site owner will check it before it is published.",
+            status="held_for_review",
         )
 
     def _review_error(self, task: dict, packed_repo) -> None:
@@ -567,12 +611,16 @@ class AuditQueueWorker:
                     """
                     UPDATE audit_queue
                     SET status = 'rejected_non_vibe',
-                        progress_message = 'Rejected: no signs that this project was vibe-coded (written by AI) were found.',
+                        progress_message = ?,
                         rejection_reason = ?,
                         completed_at = ?
                     WHERE id = ?
                     """,
-                    (reason_summary, now_iso, task_id),
+                    ("Rejected: " + ("this project is a fork of someone else's project." if getattr(verdict, "is_fork", False)
+                                     else "this project's history starts before vibe coding existed (November 2022)."
+                                     if getattr(verdict, "is_legacy_pre_2022", False)
+                                     else "it does not appear to be vibe-coded (written by AI)."),
+                     reason_summary, now_iso, task_id),
                 )
             logger.info(f"Task #{task_id} rejected as non-vibe: {reason_summary}")
         finally:

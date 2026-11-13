@@ -8,6 +8,11 @@ Held reports
   either publishes or removes the report. Unanswered requests are deleted (live + every backup)
   after HOLD_RESPONSE_DAYS.
 
+Vibe reviews (kind 'vibe_review')
+  When the vibe-coded check cannot confirm a project was vibe-coded (core/vibe_detector.py), it is still graded, but the
+  report is held with status 'awaiting_admin' and what the check found. Nothing is asked of the owner. The admin
+  publishes or removes it; these holds never expire.
+
 Error reports
   The owner of a published report can dispute one specific statement in it. An AI review checks the
   statement against the code once; if it agrees with the owner the statement is corrected in the live
@@ -99,8 +104,10 @@ def hold_report(
     commit_sha: Optional[str] = None,
     repo_icon_url: Optional[str] = None,
     db_path: Path = DEFAULT_DB_PATH,
+    kind: str = "explain",
 ) -> int:
-    """Stores a report that needs an owner explanation. Any earlier unanswered hold for the repo is replaced."""
+    """Stores a held report: 'explain' needs an owner explanation; 'vibe_review' waits for the admin to confirm the project
+    was vibe-coded. Any earlier hold for the repo is replaced."""
     init_db(db_path)
     clean = strip_safety_details(report_dict)
     deadline = _now() + timedelta(days=HOLD_RESPONSE_DAYS)
@@ -111,11 +118,12 @@ def hold_report(
             cur = conn.execute(
                 """
                 INSERT INTO held_reports (owner, repo_name, full_slug, canonical_url, repo_icon_url, commit_sha,
-                                          report_data_json, flagged_lines_json, deadline_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                          report_data_json, flagged_lines_json, deadline_at, kind, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (owner, repo_name, full_slug, canonical_url, repo_icon_url, commit_sha,
-                 json.dumps(clean), json.dumps(flagged_lines), _iso(deadline)),
+                 json.dumps(clean), json.dumps(flagged_lines), _iso(deadline), kind,
+                 "awaiting_admin" if kind == "vibe_review" else "awaiting_response"),
             )
             return int(cur.lastrowid)
     finally:
@@ -134,7 +142,7 @@ def list_held_for_owner(username: str, db_path: Path = DEFAULT_DB_PATH) -> List[
     conn = get_db_connection(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, full_slug, repo_name, status, flagged_lines_json, owner_response, created_at, deadline_at, responded_at "
+            "SELECT id, full_slug, repo_name, status, kind, flagged_lines_json, owner_response, created_at, deadline_at, responded_at "
             "FROM held_reports WHERE lower(owner) = lower(?) ORDER BY deadline_at",
             (username,),
         ).fetchall()
@@ -148,8 +156,9 @@ def list_held_for_admin(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]
     conn = get_db_connection(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, owner, full_slug, canonical_url, commit_sha, status, flagged_lines_json, owner_response, "
-            "created_at, deadline_at, responded_at FROM held_reports ORDER BY status = 'submitted' DESC, responded_at, deadline_at"
+            "SELECT id, owner, full_slug, canonical_url, commit_sha, status, kind, flagged_lines_json, owner_response, "
+            "created_at, deadline_at, responded_at FROM held_reports "
+            "ORDER BY status IN ('submitted', 'awaiting_admin') DESC, responded_at, created_at"
         ).fetchall()
         return [_held_public(r) for r in rows]
     finally:
@@ -164,7 +173,7 @@ def submit_hold_response(held_id: int, username: str, text: str, db_path: Path =
         with conn:
             cur = conn.execute(
                 "UPDATE held_reports SET owner_response = ?, status = 'submitted', responded_at = ? "
-                "WHERE id = ? AND lower(owner) = lower(?)",
+                "WHERE id = ? AND lower(owner) = lower(?) AND kind = 'explain'",
                 (text, _iso(_now()), held_id, username),
             )
             return cur.rowcount > 0
@@ -206,13 +215,15 @@ def overdue_held_ids(db_path: Path = DEFAULT_DB_PATH) -> List[int]:
 
 
 def count_pending_reviews(db_path: Path = DEFAULT_DB_PATH) -> Dict[str, int]:
-    """Items waiting for the admin: submitted explanations and disputed statements."""
+    """Items waiting for the admin: submitted explanations, vibe reviews and disputed statements."""
     init_db(db_path)
     conn = get_db_connection(db_path)
     try:
         held = conn.execute("SELECT COUNT(*) c FROM held_reports WHERE status = 'submitted'").fetchone()["c"]
+        vibe = conn.execute("SELECT COUNT(*) c FROM held_reports WHERE status = 'awaiting_admin'").fetchone()["c"]
         errors = conn.execute("SELECT COUNT(*) c FROM error_reports WHERE status = 'needs_review'").fetchone()["c"]
-        return {"explanations": int(held), "error_reports": int(errors), "total": int(held) + int(errors)}
+        return {"explanations": int(held), "vibe_reviews": int(vibe), "error_reports": int(errors),
+                "total": int(held) + int(vibe) + int(errors)}
     finally:
         conn.close()
 

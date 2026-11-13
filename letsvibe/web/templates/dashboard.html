@@ -1774,8 +1774,8 @@
     <!-- TAB 4: ADMIN CONSOLE WITH DEVELOPER TREE -->
     <main id="tab-reviews" style="display: none;">
       <section class="report-card" style="margin-top: 1.5rem;">
-        <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.35rem;"><i class="fa-solid fa-inbox" style="color: var(--accent-cyan);"></i> Owner explanations</h2>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Reports held before publishing. The flagged lines are shown as plain text and never run. Unanswered requests are deleted automatically after 7 days.</p>
+        <h2 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.35rem;"><i class="fa-solid fa-inbox" style="color: var(--accent-cyan);"></i> Held reports</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Reports held before publishing: owner explanations of flagged lines (shown as plain text and never run; unanswered requests are deleted automatically after 7 days), and graded projects the vibe-coded check could not confirm (they wait for you, nothing is asked of the owner).</p>
         <div id="reviews-held"><p style="color: var(--text-muted);">Loading...</p></div>
       </section>
       <section class="report-card">
@@ -3933,6 +3933,18 @@
 
           clearInterval(trackerPollInterval);
           localStorage.removeItem('letsvibe_active_tracker_id');
+        } else if (t.status === 'held_for_review') {
+          [s1, s2, s3, s4, s5].forEach(s => s.className = 'tracker-step completed');
+          bar.style.width = '100%';
+          badge.className = 'grade-badge grade-B';
+          badge.textContent = 'Graded, waiting for review';
+          stepCounter.textContent = 'Almost there';
+          queuePos.style.display = 'none';
+          document.getElementById('tracker-live-message').innerHTML = `
+            <div style="color: var(--accent-cyan); font-size: 1rem; font-weight: 700; margin-bottom: 0.25rem;"><i class="fa-solid fa-user-check"></i> Graded, waiting for review</div>
+            <div style="color: var(--text-muted); font-size: 0.85rem;">LetsVibe could not confirm from the code and its history that this project was vibe-coded (written by AI from your prompts), so the site owner will check it before it is published. Nothing is needed from you.</div>`;
+          clearInterval(trackerPollInterval);
+          localStorage.removeItem('letsvibe_active_tracker_id');
         } else if (t.status === 'action_required') {
           [s1, s2, s3, s4, s5].forEach(s => s.className = 'tracker-step completed');
           bar.style.width = '100%';
@@ -4020,13 +4032,13 @@
           <div class="report-card" style="padding: 1rem; margin-bottom: 0.75rem;">
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
               <strong>${escapeHtml(h.full_slug)}</strong>
-              <span class="grade-badge ${h.status === 'submitted' ? 'grade-B' : 'grade-C'}">${h.status === 'submitted' ? 'Explanation received' : 'Waiting for owner (until ' + escapeHtml(String(h.deadline_at).slice(0, 10)) + ')'}</span>
+              <span class="grade-badge ${h.status === 'submitted' || h.status === 'awaiting_admin' ? 'grade-B' : 'grade-C'}">${h.status === 'awaiting_admin' ? 'Vibe-coded? Your call' : (h.status === 'submitted' ? 'Explanation received' : 'Waiting for owner (until ' + escapeHtml(String(h.deadline_at).slice(0, 10)) + ')')}</span>
             </div>
             ${linesHtml(h.flagged_lines)}
             ${h.owner_response ? `<div style="margin-top: 0.5rem;"><div style="font-size: 0.8rem; color: var(--text-muted);">Owner's explanation</div><p style="white-space: pre-wrap; margin: 0.25rem 0;">${escapeHtml(h.owner_response)}</p></div>` : ''}
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem;">
               <button class="btn btn-danger" style="font-size: 0.8rem;" onclick="reviewAction('/api/admin/held/${h.id}/remove')">Remove</button>
-              ${h.status === 'submitted' ? `<button class="btn btn-primary" style="font-size: 0.8rem;" onclick="reviewAction('/api/admin/held/${h.id}/publish')">Publish</button>` : ''}
+              ${h.status === 'submitted' || h.status === 'awaiting_admin' ? `<button class="btn btn-primary" style="font-size: 0.8rem;" onclick="reviewAction('/api/admin/held/${h.id}/publish')">Publish</button>` : ''}
             </div>
           </div>`).join('') : '<p style="color: var(--text-muted);">Nothing waiting.</p>';
         const errs = (data.errors || []).filter(e => e.status === 'needs_review');
@@ -4173,6 +4185,8 @@
           let statusBadge = `<span class="grade-badge ${t.status === 'completed' ? 'grade-A' : (t.status === 'running' ? 'grade-C' : (t.status === 'failed' ? 'grade-D' : 'grade-B'))}">${t.status}</span>`;
           if (t.status === 'rejected_non_vibe') {
             statusBadge = `<span class="grade-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">Non-Vibe Rejected</span>`;
+          } else if (t.status === 'held_for_review') {
+            statusBadge = `<span class="grade-badge grade-B">Graded, waiting for review</span>`;
           }
 
           return `
@@ -4180,7 +4194,7 @@
               <div>
                 <div style="font-weight: 700; color: #fff;">${t.queue_position ? `<span style="color: var(--text-muted); font-weight: 600;">#${t.queue_position} in line &middot; </span>` : ''}${escapeHtml(t.full_slug || t.target)}</div>
                 <div style="font-size: 0.78rem; color: var(--text-muted);">${t.progress_message || ''}</div>
-                ${t.rejection_reason ? `<div style="font-size: 0.74rem; color: #f87171; margin-top: 0.2rem;"><i class="fa-solid fa-triangle-exclamation"></i> ${t.rejection_reason}</div>` : ''}
+                ${t.rejection_reason ? `<div style="font-size: 0.74rem; color: #f87171; margin-top: 0.2rem;"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(t.rejection_reason)}</div>` : ''}
               </div>
               <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                 ${statusBadge}

@@ -173,7 +173,8 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             report_data_json TEXT NOT NULL,
             flagged_lines_json TEXT NOT NULL DEFAULT '[]',
             owner_response TEXT,
-            status TEXT NOT NULL DEFAULT 'awaiting_response', -- awaiting_response, submitted
+            status TEXT NOT NULL DEFAULT 'awaiting_response', -- awaiting_response, submitted, awaiting_admin
+            kind TEXT NOT NULL DEFAULT 'explain', -- explain (owner explains lines), vibe_review (admin confirms vibe-coded)
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             deadline_at TIMESTAMP NOT NULL,
             responded_at TIMESTAMP
@@ -232,6 +233,10 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0;")
             except sqlite3.OperationalError:
                 pass
+        try:  # vibe-coded check: reports held for the admin to confirm the project was vibe-coded (core/vibe_detector.py)
+            conn.execute("ALTER TABLE held_reports ADD COLUMN kind TEXT NOT NULL DEFAULT 'explain';")
+        except sqlite3.OperationalError:
+            pass
         try:
             conn.execute("ALTER TABLE audit_queue ADD COLUMN force_override INTEGER DEFAULT 0;")
         except Exception:

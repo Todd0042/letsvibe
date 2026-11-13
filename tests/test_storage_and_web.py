@@ -317,6 +317,7 @@ def test_vibe_detector():
     }
     res_plain = VibeDetector.evaluate(source_path=Path("."), files=clean_files, git_log="standard human commits")
     assert res_plain.is_vibe is False
+    assert res_plain.verdict == "unclear" and res_plain.needs_review     # graded, then held for the admin
 
 
 def test_cli_ux_analyzer():

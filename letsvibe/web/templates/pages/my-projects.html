@@ -49,6 +49,22 @@
 
   function renderHeld(items) {
     $('mp-actions').innerHTML = items.map(h => {
+      if (h.kind === 'vibe_review') {
+        return `
+      <section class="action-card" aria-labelledby="held-h-${h.id}" data-held="${h.id}">
+        <h2 id="held-h-${h.id}"><i class="fa-solid fa-user-check" style="color: var(--accent-cyan);"></i> Waiting for review: ${esc(h.full_slug)}</h2>
+        <p>Your project was graded. LetsVibe could not confirm from the code and its history that it was vibe-coded (written by AI
+           from your prompts), so the site owner will check it before it is published. Nothing is needed from you.</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+          <button class="pbtn small" type="button" data-withdraw-ask="${h.id}">Withdraw and delete instead</button>
+          <span class="inline-confirm" data-withdraw-confirm="${h.id}" hidden>Delete this report?
+            <button class="pbtn danger small" type="button" data-withdraw="${h.id}">Delete</button>
+            <button class="pbtn small" type="button" data-withdraw-no="${h.id}">Cancel</button>
+          </span>
+        </div>
+        <p class="status-line" role="status" data-status="${h.id}"></p>
+      </section>`;
+      }
       const waiting = h.status === 'awaiting_response';
       return `
       <section class="action-card" aria-labelledby="held-h-${h.id}" data-held="${h.id}">
