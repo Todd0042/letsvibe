@@ -6,11 +6,14 @@ independent sources of evidence that are compared item by item.
                               launch, saving, hostile patterns (dossier.py); proven problems (analyzers/code_scan.py)
   2. Cliché check   [Python + small embedding model]  closest common vibe-coded archetype, as a plain fact (cliche.py)
   3. Code evidence  [7B]      the code in 5,200-token chunks; each factor in its own session, one at a time, only on the
-                              chunks that can tell it something; every quote checked against the real file (code_evidence.py)
+                              chunks that can tell it something; a real "no" for every item; every quote checked against the
+                              real file, praise for things people see must quote something visible, and a 7B yes/no check
+                              that each quote shows its claim (code_evidence.py)
   4. Rubric         [14B]     five checklists on the dossier with fixed choices and exact quotes (rubric.py)
   5. Compare        [Python + 14B]  item by item; conflicts settled by the 14B rereading both sides' quoted lines (reconcile.py)
   6. Score          [Python]  fixed points per answer; weighted overall (scoring.py)
-  7. Descriptions   [14B]     the model rewrites the checked answers; "needs work" only from genuine problems (describe.py);
+  7. Descriptions   [14B]     the model rewrites the checked answers, weakest first; "needs work" written by Python from
+                              every problem and every answer that falls short (describe.py);
                               a public, unscored code complexity description written by Python (complexity.py)
 
 A grade that runs past the time limit (3 hours by default, LETSVIBE_TIME_LIMIT_MIN) stops and publishes nothing.
@@ -36,7 +39,7 @@ CHUNK_MODEL = code_evidence.MODEL
 # The malicious-pattern hold is switched off for now (Todd, 2026-11-12): it will be changed and turned back on later.
 # The scan code stays in analyzers/malicious_patterns.py.
 MALICIOUS_HOLD_ENABLED = False
-RUBRIC_ID = "v9-hybrid"
+RUBRIC_ID = "v9.1-hybrid"
 TIME_LIMIT_MIN = float(os.environ.get("LETSVIBE_TIME_LIMIT_MIN", "180"))
 
 
@@ -232,7 +235,7 @@ def evaluate(client, packed_repo, repo_source: str, metrics: DeterministicMetric
         repo_name=packed_repo.repo_name, repo_source=repo_source, timestamp=datetime.now().isoformat(), archetype=archetype,
         weights=weights, deterministic_metrics=metrics, factor_evaluations=factor_evals, final_vibe_score=final,
         malware_risk_score=0.0 if concerns else 100.0, resonance_score=scores["value"], letter_grade=calculate_letter_grade(final),
-        rubric_version="v9",
+        rubric_version="v9.1",
         peer_summary="", pro_next_steps=[], integrity_hold=bool(concerns),
         integrity_concerns=[{"file": c["file"], "code": c["code"]} for c in concerns],
         verdict_title=str(arch_answer)[:120], verdict_summary=summary,
@@ -245,6 +248,8 @@ def evaluate(client, packed_repo, repo_source: str, metrics: DeterministicMetric
                     "decisions": decisions,
                     "code_evidence": {"chunks": len(batches), "coverage": {k: list(v) for k, v in coverage.items()},
                                       "routed": code.routed, "calls": code.calls, "failed_calls": code.failed_calls,
-                                      "seconds": code.seconds, "unsupported_answers_dropped": code.unsupported},
+                                      "seconds": code.seconds, "unsupported_answers_dropped": code.unsupported,
+                                      "not_user_facing_quotes_rejected": code.not_user_facing,
+                                      "answers_failing_relevance_check": code.irrelevant},
                     "unsupported_answers": {"code_dropped": code.unsupported, "dossier_unverified": unsupported_dossier}})
     return report

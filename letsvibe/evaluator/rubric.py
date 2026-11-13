@@ -8,10 +8,34 @@ scores (prompts, weights, aggregation, grade curve, checklist).
 
 from typing import Dict, List
 
-RUBRIC_VERSION = "v9"
+RUBRIC_VERSION = "v9.1"
 
 # Newest first. Plain language: this is shown publicly on /changelog.
 RUBRIC_CHANGELOG: List[Dict[str, object]] = [
+    {
+        "version": "v9.1",
+        "date": "2026-11-13",
+        "title": "Problems are found as reliably as strengths",
+        "changes": [
+            "Every checklist question now has a real 'no' answer. Before, questions such as 'does the app tell people when "
+            "something goes wrong?' could only be answered 'clearly', 'sometimes' or 'not shown', so the code review could only "
+            "ever add praise.",
+            "A 'no' is backed by the code that shows the gap, for example an error that is only written to a log. 'Not there at "
+            "all' counts only when every part of the code that could show it was read and none did; a scan that simply missed "
+            "something is still never held against a project.",
+            "For things people see (messages, confirmations, loading feedback and screen-reader labels), praise must quote "
+            "something a person actually sees. Lines written to a log, print or console never count.",
+            "Each answer from the code review is checked once more: the smaller AI model is shown the quoted lines and asked "
+            "whether they really show the claim. Answers whose quotes are real but beside the point are dropped.",
+            "Questions about the whole app (does it work from start to finish, are the features wired together, is the look "
+            "consistent, do the features work together) need evidence from at least two files. When parts of the code disagree, "
+            "the answer is the one halfway between them, so a few polished screens never outvote the rest.",
+            "A code-review answer can no longer replace the dossier review's answer without a dispute check.",
+            "'Needs work' lists every problem and every answer that falls short (for example 'mostly works' or 'only sometimes "
+            "confirms an action'), with the file and line where the code shows it. Each factor's description starts with its "
+            "weakest finding, so the words match the score.",
+        ],
+    },
     {
         "version": "v9",
         "date": "2026-11-13",

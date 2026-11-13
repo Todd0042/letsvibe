@@ -3,8 +3,9 @@ Stages 4-5 (rubric v9): compare the code evidence (7B, code_evidence.py) with th
 item by item, and settle conflicts by rereading the code.
 
   - both agree                         -> that answer
-  - only one side has checked evidence -> that answer (this is how the code fills what the dossier could not show)
-  - they disagree, both with evidence  -> conflict check: the 14B gets the exact quoted lines from both sides, with the
+  - the dossier could not show it        -> the code answer (this is how the code fills what the dossier could not show)
+  - they disagree                       -> conflict check, whether or not the dossier's quotes matched exactly, so a
+                                          code answer can never silently replace a dossier answer (rubric v9 fix):: the 14B gets the exact quoted lines from both sides, with the
                                           lines around them, and must say which claim the code supports, quoting the
                                           deciding line. Python checks that quote. If neither claim holds up, the item
                                           counts as "not shown". Every decision is kept with the report.
@@ -20,7 +21,9 @@ from .code_evidence import CODE_FIELDS, NOT_SHOWN
 from .rubric import PASSES
 
 SYSTEM = ("You settle a disagreement between two reviews of the same app by reading the evidence yourself. You only "
-          "trust what the quoted code and text actually show. Respond with JSON only.")
+          "trust what the quoted code and text actually show. Something that works in one place does not prove it works "
+          "everywhere, and a line that writes to a log, print or console is never seen by the person using the app. "
+          "Respond with JSON only.")
 _SCHEMA = {"type": "object", "properties": {
     "supported": {"type": "string", "enum": ["A", "B", "NEITHER"]},
     "deciding_quote": {"type": "string"},
@@ -107,7 +110,9 @@ def judge(generate: Callable[..., Dict[str, Any]], model: str, cat: str, fld: st
 
 def _code_as_answer(c: Dict[str, Any]) -> Dict[str, Any]:
     ev = [f"{e['file']} line {e['line']}: {e['quote'][:120]}" for e in c.get("evidence", [])]
-    return {"answer": c["answer"], "evidence": ev, "verified": True, "source": "code",
+    if c.get("absence"):
+        ev = [f"not found in any of the {c.get('chunks_read', 0)} parts of the code read for this"]
+    return {"answer": c["answer"], "evidence": ev, "verified": True, "source": "code: nothing found" if c.get("absence") else "code",
             "code_evidence": c.get("evidence", [])}
 
 
@@ -125,12 +130,16 @@ def merge(results: Dict[str, Dict[str, Any]], code: Dict[str, Dict[str, Dict[str
                 if d:
                     merged[cat][fld] = {**d, "source": "dossier"}
                 continue
-            d_has = bool(d and d.get("verified") and d.get("answer") not in (None, NOT_SHOWN))
+            # Any dossier answer counts here, even when its quotes did not match exactly (the 14B often paraphrases):
+            # otherwise a code answer would replace a dossier negative without a conflict check.
+            d_has = bool(d and d.get("answer") not in (None, NOT_SHOWN))
             entry = {"factor": cat, "item": fld, "dossier": (d or {}).get("answer"), "code": c["answer"],
-                     "code_evidence": c.get("evidence", [])[:3]}
+                     "code_evidence": c.get("evidence", [])[:3], "code_absence": bool(c.get("absence")),
+                     "dossier_quotes_matched": bool(d and d.get("verified"))}
             if not d_has:
                 merged[cat][fld] = _code_as_answer(c)
-                decisions.append({**entry, "result": "code fills a gap", "answer": c["answer"]})
+                decisions.append({**entry, "result": "code fills a gap" + (" (nothing found in any relevant chunk)" if c.get("absence") else ""),
+                                  "answer": c["answer"]})
             elif d["answer"] == c["answer"]:
                 merged[cat][fld] = {**d, "source": "both", "code_evidence": c.get("evidence", []),
                                     "evidence": list(d.get("evidence", [])) + _code_as_answer(c)["evidence"][:1]}

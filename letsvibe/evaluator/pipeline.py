@@ -27,7 +27,7 @@ from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from .triage import select_for_review
 
-PIPELINE_ID = "v9-hybrid"
+PIPELINE_ID = "v9.1-hybrid"
 CHUNK_TOKENS = 5200
 
 

@@ -18,20 +18,22 @@ POINTS: Dict[str, Dict[str, Any]] = {
         "depth_of_world_or_concept": {"STERILE_DEFAULT": 0, "LIGHTLY_THEMED": 10, "THEMED": 20, "RICHLY_THEMED": 30},
         "mechanical_synergy": {True: 20, False: 0},
     },
-    # "Not shown in the dossier" earns the middle: absence the scan cannot prove is never a penalty.
+    # "Not shown in the dossier" earns the middle: absence the scan cannot prove is never a penalty. The "not shown to the
+    # user" / "none" answers (rubric v9) come only from the code review: quoted code that shows the gap, or every relevant
+    # chunk read without finding it (see code_evidence.py).
     "functionality": {
         "core_flow": {"WORKS_END_TO_END": 40, "MOSTLY_WORKS": 28, "PARTLY_BUILT": 12, "SHELL_OR_PLACEHOLDER": 0},
         "features_connected": {"CONNECTED": 25, "SOME_LOOSE_ENDS": 12, "DISCONNECTED": 0},
-        "tells_user_about_problems": {"CLEARLY": 20, "SOMETIMES": 12, "NOT_SHOWN_IN_DOSSIER": 10},
-        "confirms_success": {"CLEARLY": 15, "SOMETIMES": 9, "NOT_SHOWN_IN_DOSSIER": 7},
+        "tells_user_about_problems": {"CLEARLY": 20, "SOMETIMES": 12, "NOT_SHOWN_IN_DOSSIER": 10, "NOT_SHOWN_TO_USER": 0},
+        "confirms_success": {"CLEARLY": 15, "SOMETIMES": 9, "NOT_SHOWN_IN_DOSSIER": 7, "NOT_SHOWN_TO_USER": 0},
         "proven_problem_rate_penalty": 10, "proven_problem_penalty_max": 20,
     },
     "ui_ux": {
         "clarity": {"CLEAR": 25, "MIXED": 12, "CLUTTERED_OR_TECHNICAL": 0},
         "consistency": {"CONSISTENT": 20, "MOSTLY_CONSISTENT": 12, "PATCHWORK": 0},
-        "feedback_while_working": {"CLEAR": 20, "SOME": 12, "NOT_SHOWN_IN_DOSSIER": 10},
+        "feedback_while_working": {"CLEAR": 20, "SOME": 12, "NOT_SHOWN_IN_DOSSIER": 10, "NONE": 0},
         "fits_its_device": {"WELL": 25, "ADEQUATELY": 15, "POORLY": 0, "NOT_SHOWN_IN_DOSSIER": 12},
-        "accessibility_labels": {"PRESENT": 10, "FEW": 5, "NOT_SHOWN_IN_DOSSIER": 5},
+        "accessibility_labels": {"PRESENT": 10, "FEW": 5, "NOT_SHOWN_IN_DOSSIER": 5, "NONE": 0},
     },
     "journey": {
         "launch_experience": {"RUNS_IMMEDIATELY": 40, "ONE_STEP_INSTALL": 30, "MANUAL_SETUP": 15, "BRING_YOUR_OWN_KEY": 0},
@@ -56,7 +58,27 @@ PROBLEM_ANSWERS = {
     "state_and_save": {"NO_SAVE"}, "hostile_monetization": {True},
     "core_flow": {"PARTLY_BUILT", "SHELL_OR_PLACEHOLDER"}, "features_connected": {"DISCONNECTED"},
     "clarity": {"CLUTTERED_OR_TECHNICAL"}, "consistency": {"PATCHWORK"}, "fits_its_device": {"POORLY"},
+    "tells_user_about_problems": {"NOT_SHOWN_TO_USER"}, "confirms_success": {"NOT_SHOWN_TO_USER"},
+    "feedback_while_working": {"NONE"}, "accessibility_labels": {"NONE"},
 }
+# Answers that are not problems but still fall short (rubric v9): listed under "needs work" after the problems, and
+# named in the factor's description.
+MIDDLE_ANSWERS = {
+    "core_flow": {"MOSTLY_WORKS"}, "features_connected": {"SOME_LOOSE_ENDS"}, "tells_user_about_problems": {"SOMETIMES"},
+    "confirms_success": {"SOMETIMES"}, "clarity": {"MIXED"}, "consistency": {"MOSTLY_CONSISTENT"},
+    "feedback_while_working": {"SOME"}, "fits_its_device": {"ADEQUATELY"}, "accessibility_labels": {"FEW"},
+    "navigation_friction": {"A_FEW_STEPS"}, "setup_burden": {"MODERATE"}, "state_and_save": {"MANUAL_SAVE"},
+    "depth_of_world_or_concept": {"LIGHTLY_THEMED"},
+}
+
+
+def shortfall(field: str, answer: Any) -> int:
+    """2 = a problem, 1 = falls short, 0 = fine (or not shown either way)."""
+    if answer in PROBLEM_ANSWERS.get(field, ()):
+        return 2
+    if answer in MIDDLE_ANSWERS.get(field, ()):
+        return 1
+    return 0
 
 
 def category(cat: str, answers: Dict[str, Any], hostile_found: List[str], proven_problems: int = 0, lines_of_code: int = 0) -> Dict[str, Any]:
