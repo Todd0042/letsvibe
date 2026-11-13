@@ -21,7 +21,7 @@ from .reporters.markdown import generate_markdown_report
 
 app = typer.Typer(
     name="letsvibe",
-    help="✨ 100% offline grader for vibe-coded projects (rubric v8: graded on what people experience)",
+    help="✨ 100% offline grader for vibe-coded projects (rubric v9: graded on what people experience)",
     add_completion=False,
 )
 console = Console()
@@ -78,7 +78,7 @@ def analyze(
     ),
 ):
     """
-    Grades a repository on what people experience (rubric v8: value, creativity, user journey, functionality, UI/UX),
+    Grades a repository on what people experience (rubric v9: value, creativity, user journey, functionality, UI/UX),
     using 100% local models.
     """
     console.rule("[bold cyan]LetsVibe: 100% Local Repository Evaluator[/bold cyan]")
@@ -123,9 +123,9 @@ def analyze(
             readme_excerpt = metrics.readme_excerpt
         static_elapsed = round(time.perf_counter() - t_static_start, 2)
 
-        # 3-4. Experience grading (rubric v8): the same recipe as the website and the curve calibration
+        # 3-4. Experience grading (rubric v9): the same recipe as the website and the curve calibration
         if mode != "blend" or explicit_macro or not distill:
-            console.print("[dim]Note: --mode, model and --distill options are ignored since rubric v8 (experience grading).[/dim]")
+            console.print("[dim]Note: --mode, model and --distill options are ignored since rubric v8 (experience grading); rubric v9 always uses the 7B and 14B together.[/dim]")
         with console.status("[bold magenta]Experience grading: dossier, checklists and descriptions...[/bold magenta]"):
             classification = classify_project(
                 client, packed_repo.source_path, platform_info,

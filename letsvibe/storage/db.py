@@ -20,6 +20,9 @@ logger = logging.getLogger("letsvibe.storage")
 
 
 DEFAULT_DB_PATH = Path("data/letsvibe.db")
+# Rubrics that grade the five experience factors only (code health and safety stored empty, never 0 or 100)
+EXPERIENCE_RUBRICS = ("v8", "v9")
+
 # Factors shown on the site (rubric v8 grades value, creativity and the user journey). Older badges for other
 # factors stay in ranking_history but are not displayed.
 SHOWN_BADGE_CATEGORIES = ("overall", "resonance", "creativity", "user_journey", "functionality", "ui_ux")
@@ -393,9 +396,9 @@ def save_report_to_db(
     verdict_title = report_dict.get("verdict_title", "")
     verdict_summary = report_dict.get("verdict_summary", "")
 
-    # Experience grading (rubric v8) grades value, creativity, user journey, functionality and UI/UX. Code health and
+    # Experience grading (rubric v8 and later) grades value, creativity, user journey, functionality and UI/UX. Code health and
     # operational safety are stored empty (never 0 or 100), so rankings, badges and averages treat them as "not graded".
-    if str(report_dict.get("rubric_version", "")).startswith("v8"):
+    if str(report_dict.get("rubric_version", "")) in EXPERIENCE_RUBRICS:
         ops_score = maint_score = arch_score = health_score = None
         vib_score = float((factors.get("resonance") or {}).get("score", 0.0))
         fnc_score = float(factors["functionality"]["score"]) if isinstance(factors.get("functionality"), dict) else None

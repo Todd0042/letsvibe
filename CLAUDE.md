@@ -4,8 +4,9 @@
 
 There are two copies of LetsVibe, and their front ends are kept in sync:
 
-- `letsvibe` (~/Documents/GitHub/letsvibe): the current site, letsvibe.todd0042.dev, grading with rubric v8
-  (experience grading: value, creativity, user journey, functionality, UI/UX).
+- `letsvibe` (~/Documents/GitHub/letsvibe): the current site, letsvibe.todd0042.dev, grading with rubric v9
+  (hybrid experience grading: value, creativity, user journey, functionality, UI/UX; the App Dossier plus per-factor
+  7B code evidence, compared item by item).
 - `letsvibe-og-bk` (~/Documents/GitHub/letsvibe-og-bk): the original grader (rubric v7: 7B + 14B code reading,
   seven factors) kept online at letsvibe-og-bk.todd0042.dev to compare the two grading engines.
 

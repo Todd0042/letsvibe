@@ -175,7 +175,7 @@ python letsvibe.py web      # http://127.0.0.1:8000 (leaderboard) and /admin (ad
 
 # Part 2 — Technical Reference
 
-> *The sections below describe LetsVibe `v1.0.0` (grading rubric `v7`) as implemented. Earlier rubric versions are listed on the site's [rubric changelog](https://letsvibe.todd0042.dev/changelog).*
+> *The sections below describe LetsVibe `v1.0.0` (grading rubric `v7`) as implemented, updated for grading rubric `v9` (hybrid grading). Earlier rubric versions are listed on the site's [rubric changelog](https://letsvibe.todd0042.dev/changelog).*
 
 ---
 
@@ -192,9 +192,11 @@ flowchart TB
     Measure --> Classify["Category, platforms, device<br/>(evaluator/classifier.py)"]
     Classify --> Dossier["App Dossier + proven-problem scan, no AI<br/>(evaluator/experience/dossier.py, analyzers/code_scan.py)"]
     Dossier --> Cliche["Closest common app type<br/>(evaluator/experience/cliche.py)"]
-    Cliche --> Rubric["14B checklists, one topic at a time,<br/>every answer quoted (evaluator/experience/rubric.py)"]
-    Rubric --> Score["Fixed points per answer, fixed weights<br/>(evaluator/experience/scoring.py)"]
-    Score --> Describe["14B rewrites its checked answers<br/>(evaluator/experience/describe.py)"]
+    Cliche --> Code["7B reads the code in 5,200-token chunks,<br/>one factor per session, every quote checked<br/>(evaluator/experience/code_evidence.py)"]
+    Code --> Rubric["14B checklists on the dossier, one topic at a time,<br/>every answer quoted (evaluator/experience/rubric.py)"]
+    Rubric --> Compare["Item-by-item comparison; 14B rereads<br/>the quoted lines when they disagree<br/>(evaluator/experience/reconcile.py)"]
+    Compare --> Score["Fixed points per answer, fixed weights<br/>(evaluator/experience/scoring.py)"]
+    Score --> Describe["14B rewrites the checked answers; public, unscored<br/>complexity description (describe.py, complexity.py)"]
     Describe --> Curve["Letter grade on the bell curve<br/>(storage/peer_grades.py)"]
     Curve --> Board["Leaderboard & report<br/>(storage/db.py, web/templates/)"]
     Calib["scripts/calibrate_curve.py<br/>reference projects x3 runs"] --> Curve
@@ -215,7 +217,7 @@ flowchart TB
   * docs, licences, build/config files and tests are **not sent to the models** (they reach them as measurements, the README and the file tree);
   * story, dialogue, level and other content files are **sampled** (the largest few, first part only), so content-heavy projects are judged on what they contain, not their length;
   * everything else — program logic, screens, setup, input/output — is read in full.
-* **No model reads the code** (rubric v8): the App Dossier and the proven-problem scan read it with plain Python and pass on only what people experience and what a program can prove.
+* **Two independent reviews** (rubric v9): the App Dossier and the proven-problem scan read the code with plain Python and pass on only what people experience and what a program can prove; separately, the 7B reads the filtered code in 5,200-token chunks, **one factor per session** (functionality, UI/UX, user journey, creativity), only on chunks whose files can inform that factor. Every 7B answer must quote lines that a program then finds in the real file, or it is dropped. The two reviews are compared item by item: agreement stands, one-sided checked evidence fills the gap, and disagreements go to the 14B with both sides' quoted lines and the code around them; it must quote the line that decides it. Answers are never averaged and no model picks a number. A grade that runs past 3 hours (`LETSVIBE_TIME_LIMIT_MIN`) stops and publishes nothing. `scripts/benchmark_v9.py` grades the reference projects (and any others) several times and compares the results with v8.
 
 ---
 
@@ -226,7 +228,7 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 | Measurement | Source | Used for |
 | :--- | :--- | :--- |
 | Proven problems and code-health findings | [analyzers/code_scan.py](letsvibe/analyzers/code_scan.py) | Functionality (endpoints nothing calls, unreadable configs, unfinished features); everything else becomes the owner's maintainer notes |
-| Cyclomatic complexity (average, max, worst functions) | [analyzers/complexity.py](letsvibe/analyzers/complexity.py) (Lizard) | Not graded; neutral project facts |
+| Cyclomatic complexity (average, max, worst functions) | [analyzers/complexity.py](letsvibe/analyzers/complexity.py) (Lizard) | Not graded; a public plain-English complexity description on every report ([evaluator/experience/complexity.py](letsvibe/evaluator/experience/complexity.py)) |
 | Packaging, licence, README | [analyzers/functionality.py](letsvibe/analyzers/functionality.py) | Neutral project facts shown on the report |
 | Platforms, hardware & device profile | [core/platforms.py](letsvibe/core/platforms.py) | Device-relative grading |
 | User-journey evidence | [analyzers/journey_signals.py](letsvibe/analyzers/journey_signals.py) | Installers & launch scripts, README quick start, setup wizards (including in-page wizards), permission requests, screens/commands, settings depth, confirmations, error and empty states |

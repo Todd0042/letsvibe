@@ -278,8 +278,8 @@ class AuditQueueWorker:
                 readme=readme_excerpt, file_tree=packed_repo.file_tree,
             )
 
-            # 3-4. Experience grading (rubric v8): dossier -> cliché check -> 14B checklists -> Python score
-            #      -> 14B descriptions. The same recipe as the curve calibration (evaluator/pipeline.py).
+            # 3-4. Experience grading (rubric v9): dossier -> cliché check -> per-factor 7B code evidence -> 14B checklists
+            #      -> compare (14B settles conflicts) -> Python score -> 14B descriptions. The same recipe as the curve calibration (evaluator/pipeline.py).
             def on_llm_progress(step_text: str, pct: int) -> None:
                 nonlocal last_step_msg
                 last_step_msg = step_text

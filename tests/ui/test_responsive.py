@@ -89,6 +89,10 @@ def test_project_page_layout(page, live_server):
     assert_no_horizontal_scroll(page)
     assert_inside_viewport(page, page.locator("#projectRadarCanvas"), "radar chart")
     assert "ESP32-S3" in page.locator("#project-device-profile").inner_text()
+    # rubric v9: code complexity is described publicly and marked as not graded
+    assert page.locator("#project-complexity-block").is_visible()
+    assert "4.2 paths per function" in page.locator("#project-complexity-summary").inner_text()
+    assert "render_dash in display.cpp" in page.locator("#project-complexity-details").inner_text()
     assert not page.js_errors, page.js_errors
 
 

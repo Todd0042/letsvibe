@@ -3,7 +3,11 @@ The one evaluation recipe, shared by the queue worker and the curve calibration 
 (scripts/calibrate_curve.py), so the reference projects that set the grading curve are graded
 exactly like every submission.
 
-Recipe "v8-experience" (2026-11-12): grades what people experience, never how the code is written.
+Recipe "v9-hybrid" (2026-11-13): grades what people experience, never how the code is written. Two sources of evidence,
+compared item by item: the App Dossier (rubric v8) and per-factor 7B reads of the code in 5,200-token chunks (rubric v7's
+chunking, one factor per session); conflicts are settled by the 14B rereading the quoted lines. See evaluator/experience.
+
+Previous recipe "v8-experience" (2026-11-12), still the dossier half of v9:
 1. Deterministic measurements (size, languages, platforms, packaging) and classification (category, platforms).
 2. Experience grading (evaluator/experience): an App Dossier built by Python, a cliché check against common
    vibe-coded app types, three 14B checklists (real-world value, creativity, user journey) answered with fixed
@@ -23,7 +27,7 @@ from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from .triage import select_for_review
 
-PIPELINE_ID = "v8-experience"
+PIPELINE_ID = "v9-hybrid"
 CHUNK_TOKENS = 5200
 
 

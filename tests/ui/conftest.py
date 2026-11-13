@@ -63,6 +63,8 @@ def _report(slug: str, score: float, category: str, platforms, profile: str) -> 
         letter_grade=calculate_letter_grade(score), verdict_title="Demo Verdict",
         verdict_summary="A concise reviewer verdict for layout testing.",
         top_solid_features=["Feature A: solid"], top_features_needing_work=["Feature B: needs tests"],
+        complexity={"summary": "Average complexity is 4.2 paths per function (moderate: typical for a working app).",
+                    "details": ["render_dash in display.cpp: 31 paths over 140 lines"], "graded": False},
     )
     return rep.model_dump(mode="json")
 

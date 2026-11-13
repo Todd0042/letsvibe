@@ -8,10 +8,32 @@ scores (prompts, weights, aggregation, grade curve, checklist).
 
 from typing import Dict, List
 
-RUBRIC_VERSION = "v8"
+RUBRIC_VERSION = "v9"
 
 # Newest first. Plain language: this is shown publicly on /changelog.
 RUBRIC_CHANGELOG: List[Dict[str, object]] = [
+    {
+        "version": "v9",
+        "date": "2026-11-13",
+        "title": "Two independent reviews of every project, checked against each other",
+        "changes": [
+            "Every project now gets two independent reviews. The first is the App Dossier from v8: a written account of what "
+            "people see and do, read by the larger AI model. The second reads the code itself, cut into small sections.",
+            "The code review looks at one thing at a time. A smaller AI model reads each section separately for functionality, "
+            "UI/UX, the user journey and creativity, and only reads the sections that can tell it something about that topic. "
+            "Real-world value is still judged from the project as a whole.",
+            "Every answer from the code review must quote real lines of code, and a program checks each quote against the "
+            "file. Answers whose quotes are not in the code are thrown away.",
+            "The two reviews are compared item by item. When they agree, the answer stands. When only one found evidence, "
+            "that evidence is used, so things a scan could not see are no longer simply given middle points. When they "
+            "disagree, the larger model rereads the exact quoted lines from both sides and decides which claim the code "
+            "supports; if neither holds up, the item counts as not shown. Answers are never averaged.",
+            "Scores still come from fixed points per answer, with the same weights as v8.",
+            "Reports now say where findings were seen (file and line) and include a plain-English description of the "
+            "code's complexity. Complexity is shown for information only and never changes the score.",
+            "A grade that runs longer than 3 hours stops and publishes nothing.",
+        ],
+    },
     {
         "version": "v8",
         "date": "2026-11-12",

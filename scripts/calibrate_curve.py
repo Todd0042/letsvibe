@@ -92,7 +92,8 @@ def main() -> None:
     data = {
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rubric_version": RUBRIC_VERSION, "pipeline": PIPELINE_ID,
-        "models": {"checklists_and_descriptions": "qwen2.5-coder:14b", "archetype_embeddings": "mxbai-embed-large"},
+        "models": {"code_evidence_per_factor": "qwen2.5-coder:7b", "checklists_conflicts_and_descriptions": "qwen2.5-coder:14b",
+                   "archetype_embeddings": "mxbai-embed-large"},
         "runs_per_anchor": args.runs,
         "why": WHY,
         "peer_min_projects": PEER_MIN_PROJECTS, "a_requires_position": A_REQUIRES_POSITION,
