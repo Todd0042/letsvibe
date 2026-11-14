@@ -64,6 +64,8 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 2. **📋 A detailed report for every project**: five factor scores, what works, what needs work (only problems the checks actually found), and private code-health notes that only the project's owner can see.
 3. **🔍 A fully disclosed method**: how grading works, every rubric change, and every number behind the grading curve are published on the site.
 
+> **Open-source site, private grading engine:** The LetsVibe web platform, leaderboard, bell-curve math, static analyzers, and self-service privacy/deletion tools in this repository are open source. The AI experience grading engine itself is not currently open source (kept in a separate private repository while the rubric evolves and to prevent checklist gaming), while the full methodology, checklist points, and curve formulas are published on [/how-it-works](https://letsvibe.todd0042.dev/how-it-works) and [/grading-curve](https://letsvibe.todd0042.dev/grading-curve).
+
 ---
 
 ## 🚀 How It Works in 3 Steps
@@ -147,6 +149,8 @@ Every number and constant used by the curve is published live on the [Grading cu
 ---
 
 ## 🛠️ Run It Yourself
+
+> **Note:** This public repository contains the open-source web platform, leaderboard, storage, bell curve, and static analyzers (`python letsvibe.py web`). The AI experience grading engine (`evaluator/experience/`) is not currently open source and is excluded from the public repository.
 
 ### Requirements
 * **Python 3.11+** and **git**
