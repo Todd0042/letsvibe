@@ -91,17 +91,3 @@ engine-test.log.1
 writer-test/
 benchmark-v9.json
 deploy/cloudflare-offline-worker/.wrangler/
-
-# Local engine internals & engine-specific tests (kept on disk, excluded from public repo)
-/letsvibe/evaluator/experience/
-/letsvibe/evaluator/fit/
-/letsvibe/evaluator/checklist.py
-/letsvibe/evaluator/consensus.py
-/letsvibe/evaluator/prompts.py
-/tests/test_hybrid_grading.py
-/tests/test_experience_grading.py
-/tests/test_project_context.py
-/tests/test_engine_log.py
-/tests/test_triage.py
-/tests/test_scoring_relevance.py
-/tests/test_analyzers.py
