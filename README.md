@@ -98,7 +98,7 @@ The radar is scaled to the project (0 at the centre, its best factor at the edge
   <img src="screenshots/report-radar.png" alt="Multi-factor radar, verdict and measurements" width="100%">
 </p>
 
-| 🧮 7-Factor Scorecard | 🛠️ What Works, What Needs Work & Next Steps |
+| 🧮 5-Factor Scorecard | 🛠️ What Works, What Needs Work & Next Steps |
 | :---: | :---: |
 | <img src="screenshots/report-scorecard.png" width="430"> | <img src="screenshots/report-findings.png" width="430"> |
 | *Weights, raw scores, contributions and the reviewers' observations* | *Strengths, gaps, and what a professional team would do next* |
@@ -131,10 +131,10 @@ AI reviewers are good at *comparing* projects but poor at absolute scores — th
 
 Every number and constant used by the curve is published live on the [Grading curve](https://letsvibe.todd0042.dev/grading-curve) page:
 
-| 🔔 Why a Curve & How It Works | 📐 The Reference Projects & Every Run |
+| 🔔 Why a Curve & How It Works | ✨ Community Sparks & Curved Grade Bands |
 | :---: | :---: |
 | <img src="screenshots/curve-method.png" width="400"> | <img src="screenshots/curve-reference.png" width="400"> |
-| *The method, the grade bands and each grade's share of a full bell* | *The exact prompt, the model that wrote it, and all three grading runs* |
+| *Why AI scores need a curve, default anchors, and adaptive scaling* | *Community Spark upvotes and the curved letter-grade ranges* |
 
 ---
 
