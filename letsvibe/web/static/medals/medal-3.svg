@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" role="img" aria-label="#3 bronze medal">
+  <defs>
+    <linearGradient id="r" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#134e4a"/><stop offset=".5" stop-color="#0f766e"/><stop offset="1" stop-color="#134e4a"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8b878"/><stop offset=".45" stop-color="#d97a2b"/><stop offset=".75" stop-color="#9a4a12"/><stop offset="1" stop-color="#f8b878"/></linearGradient>
+    <radialGradient id="face" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#ffedd5"/><stop offset=".35" stop-color="#f8b878"/><stop offset=".75" stop-color="#d97a2b"/><stop offset="1" stop-color="#9a4a12"/></radialGradient>
+    <linearGradient id="num" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a4a12"/><stop offset="1" stop-color="#5c2a08"/></linearGradient>
+  </defs>
+  <!-- ribbon: two folded bands meeting behind the medal -->
+  <path d="M12 0h15l12 34-11 6z" fill="url(#r)"/>
+  <path d="M37 0h15L36 40l-11-6z" fill="url(#r)"/>
+  <path d="M18 0h3.5l11 31-2.6 1.5z" fill="#e59a55" opacity=".9"/>
+  <path d="M42.5 0H46L34 32.5l-2.6-1.5z" fill="#e59a55" opacity=".9"/>
+  <path d="M12 0h40v3H12z" fill="#000" opacity=".25"/>
+  <!-- clasp -->
+  <rect x="25" y="29" width="14" height="6" rx="2" fill="url(#rim)" stroke="#5c2a08" stroke-width=".6"/>
+  <!-- medal -->
+  <circle cx="32" cy="53.5" r="24" fill="#000" opacity=".3"/>
+  <circle cx="32" cy="52" r="24" fill="url(#rim)"/>
+  <circle cx="32" cy="52" r="19.6" fill="url(#face)" stroke="#5c2a08" stroke-opacity=".45" stroke-width=".8"/>
+  <circle cx="32" cy="52" r="17.4" fill="none" stroke="#ffedd5" stroke-opacity=".55" stroke-width=".6" stroke-dasharray="1.2 1.6"/>
+  <ellipse cx="28.21" cy="73.47" rx="3.1" ry="1.35" transform="rotate(-18.0 28.21 73.47)" fill="#5c2a08"/><ellipse cx="22.44" cy="71.59" rx="3.1" ry="1.35" transform="rotate(-2.0 22.44 71.59)" fill="#5c2a08"/><ellipse cx="17.41" cy="68.20" rx="3.1" ry="1.35" transform="rotate(14.0 17.41 68.20)" fill="#5c2a08"/><ellipse cx="13.51" cy="63.55" rx="3.1" ry="1.35" transform="rotate(30.0 13.51 63.55)" fill="#5c2a08"/><ellipse cx="11.04" cy="58.01" rx="3.1" ry="1.35" transform="rotate(46.0 11.04 58.01)" fill="#5c2a08"/><ellipse cx="10.20" cy="52.00" rx="3.1" ry="1.35" transform="rotate(62.0 10.20 52.00)" fill="#5c2a08"/><ellipse cx="11.04" cy="45.99" rx="3.1" ry="1.35" transform="rotate(78.0 11.04 45.99)" fill="#5c2a08"/>
+  <ellipse cx="35.79" cy="73.47" rx="3.1" ry="1.35" transform="rotate(198.0 35.79 73.47)" fill="#5c2a08"/><ellipse cx="41.56" cy="71.59" rx="3.1" ry="1.35" transform="rotate(182.0 41.56 71.59)" fill="#5c2a08"/><ellipse cx="46.59" cy="68.20" rx="3.1" ry="1.35" transform="rotate(166.0 46.59 68.20)" fill="#5c2a08"/><ellipse cx="50.49" cy="63.55" rx="3.1" ry="1.35" transform="rotate(150.0 50.49 63.55)" fill="#5c2a08"/><ellipse cx="52.96" cy="58.01" rx="3.1" ry="1.35" transform="rotate(134.0 52.96 58.01)" fill="#5c2a08"/><ellipse cx="53.80" cy="52.00" rx="3.1" ry="1.35" transform="rotate(118.0 53.80 52.00)" fill="#5c2a08"/><ellipse cx="52.96" cy="45.99" rx="3.1" ry="1.35" transform="rotate(102.0 52.96 45.99)" fill="#5c2a08"/>
+  <text x="32" y="59.6" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="22" fill="#ffedd5" opacity=".7">3</text>
+  <text x="32" y="59" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="22" fill="url(#num)">3</text>
+  <!-- shine -->
+  <path d="M17 44a17 17 0 0 1 20-11" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/>
+  
+</svg>

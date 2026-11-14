@@ -1,0 +1,107 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Output, state and database storage
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+# Only published reference files may live in the package data folder (never a database or backup)
+letsvibe/data/*
+!letsvibe/data/curve_calibration.json
+!letsvibe/data/archetypes.json
+!letsvibe/data/complexity_forms.json
+!letsvibe/data/project_profiles.json
+reports/
+temp_repos/
+*.html
+!letsvibe/web/templates/*.html
+!letsvibe/web/templates/pages/*.html
+!letsvibe/web/templates/partials/*.html
+VIBE_REPORT.md
+
+# Secrets, tokens and environment variables
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+*credentials*.json
+.netrc
+.cloudflared/
+secrets/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local dev launcher (server + Cloudflare tunnel)
+start-dev.sh
+
+# Browser test output
+test-results/
+
+# Local notes
+to-do.md
+legal-plan.md
+analyzing-model-direction.md
+model-bakeoff.md
+bakeoff-v2.md
+bakesale-summary.md
+factor-scoring.md
+deep-dive.md
+engine-comparison.md
+engine-test.log
+engine-test.log.1
+writer-test/
+benchmark-v9.json
+deploy/cloudflare-offline-worker/.wrangler/
+
+# Local engine internals & engine-specific tests (kept on disk, excluded from public repo)
+/letsvibe/evaluator/experience/
+/letsvibe/evaluator/fit/
+/letsvibe/evaluator/checklist.py
+/letsvibe/evaluator/consensus.py
+/letsvibe/evaluator/prompts.py
+/tests/test_hybrid_grading.py
+/tests/test_experience_grading.py
+/tests/test_project_context.py
+/tests/test_engine_log.py
+/tests/test_triage.py
+/tests/test_scoring_relevance.py
+/tests/test_analyzers.py

@@ -1,0 +1,69 @@
+<h1>Sign in</h1>
+<p class="lede">Signing in with GitHub creates your LetsVibe account, so please read and accept the terms first.</p>
+
+<div class="callout">
+  <p>LetsVibe asks GitHub for your public username, numeric ID and avatar only. It never asks for or stores your email address.</p>
+  <p>Before continuing, read the <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+</div>
+
+<div id="signin-cookie-gate" class="callout" hidden>
+  <p><strong>Essential cookies are required to register or sign in.</strong></p>
+  <p>LetsVibe uses only strictly necessary session cookies to keep you signed in and protect sign-in from forgery. If you decline, no consent storage or session cookie will be set, and you can continue browsing the public leaderboard without registering or submitting projects.</p>
+  <p style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.6rem;">
+    <button type="button" class="pbtn primary" id="signin-cookie-accept">Accept Essential Cookies</button>
+    <button type="button" class="pbtn" id="signin-cookie-decline">Decline (Browse Only)</button>
+  </p>
+  <p id="signin-cookie-declined-msg" hidden><strong>Storage declined.</strong> No cookie was set. Registration and project submission are disabled.</p>
+</div>
+
+<form id="signin-form" action="/api/auth/github/login" method="get" class="signin-form">
+  <input type="hidden" name="accept_terms" value="{{TERMS_VERSION}}">
+  <label class="signin-accept">
+    <input type="checkbox" id="signin-accept" required>
+    <span>I am <strong>18 or older</strong> (or the age of majority where I live, if that is higher), and I agree to the
+      <a href="/terms" target="_blank" rel="noopener">Terms of Use</a>,
+      <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>, and
+      <a href="/cookies" target="_blank" rel="noopener">Cookie Policy</a> (version {{TERMS_VERSION}}).</span>
+  </label>
+  <p><button type="submit" class="pbtn primary" id="signin-go" disabled><i class="fa-brands fa-github"></i> Continue with GitHub</button></p>
+</form>
+<p class="updated">Your acceptance (which version, and when) is stored with your account, included in your data export, and deleted with your account. If the terms change, you'll be asked to accept them again the next time you sign in.</p>
+<!--SCRIPT-->
+<script>
+(() => {
+  const gate = document.getElementById('signin-cookie-gate');
+  const acceptBtn = document.getElementById('signin-cookie-accept');
+  const declineBtn = document.getElementById('signin-cookie-decline');
+  const declinedMsg = document.getElementById('signin-cookie-declined-msg');
+  const box = document.getElementById('signin-accept');
+  const go = document.getElementById('signin-go');
+
+  function hasAcceptedCookies() {
+    const v = localStorage.getItem('letsvibe_cookie_consent');
+    return v === 'accepted' || v === 'seen';
+  }
+
+  function syncState() {
+    const accepted = hasAcceptedCookies();
+    gate.hidden = accepted;
+    box.disabled = !accepted;
+    if (!accepted) box.checked = false;
+    go.disabled = !(accepted && box.checked);
+  }
+
+  acceptBtn.addEventListener('click', () => {
+    localStorage.setItem('letsvibe_cookie_consent', 'accepted');
+    declinedMsg.hidden = true;
+    syncState();
+  });
+
+  declineBtn.addEventListener('click', () => {
+    localStorage.removeItem('letsvibe_cookie_consent');
+    declinedMsg.hidden = false;
+    syncState();
+  });
+
+  box.addEventListener('change', syncState);
+  syncState();
+})();
+</script>

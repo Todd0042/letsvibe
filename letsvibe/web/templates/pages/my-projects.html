@@ -1,0 +1,154 @@
+<h1>My Projects</h1>
+<p class="lede">Your graded repositories, anything that needs your input, and the status of error reports you've sent.</p>
+
+<div id="mp-signed-out" class="data-card" hidden>
+  <h2>Sign in to see your projects</h2>
+  <p><a class="pbtn primary" href="/sign-in"><i class="fa-brands fa-github"></i> Continue with GitHub</a></p>
+</div>
+
+<div id="mp-signed-in" hidden>
+  <div id="mp-actions"></div>
+
+  <section class="data-card" aria-labelledby="mp-proj-h">
+    <h2 id="mp-proj-h">Published projects</h2>
+    <p id="mp-proj-empty" hidden>No published projects yet. <a href="/">Submit one from the leaderboard.</a></p>
+    <ul class="project-list" id="mp-proj-list"></ul>
+    <p style="font-size: 0.85rem; color: var(--text-muted);">Spotted something wrong in a review? Open the project and use <strong>Report an error in this review</strong>.</p>
+  </section>
+
+  <section class="data-card" aria-labelledby="mp-err-h">
+    <h2 id="mp-err-h">Your error reports</h2>
+    <p id="mp-err-empty">None.</p>
+    <div id="mp-err-list"></div>
+  </section>
+
+  <p style="font-size: 0.85rem; color: var(--text-muted);">To delete projects, export your data or close your account, go to <a href="/my-data">My Data</a>.</p>
+</div>
+<!--SCRIPT-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const day = (v) => esc(String(v || '').slice(0, 10));
+
+  async function api(url, opts = {}) {
+    const res = await fetch(url, { credentials: 'same-origin', ...opts });
+    let body = {};
+    try { body = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+    return body;
+  }
+
+  function linesHtml(lines) {
+    return (lines || []).map(l => `
+      <div>
+        <div style="font-size: 0.85rem; color: #e2e8f0;"><code>${esc(l.file)}</code>${l.start_line ? `, lines ${l.start_line}&ndash;${l.end_line}` : ''}</div>
+        ${l.code ? `<pre>${esc(l.code)}</pre>` : ''}
+      </div>`).join('');
+  }
+
+  function renderHeld(items) {
+    $('mp-actions').innerHTML = items.map(h => {
+      if (h.kind === 'vibe_review') {
+        return `
+      <section class="action-card" aria-labelledby="held-h-${h.id}" data-held="${h.id}">
+        <h2 id="held-h-${h.id}"><i class="fa-solid fa-user-check" style="color: var(--accent-cyan);"></i> Waiting for review: ${esc(h.full_slug)}</h2>
+        <p>Your project was graded. LetsVibe could not confirm from the code and its history that it was vibe-coded (written by AI
+           from your prompts), so the site owner will check it before it is published. Nothing is needed from you.</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+          <button class="pbtn small" type="button" data-withdraw-ask="${h.id}">Withdraw and delete instead</button>
+          <span class="inline-confirm" data-withdraw-confirm="${h.id}" hidden>Delete this report?
+            <button class="pbtn danger small" type="button" data-withdraw="${h.id}">Delete</button>
+            <button class="pbtn small" type="button" data-withdraw-no="${h.id}">Cancel</button>
+          </span>
+        </div>
+        <p class="status-line" role="status" data-status="${h.id}"></p>
+      </section>`;
+      }
+      const waiting = h.status === 'awaiting_response';
+      return `
+      <section class="action-card" aria-labelledby="held-h-${h.id}" data-held="${h.id}">
+        <h2 id="held-h-${h.id}"><i class="fa-solid fa-pen-to-square" style="color: var(--accent-gold);"></i>
+          ${waiting ? 'Action required' : 'Explanation received'}: ${esc(h.full_slug)}</h2>
+        ${waiting
+          ? `<p>Before this report can be published, please explain what the following code does and why it is needed.
+               If no explanation is received by <strong>${day(h.deadline_at)}</strong>, this report will be deleted.</p>`
+          : `<p>Thank you. Your explanation is being reviewed, and the report will be published once that is done. You can still update it below.</p>`}
+        ${linesHtml(h.flagged_lines)}
+        <div class="field">
+          <label for="held-text-${h.id}">Your explanation</label>
+          <textarea id="held-text-${h.id}" rows="5" minlength="20" maxlength="4000">${esc(h.owner_response || '')}</textarea>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+          <button class="pbtn primary" type="button" data-submit="${h.id}">${waiting ? 'Submit explanation' : 'Update explanation'}</button>
+          <button class="pbtn small" type="button" data-withdraw-ask="${h.id}">Withdraw and delete instead</button>
+          <span class="inline-confirm" data-withdraw-confirm="${h.id}" hidden>Delete this report?
+            <button class="pbtn danger small" type="button" data-withdraw="${h.id}">Delete</button>
+            <button class="pbtn small" type="button" data-withdraw-no="${h.id}">Cancel</button>
+          </span>
+        </div>
+        <p class="status-line" role="status" data-status="${h.id}"></p>
+      </section>`;
+    }).join('');
+  }
+
+  const ERR_LABEL = {
+    queued: 'Being checked against your code', corrected: 'Corrected', applied: 'Corrected',
+    needs_review: 'In manual review', dismissed: 'Reviewed: no change made',
+  };
+
+  async function load() {
+    const [held, projects, errors] = await Promise.all([api('/api/me/held'), api('/api/me/projects'), api('/api/me/error-reports')]);
+    renderHeld(held.items || []);
+    const items = projects.items || [];
+    $('mp-proj-empty').hidden = items.length > 0;
+    $('mp-proj-list').innerHTML = items.map(p => `
+      <li><div><div class="name"><a href="/project/${esc(p.full_slug)}">${esc(p.full_slug)}</a></div>
+      <div class="meta">${p.final_score != null ? `${Number(p.final_score).toFixed(1)} (${esc(p.letter_grade)})` : ''}${p.graded_at ? ' &middot; graded ' + day(p.graded_at) : ''}</div></div></li>`).join('');
+    const errs = errors.items || [];
+    $('mp-err-empty').hidden = errs.length > 0;
+    $('mp-err-list').innerHTML = errs.map(e => `
+      <div class="appeal-item">
+        <div><strong>${esc(e.full_slug)}</strong> <span class="pill ${['corrected', 'applied'].includes(e.status) ? 'approved' : (e.status === 'dismissed' ? 'declined' : 'pending')}">${esc(ERR_LABEL[e.status] || e.status)}</span></div>
+        <p style="margin: 0.35rem 0;">"${esc(e.statement_text)}"</p>
+        <div class="meta" style="font-size: 0.8rem; color: var(--text-muted);">Sent ${day(e.created_at)}${e.resolved_at ? ' &middot; resolved ' + day(e.resolved_at) : ''}</div>
+      </div>`).join('');
+  }
+
+  $('mp-actions').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    const card = b.closest('[data-held]');
+    const id = card && card.dataset.held;
+    const status = card && card.querySelector('[data-status]');
+    const set = (t, k) => { status.textContent = t; status.className = 'status-line' + (k ? ' ' + k : ''); };
+    if (b.dataset.submit) {
+      b.disabled = true;
+      try {
+        const r = await api(`/api/me/held/${id}/respond`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ explanation: card.querySelector('textarea').value }),
+        });
+        await load();
+        const again = document.querySelector(`[data-held="${id}"] [data-status]`);
+        if (again) { again.textContent = r.message; again.className = 'status-line ok'; }
+      } catch (err) { set(err.message, 'err'); b.disabled = false; }
+    } else if (b.dataset.withdrawAsk) {
+      b.hidden = true; card.querySelector('[data-withdraw-confirm]').hidden = false;
+    } else if (b.dataset.withdrawNo) {
+      card.querySelector('[data-withdraw-ask]').hidden = false; card.querySelector('[data-withdraw-confirm]').hidden = true;
+    } else if (b.dataset.withdraw) {
+      try { await api(`/api/me/held/${id}`, { method: 'DELETE' }); await load(); }
+      catch (err) { set(err.message, 'err'); }
+    }
+  });
+
+  (async () => {
+    let auth = {};
+    try { auth = await api('/api/auth/me'); } catch (e) {}
+    if (!auth.authenticated) { $('mp-signed-out').hidden = false; return; }
+    $('mp-signed-in').hidden = false;
+    try { await load(); } catch (err) { $('mp-actions').innerHTML = `<p class="status-line err">${esc(err.message)}</p>`; }
+  })();
+})();
+</script>

@@ -1,0 +1,23 @@
+services:
+  letsvibe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: letsvibe
+    restart: unless-stopped
+    network_mode: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - .env
+    environment:
+      - LETSVIBE_DB_PATH=/app/data/letsvibe.db
+      - LETSVIBE_BACKUP_DIR=/backups
+      - PYTHONPATH=/engine
+    volumes:
+      - ./data:/app/data
+      - /home/todd/letsvibe-backups:/backups
+      - ${LETSVIBE_ENGINE_PATH:-../letsvibe-engine}:/engine:ro

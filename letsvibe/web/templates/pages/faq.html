@@ -1,0 +1,99 @@
+<h1>Frequently asked questions</h1>
+<p class="lede">Can't find your answer? <a href="/support">Get in touch</a>.</p>
+
+<h2 id="submitting">Submitting</h2>
+<details class="faq" id="who">
+  <summary>Who can use LetsVibe?</summary>
+  <p>Anyone can browse. To sign in and submit projects you must be 18 or older (or the age of majority where you live, if higher) and accept the <a href="/terms">Terms of Use</a> and <a href="/privacy">Privacy Policy</a>; you confirm both with one checkbox before signing in. Your acceptance is stored with your account and deleted with it.</p>
+</details>
+<details class="faq">
+  <summary>Which projects can I submit?</summary>
+  <p>Public GitHub repositories <strong>owned by the GitHub account you signed in with</strong>, that were vibe-coded (written by AI from your prompts). You cannot submit someone else's repository. If your work lives under a second GitHub account, sign in with that account to submit it (while sign-up slots are available).</p>
+  <p>Projects up to roughly 50&nbsp;MB or 2,000 files of source code are supported. Binaries, archives and model weights are skipped automatically.</p>
+</details>
+<details class="faq">
+  <summary>What does "vibe-coded" mean here?</summary>
+  <p>The program was written by AI from your prompts, using tools such as Claude, ChatGPT, Cursor, GitHub Copilot, Windsurf, Cline or Aider, usually by someone who is not a programmer. A professional developer using AI assistance in their normal work is not what LetsVibe grades. We look for traces like assistant configuration files, AI co-author lines in commits, a README that says the project was written by AI, or code with habits typical of AI. If none are clear (for example because you copied code from a chat window), your project is still graded and the site owner reviews it before it is published. Projects whose history starts before November 2022 and forks of someone else's project are not graded; if that happened by mistake, you can appeal (below).</p>
+</details>
+<details class="faq">
+  <summary>How long does grading take?</summary>
+  <p>Usually 3&ndash;15 minutes, and up to about 20 for large projects, plus time waiting for projects ahead of yours (first come, first served). Everything runs on one local graphics card, one project at a time. You can close the progress window; grading continues in the background.</p>
+</details>
+<details class="faq">
+  <summary>How often can I submit?</summary>
+  <p>There is a submission limit per account during the beta so everyone gets a turn on the single GPU; your remaining submissions are shown next to your name. Re-grading the same commit is never allowed (nothing would change); push a new commit first.</p>
+</details>
+<details class="faq">
+  <summary>Can I use a private repository?</summary>
+  <p>Not currently. LetsVibe only reads public repositories and never asks for access to private ones.</p>
+</details>
+
+<h2 id="scores">Scores</h2>
+<details class="faq" id="compared-with">
+  <summary>Who is my project compared with?</summary>
+  <p>Other vibe-coded projects: programs written by AI from someone's prompts. LetsVibe never compares your project with software written by professional developers. Your letter grade comes from a <a href="#curve">bell curve</a>, and your report shows your project's rank in its category (for example "#3 of 41 in Games").</p>
+</details>
+<details class="faq">
+  <summary>Why is my score lower than I expected?</summary>
+  <p>A typical working vibe-coded project lands around the middle of the scale, which is a C, so a C means "solid, like most working projects", not "bad". Most of the weight is on what users experience: does it do what it promises, how smooth is the journey from install to finished task, how pleasant is it to use, how valuable and how original is it. Each report lists the strongest features, the areas needing the most attention, and separately, what a professional team would do next.</p>
+</details>
+<details class="faq" id="curve">
+  <summary>Does LetsVibe grade on a curve?</summary>
+  <p>Yes, on a single site-wide bell curve. AI reviewers hedge toward the middle, so raw scores bunch up and say little on their own. The curve maps raw scores onto a 0&ndash;100 bell scale and blends smoothly from a calibrated prior toward the real site-wide average and spread as more public projects are graded. The <a href="/grading-curve">Grading curve</a> page shows every live constant and formula behind it, and you can switch to <strong>Raw Rubric</strong> anytime.</p>
+</details>
+<details class="faq">
+  <summary>Why can my letter grade change when I haven't changed anything?</summary>
+  <p>Because Bell Curve grades are computed dynamically across all graded projects (plus community Spark upvotes in Bell Curve view). As more projects are graded or Sparked, the site-wide curve adjusts slightly. Your <strong>Raw Rubric</strong> score only changes when your project is re-graded.</p>
+</details>
+<details class="faq" id="sparks">
+  <summary>How do Spark (&#10024;) upvotes work and affect scores?</summary>
+  <p>Signed-in users can give a <strong>Spark (&#10024;)</strong> upvote to public projects (unlimited for other people's apps, and at most <strong>one</strong> of your own repositories). Sparks add a bounded diminishing-returns bonus of <code>min(3.0, 0.5 &times; log<sub>2</sub>(1 + sparks))</code> &mdash; <strong>+0.50</strong> for the first Spark, <strong>+1.00</strong> at 3 Sparks, and capped at <strong>+3.00</strong> total &mdash; to the <strong>Bell Curve</strong> score only (clamped at 100.0). The <strong>Raw Rubric</strong> score is never changed by Sparks, so you can toggle between Bell Curve and Raw Rubric anytime. Un-clicking a Spark or deleting your account removes your vote immediately.</p>
+</details>
+<details class="faq">
+  <summary>Why did the same code get a slightly different score?</summary>
+  <p>AI models are not perfectly deterministic, so repeated evaluations can differ by a few points. Treat small gaps between projects as a tie. Larger differences usually come from a new commit or a new <a href="/changelog">rubric version</a>.</p>
+</details>
+<details class="faq">
+  <summary>My project runs on a microcontroller, phone or console. Is it judged like desktop software?</summary>
+  <p>No. LetsVibe detects the target platform and hardware from your build files and grades the interface, performance and architecture against that device. See <a href="/how-it-works#pipeline">how grading works</a>.</p>
+</details>
+<details class="faq">
+  <summary>Does a good grade mean the software is safe?</summary>
+  <p>No. LetsVibe is not a security audit, and a report never certifies that software is safe to run.</p>
+</details>
+<details class="faq" id="explain">
+  <summary>Why am I asked to explain some lines of code?</summary>
+  <p>Sometimes the review needs more context about what specific code does before a report can be published. You'll see an <strong>Action required</strong> card on <a href="/my-projects">My Projects</a> listing the exact lines. Describe what they do and why they're needed; the report is published after your explanation is reviewed. If there is no explanation within 7 days, the report is deleted. You can also withdraw it at any time.</p>
+</details>
+<details class="faq" id="report-error">
+  <summary>The review says something that isn't true. How do I fix it?</summary>
+  <p>Open your project and choose <strong>Report an error in this review</strong>. Pick the statement, and explain what is wrong, ideally naming the files or functions that show it. It is checked against your code once; if confirmed, the review is corrected automatically, otherwise it is reviewed by hand. Track progress on <a href="/my-projects">My Projects</a>.</p>
+</details>
+<details class="faq">
+  <summary>How do I improve my grade?</summary>
+  <p>Work through the "Areas Needing Attention" on your report, push a new commit, then use <strong>Re-Analyze</strong> on your project page.</p>
+</details>
+
+<h2 id="appeals">Appeals</h2>
+<details class="faq">
+  <summary>My project was rejected as "not vibe-coded". What now?</summary>
+  <p>Open the rejected submission and choose <strong>Appeal</strong>. Explain how AI was used (tools, prompts, workflow). Appeals are reviewed in the order they arrive and the decision appears on your <a href="/my-data">My Data</a> page. No email address is needed.</p>
+</details>
+<details class="faq">
+  <summary>Can I appeal a score?</summary>
+  <p>Scores themselves are not appealed one by one; the same rubric applies to everyone. If the review states something factually wrong (for example it claims a feature is missing that clearly exists), use <a href="#report-error">Report an error in this review</a>.</p>
+</details>
+
+<h2 id="privacy">Privacy &amp; removal</h2>
+<details class="faq">
+  <summary>Can I remove my project or account?</summary>
+  <p>Yes, at any time and without asking anyone. Go to <a href="/my-data">My Data</a> to delete one project, all of your projects, or your whole account. Nobody is notified. See <a href="/remove">Remove my project</a>.</p>
+</details>
+<details class="faq">
+  <summary>Is my code sent to an AI company?</summary>
+  <p>No. The models run on LetsVibe's own hardware. The temporary copy of your repository is deleted after grading. Details are in the <a href="/privacy">privacy policy</a>.</p>
+</details>
+<details class="faq">
+  <summary>Someone else's repository about me is listed. What can I do?</summary>
+  <p>Only owners can submit their repositories, so a listing normally means the owner submitted it. If you believe a listing should not be there, <a href="/support">contact us</a> and we will review it promptly.</p>
+</details>

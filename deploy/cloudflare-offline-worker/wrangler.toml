@@ -1,0 +1,7 @@
+name = "letsvibe-offline-fallback"
+main = "worker.js"
+compatibility_date = "2026-11-14"
+
+routes = [
+  { pattern = "letsvibe.todd0042.dev/*", zone_name = "todd0042.dev" }
+]
