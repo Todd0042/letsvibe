@@ -6312,18 +6312,28 @@ ${t.status === 'running' ? `
         if (countEl) countEl.textContent = countStr;
         if (pinnedCountEl) pinnedCountEl.textContent = countStr;
 
+        const fmtDur = (sec) => {
+          const s = Math.max(0, Number(sec || 0));
+          if (s < 60) return `${s}s`;
+          const m = Math.floor(s / 60);
+          const rem = s % 60;
+          return rem ? `${m}m ${rem}s` : `${m}m`;
+        };
+
         const viewerPills = viewers.length
           ? viewers.map(v => {
               const country = v.country ? ` <span style="color: var(--accent-cyan);">[${escapeHtml(v.country)}]</span>` : '';
               const ago = v.seconds_ago <= 3 ? 'just now' : `${v.seconds_ago}s ago`;
-              const pages = (v.pages && v.pages.length) ? v.pages : [{ path: v.path, hits: v.hits }];
-              const pageTags = pages.map(p =>
-                `<code style="font-size: 0.71rem; color: #cbd5e1; background: rgba(30, 41, 59, 0.85); padding: 0.1rem 0.38rem; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.18);">${escapeHtml(p.path)}${p.hits > 1 ? ` (${Number(p.hits)})` : ''}</code>`
-              ).join('');
+              const spanTxt = Number(v.duration_seconds || 0) > 0 ? ` · ${fmtDur(v.duration_seconds)}` : '';
+              const pages = (v.pages && v.pages.length) ? v.pages : [{ path: v.path, hits: v.hits, seconds: 0 }];
+              const pageTags = pages.map(p => {
+                const pDur = Number(p.seconds || 0) > 0 ? ` · ${fmtDur(p.seconds)}` : '';
+                return `<code style="font-size: 0.71rem; color: #cbd5e1; background: rgba(30, 41, 59, 0.85); padding: 0.1rem 0.38rem; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.18);">${escapeHtml(p.path)}${p.hits > 1 ? ` (${Number(p.hits)})` : ''}${pDur}</code>`;
+              }).join('');
               return `<div style="padding: 0.42rem 0.58rem; border-radius: 10px; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--card-border); color: #e2e8f0;">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.35rem;">
                   <span><strong style="color: var(--accent-green);">${escapeHtml(v.label)}</strong>${country}</span>
-                  <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${ago} (${v.hits})</span>
+                  <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${ago}${spanTxt} (${v.hits})</span>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem;">
                   ${pageTags}
@@ -6349,16 +6359,20 @@ ${t.status === 'running' ? `
           ? journeys.map(j => {
               const country = j.country ? ` <span style="color: var(--accent-cyan);">[${escapeHtml(j.country)}]</span>` : '';
               const borderCol = j.has_error ? 'rgba(248, 113, 113, 0.55)' : 'var(--card-border)';
-              const trail = (j.steps || []).map(s => {
+              const steps = j.steps || [];
+              const stepWord = steps.length === 1 ? '1 step' : `${steps.length} steps`;
+              const jDur = Number(j.duration_seconds || 0) > 0 ? ` · ${fmtDur(j.duration_seconds)}` : '';
+              const trail = steps.map(s => {
                 const sc = Number(s.status_code || 200);
                 const isErr = sc >= 400;
                 const badge = isErr ? ` <span style="color: #f87171; font-weight: 700;">(${sc})</span>` : '';
-                return `<code style="font-size: 0.7rem; color: ${isErr ? '#fca5a5' : '#cbd5e1'}; background: rgba(30, 41, 59, 0.85); padding: 0.08rem 0.32rem; border-radius: 5px; border: 1px solid ${isErr ? 'rgba(248, 113, 113, 0.45)' : 'rgba(148, 163, 184, 0.18)'};">${escapeHtml(s.path)}${badge}</code>`;
+                const dwell = Number(s.dwell_seconds || 0) > 0 ? ` <span style="color: var(--text-muted);">(${fmtDur(s.dwell_seconds)})</span>` : '';
+                return `<code style="font-size: 0.7rem; color: ${isErr ? '#fca5a5' : '#cbd5e1'}; background: rgba(30, 41, 59, 0.85); padding: 0.08rem 0.32rem; border-radius: 5px; border: 1px solid ${isErr ? 'rgba(248, 113, 113, 0.45)' : 'rgba(148, 163, 184, 0.18)'};">${escapeHtml(s.path)}${badge}${dwell}</code>`;
               }).join('<span style="color: var(--text-muted); font-size: 0.68rem;">→</span>');
               return `<div style="padding: 0.38rem 0.52rem; border-radius: 9px; background: rgba(15, 23, 42, 0.8); border: 1px solid ${borderCol};">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.3rem;">
                   <span><strong style="color: ${j.has_error ? '#f87171' : 'var(--accent-green)'};">${escapeHtml(j.label)}</strong>${country}</span>
-                  <span style="font-size: 0.68rem; color: var(--text-muted);">${j.has_error ? 'hit error' : `${(j.steps || []).length} steps`}</span>
+                  <span style="font-size: 0.68rem; color: var(--text-muted);">${j.has_error ? 'hit error' : `${stepWord}${jDur}`}</span>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.22rem; margin-top: 0.28rem;">${trail}</div>
               </div>`;

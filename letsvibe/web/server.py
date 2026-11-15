@@ -307,13 +307,22 @@ def _record_active_viewer(request: Request) -> None:
         for k in stale:
             _ACTIVE_VIEWERS.pop(k, None)
         prev = _ACTIVE_VIEWERS.get(key)
-        pages = dict(prev.get("pages") or {}) if prev else {}
-        pages[path] = pages.get(path, 0) + 1
+        raw_pages = dict(prev.get("pages") or {}) if prev else {}
+        prev_page = raw_pages.get(path)
+        if isinstance(prev_page, dict):
+            raw_pages[path] = {
+                "hits": prev_page["hits"] + 1,
+                "first_seen": prev_page["first_seen"],
+                "last_seen": now,
+            }
+        else:
+            raw_pages[path] = {"hits": 1, "first_seen": now, "last_seen": now}
         _ACTIVE_VIEWERS[key] = {
             "label": label,
             "country": country or (prev["country"] if prev else ""),
             "path": path,
-            "pages": pages,
+            "pages": raw_pages,
+            "first_seen": prev["first_seen"] if (prev and "first_seen" in prev) else now,
             "last_seen": now,
             "hits": (prev["hits"] + 1) if prev else 1,
         }
@@ -327,18 +336,30 @@ def _get_active_viewers(exclude_username: Optional[str] = None) -> list[Dict[str
         stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
         for k in stale:
             _ACTIVE_VIEWERS.pop(k, None)
-        items = [
-            {
+        items = []
+        for k, v in _ACTIVE_VIEWERS.items():
+            if k == exclude_key:
+                continue
+            pages_list = []
+            for p, info in reversed(list((v.get("pages") or {}).items())):
+                if isinstance(info, dict):
+                    pages_list.append({
+                        "path": p,
+                        "hits": info["hits"],
+                        "seconds": max(0, int(round(info["last_seen"] - info["first_seen"]))),
+                    })
+                else:
+                    pages_list.append({"path": p, "hits": info, "seconds": 0})
+            first_seen = v.get("first_seen", v["last_seen"])
+            items.append({
                 "label": v["label"],
                 "country": v["country"],
                 "path": v["path"],
-                "pages": [{"path": p, "hits": c} for p, c in reversed(list((v.get("pages") or {v["path"]: v["hits"]}).items()))],
+                "pages": pages_list or [{"path": v["path"], "hits": v["hits"], "seconds": 0}],
+                "duration_seconds": max(0, int(round(v["last_seen"] - first_seen))),
                 "seconds_ago": max(0, int(round(now - v["last_seen"]))),
                 "hits": v["hits"],
-            }
-            for k, v in _ACTIVE_VIEWERS.items()
-            if k != exclude_key
-        ]
+            })
     items.sort(key=lambda x: x["seconds_ago"])
     return items
 

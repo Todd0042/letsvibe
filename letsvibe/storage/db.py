@@ -3282,6 +3282,19 @@ def get_recent_visitor_journeys(
                 })
         for entry in grouped.values():
             entry["steps"].reverse()
+            steps = entry["steps"]
+            entry["duration_seconds"] = 0
+            if len(steps) >= 2:
+                try:
+                    t0 = datetime.strptime(steps[0]["created_at"], "%Y-%m-%d %H:%M:%S")
+                    t_last = datetime.strptime(steps[-1]["created_at"], "%Y-%m-%d %H:%M:%S")
+                    entry["duration_seconds"] = max(0, int((t_last - t0).total_seconds()))
+                    for idx in range(len(steps) - 1):
+                        ta = datetime.strptime(steps[idx]["created_at"], "%Y-%m-%d %H:%M:%S")
+                        tb = datetime.strptime(steps[idx + 1]["created_at"], "%Y-%m-%d %H:%M:%S")
+                        steps[idx]["dwell_seconds"] = max(0, int((tb - ta).total_seconds()))
+                except Exception:  # nosec B110 - best-effort timestamp parsing
+                    pass
         return list(grouped.values())
     finally:
         conn.close()
