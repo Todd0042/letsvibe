@@ -20,7 +20,7 @@ x-web-common: &web-common
     - LETSVIBE_WORKER_URL=http://127.0.0.1:8099
     - PYTHONPATH=/engine
   volumes:
-    - ../../data:/app/data
+    - ${LETSVIBE_DATA_DIR:-../../data}:/app/data
     - /home/todd/letsvibe-backups:/backups
     - ../../letsvibe/web/templates:/app/web/templates:ro
     - ../../letsvibe/web/static:/app/web/static:ro
@@ -48,7 +48,7 @@ services:
       - LETSVIBE_WORKER_PORT=8099
       - PYTHONPATH=/engine
     volumes:
-      - ../../data:/app/data
+      - ${LETSVIBE_DATA_DIR:-../../data}:/app/data
       - /home/todd/letsvibe-backups:/backups
       - ${LETSVIBE_ENGINE_PATH:-../../../letsvibe-engine}:/engine:ro
     command: ["python", "-m", "letsvibe.web.worker_daemon"]

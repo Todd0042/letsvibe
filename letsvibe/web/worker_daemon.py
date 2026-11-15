@@ -87,7 +87,7 @@ async def run_now(task_id: int):
 def main() -> None:
     host = os.environ.get("LETSVIBE_WORKER_HOST", "127.0.0.1")
     port = int(os.environ.get("LETSVIBE_WORKER_PORT", "8099"))
-    uvicorn.run(worker_app, host=host, port=port, no_access_log=True)
+    uvicorn.run(worker_app, host=host, port=port, access_log=False)
 
 
 if __name__ == "__main__":
