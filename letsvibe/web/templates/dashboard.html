@@ -1725,7 +1725,7 @@
   </div>
   <!-- Admin-only right-hand Live Viewers sidebar -->
   <aside id="admin-live-bar" style="display: none; position: fixed; right: 14px; top: 84px; width: 276px; max-height: calc(100vh - 104px); overflow-y: auto; z-index: 950; background: rgba(10, 15, 29, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--card-border); border-radius: 14px; padding: 0.75rem 0.85rem; font-size: 0.78rem; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);">
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;">
+    <div id="admin-live-drag-handle" style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: grab; user-select: none; touch-action: none;" title="Drag to move">
       <span style="font-weight: 700; color: #e2e8f0; display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
         <i class="fa-solid fa-eye" style="color: var(--accent-green);"></i> Live
         <span id="pinned-viewers-count" class="grade-badge" style="background: rgba(52, 211, 153, 0.16); color: var(--accent-green); font-size: 0.72rem; padding: 0.1rem 0.42rem;">0</span>
@@ -6290,6 +6290,59 @@ ${t.status === 'running' ? `
       bar.style.width = collapsing ? 'auto' : '276px';
       if (icon) icon.className = collapsing ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right';
     }
+
+    (function initAdminLiveDrag() {
+      const bar = document.getElementById('admin-live-bar');
+      const handle = document.getElementById('admin-live-drag-handle');
+      if (!bar || !handle) return;
+      const STORAGE_KEY = 'letsvibe_admin_live_pos';
+      function applyPos(left, top) {
+        const maxLeft = Math.max(8, window.innerWidth - (bar.offsetWidth || 276) - 8);
+        const maxTop = Math.max(8, window.innerHeight - 52);
+        const x = Math.min(Math.max(8, left), maxLeft);
+        const y = Math.min(Math.max(8, top), maxTop);
+        bar.style.right = 'auto';
+        bar.style.left = `${x}px`;
+        bar.style.top = `${y}px`;
+        return { left: x, top: y };
+      }
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+          applyPos(saved.left, saved.top);
+        }
+      } catch (_) {}
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+      handle.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        const rect = bar.getBoundingClientRect();
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        origLeft = rect.left;
+        origTop = rect.top;
+        handle.style.cursor = 'grabbing';
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        applyPos(origLeft + (e.clientX - startX), origTop + (e.clientY - startY));
+      });
+      const finishDrag = () => {
+        if (!dragging) return;
+        dragging = false;
+        handle.style.cursor = 'grab';
+        const rect = bar.getBoundingClientRect();
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (_) {}
+      };
+      handle.addEventListener('pointerup', finishDrag);
+      handle.addEventListener('pointercancel', finishDrag);
+      window.addEventListener('resize', () => {
+        if (bar.style.left) {
+          applyPos(parseFloat(bar.style.left) || 8, parseFloat(bar.style.top) || 84);
+        }
+      });
+    })();
 
     async function fetchActiveViewers() {
       if (!currentUser || !currentUser.is_admin) return;
