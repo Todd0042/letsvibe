@@ -242,12 +242,29 @@ _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/badge/",
     "/icons/",
     "/favicon.ico",
-    "/api/me/chat/unread",
+    "/api/health",
+    "/api/queue",
+    "/api/engines",
+    "/api/taxonomy",
+    "/api/me/",
     "/api/admin/",
     "/api/auth/",
 )
 _ACTIVE_VIEWERS: Dict[str, Dict[str, Any]] = {}
 _ACTIVE_VIEWERS_LOCK = threading.Lock()
+
+
+def _normalize_viewer_path(path: str) -> str:
+    """Map SPA data endpoints to their user-facing page path for Live View."""
+    if path == "/api/leaderboard":
+        return "/"
+    if path == "/api/creators":
+        return "/?view=creators"
+    if path == "/api/hall-of-fame":
+        return "/?view=hof"
+    if path.startswith("/api/project/") and not path.endswith("/statements"):
+        return "/project/" + path[len("/api/project/"):]
+    return path
 
 
 def _record_active_viewer(request: Request) -> None:
@@ -256,6 +273,7 @@ def _record_active_viewer(request: Request) -> None:
     path = request.url.path or "/"
     if path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
         return
+    path = _normalize_viewer_path(path)
     now = time.monotonic()
     user = get_current_user(request)
     if user and user.get("username"):
