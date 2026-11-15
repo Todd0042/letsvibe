@@ -286,6 +286,8 @@ _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/badge/",
     "/icons/",
     "/favicon.ico",
+    "/robots.txt",
+    "/sitemap.xml",
     "/api/health",
     "/api/queue",
     "/api/engines",
@@ -368,6 +370,10 @@ def _record_active_viewer(request: Request) -> None:
     if request.method != "GET":
         return
     raw_path = request.url.path or "/"
+    if raw_path == "/robots.txt":
+        key, _, _ = _resolve_visitor_identity(request)
+        _ignore_viewer(key)
+        return
     if raw_path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
         return
     path = _normalize_viewer_path(raw_path)
@@ -519,6 +525,15 @@ async def favicon():
     if ico_path.exists():
         return FileResponse(ico_path, media_type="image/x-icon")
     return Response(status_code=404)
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """Serve robots.txt so crawlers get 200 instead of 404."""
+    return Response(
+        content="User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n",
+        media_type="text/plain",
+    )
 
 
 class EnqueueRequest(BaseModel):

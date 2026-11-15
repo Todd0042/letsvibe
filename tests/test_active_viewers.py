@@ -178,6 +178,13 @@ def test_scraper_probes_ignored_for_cooldown(tmp_path, monkeypatch):
     assert client.get("/api/v1/users", headers=probe_hdrs).status_code == 404
     assert client.get("/faq", headers=probe_hdrs).status_code == 200
 
+    # 2b) Crawler hits /robots.txt (200) -> ignored & follow-up / not counted
+    bot_hdrs = {"cf-connecting-ip": "198.51.100.25", "user-agent": "CrawlBot/1.0"}
+    robots_res = client.get("/robots.txt", headers=bot_hdrs)
+    assert robots_res.status_code == 200
+    assert "Disallow: /api/" in robots_res.text
+    assert client.get("/", headers=bot_hdrs).status_code == 200
+
     # 3) Normal visitor loads / then /api/creators -> still tracked
     real_hdrs = {"cf-connecting-ip": "198.51.100.30", "user-agent": "RealBrowser/1.0"}
     assert client.get("/", headers=real_hdrs).status_code == 200
