@@ -299,10 +299,13 @@ def _record_active_viewer(request: Request) -> None:
         for k in stale:
             _ACTIVE_VIEWERS.pop(k, None)
         prev = _ACTIVE_VIEWERS.get(key)
+        pages = dict(prev.get("pages") or {}) if prev else {}
+        pages[path] = pages.get(path, 0) + 1
         _ACTIVE_VIEWERS[key] = {
             "label": label,
             "country": country or (prev["country"] if prev else ""),
             "path": path,
+            "pages": pages,
             "last_seen": now,
             "hits": (prev["hits"] + 1) if prev else 1,
         }
@@ -321,6 +324,7 @@ def _get_active_viewers(exclude_username: Optional[str] = None) -> list[Dict[str
                 "label": v["label"],
                 "country": v["country"],
                 "path": v["path"],
+                "pages": [{"path": p, "hits": c} for p, c in reversed(list((v.get("pages") or {v["path"]: v["hits"]}).items()))],
                 "seconds_ago": max(0, int(round(now - v["last_seen"]))),
                 "hits": v["hits"],
             }

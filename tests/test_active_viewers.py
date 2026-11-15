@@ -15,6 +15,7 @@ def test_active_viewers_records_guest_and_returns_anonymized():
 
     guest_res = client.get("/", headers={"cf-connecting-ip": "203.0.113.42", "cf-ipcountry": "US", "user-agent": "TestBrowser/1.0"})
     assert guest_res.status_code == 200
+    assert client.get("/faq", headers={"cf-connecting-ip": "203.0.113.42", "cf-ipcountry": "US", "user-agent": "TestBrowser/1.0"}).status_code == 200
 
     srv.app.dependency_overrides[srv.require_admin] = lambda: {"username": "admin", "is_admin": True}
     try:
@@ -27,6 +28,10 @@ def test_active_viewers_records_guest_and_returns_anonymized():
     assert data["count"] >= 1
     labels = [v["label"] for v in data["viewers"]]
     assert any(lbl.startswith("visitor-") for lbl in labels)
+    visitor = next(v for v in data["viewers"] if v["label"].startswith("visitor-"))
+    viewed_paths = [p["path"] for p in visitor["pages"]]
+    assert "/" in viewed_paths
+    assert "/faq" in viewed_paths
     assert "203.0.113.42" not in str(data)
 
 
