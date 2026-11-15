@@ -28,3 +28,35 @@ def test_active_viewers_records_guest_and_returns_anonymized():
     labels = [v["label"] for v in data["viewers"]]
     assert any(lbl.startswith("visitor-") for lbl in labels)
     assert "203.0.113.42" not in str(data)
+
+
+def test_active_viewers_excludes_requesting_admin():
+    srv._ACTIVE_VIEWERS.clear()
+    srv._ACTIVE_VIEWERS["u:Todd0042"] = {
+        "label": "@Todd0042",
+        "country": "US",
+        "path": "/api/queue",
+        "last_seen": srv.time.monotonic(),
+        "hits": 5,
+    }
+    srv._ACTIVE_VIEWERS["u:otheruser"] = {
+        "label": "@otheruser",
+        "country": "CA",
+        "path": "/api/leaderboard",
+        "last_seen": srv.time.monotonic(),
+        "hits": 2,
+    }
+
+    client = TestClient(srv.app)
+    srv.app.dependency_overrides[srv.require_admin] = lambda: {"username": "Todd0042", "is_admin": True}
+    try:
+        res = client.get("/api/admin/active-viewers")
+    finally:
+        srv.app.dependency_overrides.pop(srv.require_admin, None)
+
+    assert res.status_code == 200
+    data = res.json()
+    labels = [v["label"] for v in data["viewers"]]
+    assert "@Todd0042" not in labels
+    assert "@otheruser" in labels
+    assert data["count"] == 1

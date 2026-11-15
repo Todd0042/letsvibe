@@ -288,9 +288,10 @@ def _record_active_viewer(request: Request) -> None:
         }
 
 
-def _get_active_viewers() -> list[Dict[str, Any]]:
+def _get_active_viewers(exclude_username: Optional[str] = None) -> list[Dict[str, Any]]:
     now = time.monotonic()
     cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
+    exclude_key = f"u:{exclude_username}" if exclude_username else None
     with _ACTIVE_VIEWERS_LOCK:
         stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
         for k in stale:
@@ -303,7 +304,8 @@ def _get_active_viewers() -> list[Dict[str, Any]]:
                 "seconds_ago": max(0, int(round(now - v["last_seen"]))),
                 "hits": v["hits"],
             }
-            for v in _ACTIVE_VIEWERS.values()
+            for k, v in _ACTIVE_VIEWERS.items()
+            if k != exclude_key
         ]
     items.sort(key=lambda x: x["seconds_ago"])
     return items
@@ -2228,8 +2230,8 @@ async def api_admin_reclassify_all(_admin: Dict[str, Any] = Depends(require_admi
 
 @app.get("/api/admin/active-viewers")
 async def api_admin_active_viewers(_admin: Dict[str, Any] = Depends(require_admin)):
-    """Admin: lists active visitors seen in the last 2 minutes (anonymized for guests)."""
-    viewers = _get_active_viewers()
+    """Admin: lists active visitors seen in the last 2 minutes (anonymized for guests), excluding the requesting admin."""
+    viewers = _get_active_viewers(exclude_username=_admin.get("username"))
     return {
         "status": "ok",
         "count": len(viewers),
