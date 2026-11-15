@@ -6,12 +6,14 @@ manual run-now triggers, and Ollama engine diagnostics).
 """
 
 import glob
+import hashlib
 import hmac
 import json
 import os
 import shutil
 import subprocess  # nosec B404 - git/nvidia-smi run with fixed list arguments, never a shell
 import tempfile
+import threading
 import time
 import urllib.parse
 import uuid
@@ -231,6 +233,82 @@ def _host_matches_request(header_url: str, request: Request) -> bool:
     return origin_host in allowed_hosts
 
 
+_ACTIVE_VIEWER_WINDOW_SECONDS = 120
+_ACTIVE_VIEWER_SKIP_PREFIXES = (
+    "/static/",
+    "/img",
+    "/badge/",
+    "/icons/",
+    "/favicon.ico",
+    "/api/me/chat/unread",
+    "/api/admin/",
+    "/api/auth/",
+)
+_ACTIVE_VIEWERS: Dict[str, Dict[str, Any]] = {}
+_ACTIVE_VIEWERS_LOCK = threading.Lock()
+
+
+def _record_active_viewer(request: Request) -> None:
+    if request.method != "GET":
+        return
+    path = request.url.path or "/"
+    if path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
+        return
+    now = time.monotonic()
+    user = get_current_user(request)
+    if user and user.get("username"):
+        key = f"u:{user['username']}"
+        label = f"@{user['username']}"
+    else:
+        ip = (
+            request.headers.get("cf-connecting-ip")
+            or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or (request.client.host if request.client else "")
+            or "unknown"
+        )
+        ua = request.headers.get("user-agent", "")
+        digest = hashlib.sha256(f"{ip}|{ua}".encode("utf-8", errors="ignore")).hexdigest()[:6]
+        key = f"v:{digest}"
+        label = f"visitor-{digest}"
+    country = (request.headers.get("cf-ipcountry") or "").strip().upper()
+    if country in ("", "XX", "T1"):
+        country = ""
+    with _ACTIVE_VIEWERS_LOCK:
+        cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
+        stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
+        for k in stale:
+            _ACTIVE_VIEWERS.pop(k, None)
+        prev = _ACTIVE_VIEWERS.get(key)
+        _ACTIVE_VIEWERS[key] = {
+            "label": label,
+            "country": country or (prev["country"] if prev else ""),
+            "path": path,
+            "last_seen": now,
+            "hits": (prev["hits"] + 1) if prev else 1,
+        }
+
+
+def _get_active_viewers() -> list[Dict[str, Any]]:
+    now = time.monotonic()
+    cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
+    with _ACTIVE_VIEWERS_LOCK:
+        stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
+        for k in stale:
+            _ACTIVE_VIEWERS.pop(k, None)
+        items = [
+            {
+                "label": v["label"],
+                "country": v["country"],
+                "path": v["path"],
+                "seconds_ago": max(0, int(round(now - v["last_seen"]))),
+                "hits": v["hits"],
+            }
+            for v in _ACTIVE_VIEWERS.values()
+        ]
+    items.sort(key=lambda x: x["seconds_ago"])
+    return items
+
+
 @app.middleware("http")
 async def security_headers_and_csrf_middleware(request: Request, call_next):
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -243,6 +321,7 @@ async def security_headers_and_csrf_middleware(request: Request, call_next):
             if not _host_matches_request(referer, request):
                 return JSONResponse({"detail": "Cross-origin state-changing request blocked."}, status_code=403)
 
+    _record_active_viewer(request)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -2144,6 +2223,18 @@ async def api_admin_reclassify_all(_admin: Dict[str, Any] = Depends(require_admi
         "status": "ok",
         "requeued_count": len(targets),
         "message": f"Queued {len(targets)} projects for reclassification (~5-15s each, no regrade).",
+    }
+
+
+@app.get("/api/admin/active-viewers")
+async def api_admin_active_viewers(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin: lists active visitors seen in the last 2 minutes (anonymized for guests)."""
+    viewers = _get_active_viewers()
+    return {
+        "status": "ok",
+        "count": len(viewers),
+        "window_seconds": _ACTIVE_VIEWER_WINDOW_SECONDS,
+        "viewers": viewers,
     }
 
 
