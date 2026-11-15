@@ -271,6 +271,17 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             views INTEGER NOT NULL DEFAULT 0,
             last_viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS visitor_journeys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            country TEXT NOT NULL DEFAULT '',
+            path TEXT NOT NULL,
+            status_code INTEGER NOT NULL DEFAULT 200,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_visitor_journeys_id ON visitor_journeys(id DESC);
+        CREATE INDEX IF NOT EXISTS idx_visitor_journeys_visitor ON visitor_journeys(visitor_key, id DESC);
         """)
         # Safe migrations for existing databases
         try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
@@ -3188,5 +3199,89 @@ def get_page_views(limit: int = 30, db_path: Path = DEFAULT_DB_PATH) -> List[Dic
             (max(1, int(limit)),),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def record_visitor_journey_step(
+    visitor_key: str,
+    label: str,
+    country: str,
+    path: str,
+    status_code: int = 200,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> None:
+    """Append a non-admin route step for a visitor, collapsing immediate duplicate 200 hits."""
+    clean_path = (path or "/").strip() or "/"
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        last = conn.execute(
+            "SELECT path, status_code FROM visitor_journeys WHERE visitor_key = ? ORDER BY id DESC LIMIT 1",
+            (visitor_key,),
+        ).fetchone()
+        if last and last["path"] == clean_path and int(last["status_code"]) == int(status_code) and int(status_code) < 400:
+            return
+        cur = conn.execute(
+            """
+            INSERT INTO visitor_journeys (visitor_key, label, country, path, status_code)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (visitor_key, label, country or "", clean_path, int(status_code)),
+        )
+        if cur.lastrowid and cur.lastrowid % 200 == 0:
+            conn.execute(
+                "DELETE FROM visitor_journeys WHERE id <= (SELECT id FROM visitor_journeys ORDER BY id DESC LIMIT 1 OFFSET 2000)"
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_recent_visitor_journeys(
+    limit_visitors: int = 15,
+    steps_per_visitor: int = 12,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> List[Dict[str, Any]]:
+    """Return recent visitors with their chronological route trail and any error status codes."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT visitor_key, label, country, path, status_code, created_at
+            FROM visitor_journeys
+            ORDER BY id DESC
+            LIMIT 400
+            """
+        ).fetchall()
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for r in rows:
+            vk = r["visitor_key"]
+            if vk not in grouped:
+                if len(grouped) >= max(1, int(limit_visitors)):
+                    continue
+                grouped[vk] = {
+                    "label": r["label"],
+                    "country": r["country"],
+                    "last_seen_at": r["created_at"],
+                    "has_error": False,
+                    "steps": [],
+                }
+            entry = grouped[vk]
+            if not entry["country"] and r["country"]:
+                entry["country"] = r["country"]
+            if len(entry["steps"]) < max(1, int(steps_per_visitor)):
+                sc = int(r["status_code"])
+                if sc >= 400:
+                    entry["has_error"] = True
+                entry["steps"].append({
+                    "path": r["path"],
+                    "status_code": sc,
+                    "created_at": r["created_at"],
+                })
+        for entry in grouped.values():
+            entry["steps"].reverse()
+        return list(grouped.values())
     finally:
         conn.close()

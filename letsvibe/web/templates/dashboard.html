@@ -1749,6 +1749,8 @@
       <div id="pinned-page-views-drawer" style="display: none; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid rgba(148, 163, 184, 0.18);">
         <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.35rem;">Page Views (Excl. Admin)</div>
         <div id="pinned-page-views-list" style="display: flex; flex-direction: column; gap: 0.32rem; font-size: 0.73rem; color: var(--text-muted);"></div>
+        <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin: 0.6rem 0 0.35rem;">Recent Visitor Journeys</div>
+        <div id="pinned-journeys-list" style="display: flex; flex-direction: column; gap: 0.38rem; font-size: 0.72rem; color: var(--text-muted);"></div>
       </div>
     </div>
   </aside>
@@ -2269,6 +2271,12 @@
           </div>
           <div id="page-views-list" style="display: flex; flex-wrap: wrap; gap: 0.45rem; font-size: 0.78rem; color: var(--text-muted);">
             Loading page views...
+          </div>
+          <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin: 0.75rem 0 0.45rem; display: flex; align-items: center; gap: 0.4rem;">
+            <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i> Recent Visitor Journeys
+          </div>
+          <div id="admin-journeys-list" style="display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.78rem; color: var(--text-muted);">
+            Loading visitor journeys...
           </div>
         </div>
       </div>
@@ -6277,12 +6285,15 @@ ${t.status === 'running' ? `
       const pinnedCountEl = document.getElementById('pinned-viewers-count');
       const pinnedListEl = document.getElementById('pinned-viewers-list');
       const pinnedPvEl = document.getElementById('pinned-page-views-list');
+      const pinnedJourneysEl = document.getElementById('pinned-journeys-list');
+      const adminJourneysEl = document.getElementById('admin-journeys-list');
       try {
         const res = await fetch('/api/admin/active-viewers');
         if (!res.ok) return;
         const data = await res.json();
         const viewers = data.viewers || [];
         const pageViews = data.page_views || [];
+        const journeys = data.journeys || [];
         const countStr = String(data.count ?? viewers.length);
         if (countEl) countEl.textContent = countStr;
         if (pinnedCountEl) pinnedCountEl.textContent = countStr;
@@ -6319,6 +6330,29 @@ ${t.status === 'running' ? `
 
         if (pvEl) pvEl.innerHTML = pvPills;
         if (pinnedPvEl) pinnedPvEl.innerHTML = pvPills;
+
+        const journeyCards = journeys.length
+          ? journeys.map(j => {
+              const country = j.country ? ` <span style="color: var(--accent-cyan);">[${escapeHtml(j.country)}]</span>` : '';
+              const borderCol = j.has_error ? 'rgba(248, 113, 113, 0.55)' : 'var(--card-border)';
+              const trail = (j.steps || []).map(s => {
+                const sc = Number(s.status_code || 200);
+                const isErr = sc >= 400;
+                const badge = isErr ? ` <span style="color: #f87171; font-weight: 700;">(${sc})</span>` : '';
+                return `<code style="font-size: 0.7rem; color: ${isErr ? '#fca5a5' : '#cbd5e1'}; background: rgba(30, 41, 59, 0.85); padding: 0.08rem 0.32rem; border-radius: 5px; border: 1px solid ${isErr ? 'rgba(248, 113, 113, 0.45)' : 'rgba(148, 163, 184, 0.18)'};">${escapeHtml(s.path)}${badge}</code>`;
+              }).join('<span style="color: var(--text-muted); font-size: 0.68rem;">→</span>');
+              return `<div style="padding: 0.38rem 0.52rem; border-radius: 9px; background: rgba(15, 23, 42, 0.8); border: 1px solid ${borderCol};">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.3rem;">
+                  <span><strong style="color: ${j.has_error ? '#f87171' : 'var(--accent-green)'};">${escapeHtml(j.label)}</strong>${country}</span>
+                  <span style="font-size: 0.68rem; color: var(--text-muted);">${j.has_error ? 'hit error' : `${(j.steps || []).length} steps`}</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.22rem; margin-top: 0.28rem;">${trail}</div>
+              </div>`;
+            }).join('')
+          : '<span style="color: var(--text-muted);">No visitor journeys recorded yet.</span>';
+
+        if (pinnedJourneysEl) pinnedJourneysEl.innerHTML = journeyCards;
+        if (adminJourneysEl) adminJourneysEl.innerHTML = journeyCards;
       } catch (_) {}
     }
 

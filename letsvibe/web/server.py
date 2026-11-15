@@ -99,6 +99,8 @@ from ..storage.db import (
     list_admin_chat_messages_by_tag,
     get_page_views,
     record_page_view,
+    record_visitor_journey_step,
+    get_recent_visitor_journeys,
 )
 from ..storage.identity import parse_repo_identity
 from ..core.moderation import analyze_appeal_text
@@ -267,14 +269,8 @@ def _normalize_viewer_path(path: str) -> str:
     return path
 
 
-def _record_active_viewer(request: Request) -> None:
-    if request.method != "GET":
-        return
-    path = request.url.path or "/"
-    if path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
-        return
-    path = _normalize_viewer_path(path)
-    now = time.monotonic()
+def _resolve_visitor_identity(request: Request) -> tuple[str, str, str]:
+    """Return (visitor_key, display_label, country_code) without storing raw IPs."""
     user = get_current_user(request)
     if user and user.get("username"):
         key = f"u:{user['username']}"
@@ -293,6 +289,18 @@ def _record_active_viewer(request: Request) -> None:
     country = (request.headers.get("cf-ipcountry") or "").strip().upper()
     if country in ("", "XX", "T1"):
         country = ""
+    return key, label, country
+
+
+def _record_active_viewer(request: Request) -> None:
+    if request.method != "GET":
+        return
+    path = request.url.path or "/"
+    if path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
+        return
+    path = _normalize_viewer_path(path)
+    now = time.monotonic()
+    key, label, country = _resolve_visitor_identity(request)
     with _ACTIVE_VIEWERS_LOCK:
         cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
         stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
@@ -359,6 +367,22 @@ async def security_headers_and_csrf_middleware(request: Request, call_next):
 
     _record_active_viewer(request)
     response = await call_next(request)
+    raw_path = request.url.path or "/"
+    if (
+        request.method in ("GET", "POST")
+        and not raw_path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES)
+        and not is_admin_request(request)
+    ):
+        try:
+            key, label, country = _resolve_visitor_identity(request)
+            norm = _normalize_viewer_path(raw_path)
+            if request.method == "POST":
+                norm = f"POST {norm}"
+            elif request.query_params.get("registration") == "closed":
+                norm = "/?registration=closed"
+            record_visitor_journey_step(key, label, country, norm, response.status_code)
+        except Exception:  # nosec B110 - never break responses on analytics write
+            pass
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "same-origin")
@@ -2278,6 +2302,7 @@ async def api_admin_active_viewers(_admin: Dict[str, Any] = Depends(require_admi
         "window_seconds": _ACTIVE_VIEWER_WINDOW_SECONDS,
         "viewers": viewers,
         "page_views": get_page_views(limit=30),
+        "journeys": get_recent_visitor_journeys(limit_visitors=15, steps_per_visitor=12),
     }
 
 
