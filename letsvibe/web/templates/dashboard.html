@@ -899,6 +899,8 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 .modal-overlay.active,
     .modal-overlay.open {
@@ -920,9 +922,23 @@
       border-radius: 20px;
       width: 100%;
       max-width: 580px;
+      max-height: calc(100vh - 2rem);
+      max-height: calc(100dvh - 2rem);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: auto;
       padding: 2rem;
       position: relative;
       box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    @media (max-width: 640px) {
+      .modal-overlay { padding: 0.75rem; }
+      .modal-box {
+        padding: 1.25rem;
+        border-radius: 16px;
+        max-height: calc(100vh - 1.5rem);
+        max-height: calc(100dvh - 1.5rem);
+      }
     }
     .modal-close {
       position: absolute;
@@ -2645,7 +2661,7 @@
           <div style="margin-bottom: 1.35rem;">
             <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.35rem;">Audit Engine</label>
             <select id="mode-input" class="select-dropdown" style="width: 100%;" onchange="onEngineModeChange()">
-              <option value="blend">✨ Experience Grading (Rubric v9.4 — Submitter Context &amp; Grounding)</option>
+              <option value="v10">✨ Engine v10 — Qwen3 30B-A3B (Production)</option>
             </select>
             <div id="testing-engine-note" style="display: none; margin-top: 0.45rem; font-size: 0.78rem; color: #f0abfc;">
               <i class="fa-solid fa-flask"></i> Testing engine selected (Admin only) — this evaluation will run as a private Admin Test Grading.
@@ -2721,7 +2737,7 @@
         <div class="form-group" style="margin-bottom: 0.9rem;">
           <label for="batch-own-engine-select" style="font-size: 0.82rem; font-weight: 700;">Engine Version</label>
           <select id="batch-own-engine-select" class="form-control">
-            <option value="blend">Default Production Engine</option>
+            <option value="v10">Default Production Engine</option>
           </select>
         </div>
 
@@ -2744,6 +2760,28 @@
           <button type="button" class="btn btn-primary" id="btn-batch-own-submit" onclick="submitBatchOwnRepos()">
             <i class="fa-solid fa-play"></i> Submit Selected to Queue
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Import v10a (Anna) Report -->
+    <div id="import-v10a-modal" class="modal-overlay">
+      <div class="modal-box" style="max-width: 560px; padding: 2rem;">
+        <button class="modal-close" onclick="closeImportV10aModal()">&times;</button>
+        <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 0.4rem;">
+          🚀 Import v10a Report from Anna
+        </h2>
+        <p style="color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1rem;">
+          Upload the <code>.json</code> report exported by <strong>LetsVibe Vibecode Assistant (Anna)</strong>.
+          LetsVibe will verify that you own the GitHub repository and that the commit &amp; files match before publishing as <code>v10a</code>.
+        </p>
+        <div style="margin-bottom: 1rem;">
+          <input type="file" id="import-v10a-file" accept=".json,application/json" class="search-input" style="width: 100%; padding: 0.65rem;" />
+        </div>
+        <div id="import-v10a-status" style="font-size: 0.85rem; margin-bottom: 1rem; color: var(--text-muted);"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeImportV10aModal()">Cancel</button>
+          <button type="button" id="btn-import-v10a-submit" class="btn btn-primary" onclick="submitImportV10a()">Verify &amp; Import</button>
         </div>
       </div>
     </div>
@@ -3618,8 +3656,25 @@
         document.getElementById('score-col-header').textContent = sortedFactor()
           ? `${FACTOR_LABELS[sortedFactor()]} Score`
           : (scoreScale === 'raw' ? 'Raw Score & Grade' : 'Curved Score & Grade');
-        renderPodium(data.items.slice(0, 3));
-        renderTable(data.items.slice(3), data.items.length);  // the top 3 are already on the podium
+        const isFiltered = Boolean(
+          (search || '').trim() ||
+          engFilter ||
+          filterState.tier.size ||
+          filterState.category.size ||
+          filterState.platform.size
+        );
+        if (isFiltered) {
+          const podiumEl = document.getElementById('podium-cards');
+          if (podiumEl) {
+            podiumEl.innerHTML = data.items.length
+              ? '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.35rem 0;">Filtered results — matching repositories are listed in the table below with their global rank.</div>'
+              : '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 1.25rem 0;">No repositories match your current search or filters.</div>';
+          }
+          renderTable(data.items, data.items.length);
+        } else {
+          renderPodium(data.items.slice(0, 3));
+          renderTable(data.items.slice(3), data.items.length);  // the top 3 are already on the podium
+        }
       } catch (err) {
         console.error("Failed to fetch leaderboard:", err);
       }
@@ -4298,11 +4353,31 @@
         ? `Raw rubric score (${p.final_score.toFixed(1)} / ${p.raw_letter_grade || activeGrade}) • Curved: ${Number(p.curved_score ?? p.final_score).toFixed(1)} (${p.curved_letter_grade || p.letter_grade})`
         : `On the grading curve. Raw model score: ${p.final_score.toFixed(1)} (${p.raw_letter_grade || activeGrade})`;
       const st = p.is_latest === false ? null : p.standing;
-      document.getElementById('project-standing').innerHTML = st
+      const standingHtml = st
         ? (scoreScale === 'raw'
           ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>Showing direct Raw Rubric grade (${p.final_score.toFixed(1)} / ${p.raw_letter_grade || activeGrade}). Bell curve equivalent: ${Number(p.curved_score ?? p.final_score).toFixed(1)} (${p.curved_letter_grade || p.letter_grade}). <a href="/grading-curve">How the curve works</a></span>`
           : `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>${curveNote(st.basis, rep.curve || p.curve)} Raw score: ${p.final_score.toFixed(1)} (${p.raw_letter_grade || activeGrade}). <a href="/grading-curve">How the curve works</a></span>`)
         : '';
+
+      let changeNoteHtml = '';
+      const hist = Array.isArray(p.history) ? p.history : [];
+      const currIdx = hist.findIndex(h => Number(h.report_id) === Number(p.report_id));
+      const prevScan = currIdx >= 0 ? hist[currIdx + 1] : null;
+      if (prevScan) {
+        const prevScore = shownScore(prevScan);
+        const delta = activeScore - prevScore;
+        const currVer = p.rubric_version || rep.rubric_version || '';
+        const prevVer = prevScan.rubric_version || '';
+        const rubricChanged = Boolean(currVer && prevVer && currVer !== prevVer);
+        if (Math.abs(delta) >= 10 || (rubricChanged && Math.abs(delta) >= 5)) {
+          const sign = delta >= 0 ? '+' : '';
+          const prevLabel = `${Number(prevScore).toFixed(1)} ${shownGrade(prevScan) || ''}`.trim();
+          const currLabel = `${Number(activeScore).toFixed(1)} ${activeGrade || ''}`.trim();
+          const verNote = rubricChanged ? ` — rubric upgraded from ${escapeHtml(prevVer)} to ${escapeHtml(currVer)}` : '';
+          changeNoteHtml = `<div style="margin-top: 0.65rem; padding: 0.55rem 0.75rem; border-radius: 10px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); font-size: 0.8rem; color: #e2e8f0; text-align: left;"><strong>Why this changed:</strong> ${sign}${delta.toFixed(1)} pts vs previous scan (${escapeHtml(prevLabel)}${prevVer ? ' on ' + escapeHtml(prevVer) : ''} → ${escapeHtml(currLabel)}${currVer ? ' on ' + escapeHtml(currVer) : ''})${verNote}.</div>`;
+        }
+      }
+      document.getElementById('project-standing').innerHTML = standingHtml + changeNoteHtml;
       renderScanPicker(p);
       setupBadgeGenerator(p);
     }
@@ -6687,6 +6762,55 @@ ${t.status === 'running' ? `
     }
 
     // Initialization
+    function openImportV10aModal() {
+      if (!currentUser) {
+        openLoginModal();
+        return;
+      }
+      const st = document.getElementById('import-v10a-status');
+      if (st) st.textContent = '';
+      document.getElementById('import-v10a-modal').classList.add('active');
+    }
+
+    function closeImportV10aModal() {
+      document.getElementById('import-v10a-modal').classList.remove('active');
+    }
+
+    async function submitImportV10a() {
+      const fileInput = document.getElementById('import-v10a-file');
+      const statusEl = document.getElementById('import-v10a-status');
+      const btn = document.getElementById('btn-import-v10a-submit');
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if (!file) {
+        statusEl.textContent = 'Please select the exported v10a JSON file first.';
+        return;
+      }
+      btn.disabled = true;
+      statusEl.textContent = 'Verifying repository ownership and commit on GitHub...';
+      try {
+        const parsed = JSON.parse(await file.text());
+        const res = await fetch('/api/reports/import-v10a', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ report: parsed }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.style.color = '#f87171';
+          statusEl.textContent = data.detail || 'Import failed.';
+          return;
+        }
+        closeImportV10aModal();
+        await fetchLeaderboard();
+        navigateTo('project', data.full_slug, data.report_id);
+      } catch (err) {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = 'Import failed: ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     window.addEventListener('DOMContentLoaded', async () => {
       syncScaleToggleButtons();
       await Promise.all([checkAuthStatus(), loadTaxonomy()]);
@@ -6711,6 +6835,10 @@ ${t.status === 'running' ? `
         navigateTo(requestedView, null, null, { replace: true });
       } else {
         navigateTo('leaderboard', null, null, { replace: true });
+      }
+
+      if (urlParams.get('import') === 'v10a') {
+        openImportV10aModal();
       }
 
       if (currentUser && currentUser.is_admin) {

@@ -5,3 +5,7 @@ compatibility_date = "2026-11-14"
 routes = [
   { pattern = "letsvibe.todd0042.dev/*", zone_name = "todd0042.dev" }
 ]
+
+[[kv_namespaces]]
+binding = "LETSVIBE_SNAPSHOTS"
+id = "71ab5e501e2b430dacbc2e006bf0d619"

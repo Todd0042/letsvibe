@@ -41,7 +41,8 @@ def gather_metrics(packed_repo) -> Tuple[DeterministicMetrics, Any]:
     has_cli_fw, has_tui, has_rich, cli_details = FunctionalityAnalyzer.evaluate_cli_ux(packed_repo.files)
     platform_info = detect_platforms(packed_repo.source_path)
     metrics = DeterministicMetrics(
-        total_loc=packed_repo.total_loc, total_files=len(packed_repo.files), languages=packed_repo.language_stats,
+        total_loc=packed_repo.total_loc, data_loc=getattr(packed_repo, "data_loc", 0),
+        total_files=len(packed_repo.files), languages=packed_repo.language_stats,
         avg_cyclomatic_complexity=avg_cc, max_cyclomatic_complexity=max_cc, top_complex_functions=top_funcs,
         detected_secrets_count=secret_count, secret_findings=secret_findings,
         test_files_count=test_count, test_to_code_ratio=test_ratio, has_ci_cd=has_ci_cd, has_docker=has_docker,

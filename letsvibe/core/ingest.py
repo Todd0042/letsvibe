@@ -81,6 +81,18 @@ BLOAT_FILENAMES: Set[str] = {
     "cargo.lock",
     "poetry.lock",
     "composer.lock",
+    "gemfile.lock",
+    "pipfile.lock",
+    "gradle.lockfile",
+    "bun.lock",
+    "bun.lockb",
+}
+
+# Data, config, and documentation extensions tracked separately from source code LOC
+DATA_AND_DOC_EXTENSIONS: Set[str] = {
+    ".json", ".jsonl", ".ndjson", ".csv", ".tsv",
+    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf", ".xml",
+    ".md", ".markdown", ".txt", ".rst", ".lock",
 }
 
 VENDOR_PATH_PATTERNS: Tuple[str, ...] = (
@@ -465,6 +477,7 @@ class PackedRepository:
     files: Dict[str, str] = field(default_factory=dict)
     file_tree: str = ""
     total_loc: int = 0
+    data_loc: int = 0
     language_stats: Dict[str, int] = field(default_factory=dict)
     skipped_vendor_files: int = 0
     # Media files recorded by name only: (relative path, kind, size in bytes). Contents are never read.
@@ -734,6 +747,7 @@ class RepositoryIngestor:
         tree_lines: List[str] = []
         lang_stats: Dict[str, int] = {}
         total_loc = 0
+        data_loc = 0
         total_bytes = 0
         skipped_vendor_count = 0
         assets: List[Tuple[str, str, int]] = []
@@ -770,7 +784,8 @@ class RepositoryIngestor:
                     continue
 
                 fn = os.path.basename(rel_file)
-                if fn in BLOAT_FILENAMES or fn.endswith(".min.js") or fn.endswith(".min.css"):
+                fn_low = fn.lower()
+                if fn_low in BLOAT_FILENAMES or fn_low.endswith(".min.js") or fn_low.endswith(".min.css"):
                     continue
                 ext = os.path.splitext(fn)[1].lower()
                 abs_file = source_path / rel_file
@@ -804,10 +819,13 @@ class RepositoryIngestor:
 
                     files[rel_file] = content
                     loc = content.count("\n") + (1 if content else 0)
-                    total_loc += loc
                     total_bytes += len(content)
-                    lang = ext.lstrip(".") or "other"
-                    lang_stats[lang] = lang_stats.get(lang, 0) + loc
+                    if ext in DATA_AND_DOC_EXTENSIONS:
+                        data_loc += loc
+                    else:
+                        total_loc += loc
+                        lang = ext.lstrip(".") or "other"
+                        lang_stats[lang] = lang_stats.get(lang, 0) + loc
 
                     if len(files) > MAX_REPO_FILES or total_bytes > MAX_REPO_BYTES:
                         if is_temp and temp_dir:
@@ -837,7 +855,8 @@ class RepositoryIngestor:
                 tree_lines.append(f"{indent}📁 {folder_name}/")
 
                 for fn in sorted(filenames):
-                    if fn in BLOAT_FILENAMES or fn.endswith(".min.js") or fn.endswith(".min.css"):
+                    fn_low = fn.lower()
+                    if fn_low in BLOAT_FILENAMES or fn_low.endswith(".min.js") or fn_low.endswith(".min.css"):
                         continue
                     abs_file = Path(root) / fn
                     if not is_safe_repo_file(source_path, abs_file):
@@ -864,10 +883,13 @@ class RepositoryIngestor:
                             content = strip_heavy_arrays(f.read())
                         files[rel_file] = content
                         loc = content.count("\n") + (1 if content else 0)
-                        total_loc += loc
                         total_bytes += len(content)
-                        lang = ext.lstrip(".") or "other"
-                        lang_stats[lang] = lang_stats.get(lang, 0) + loc
+                        if ext in DATA_AND_DOC_EXTENSIONS:
+                            data_loc += loc
+                        else:
+                            total_loc += loc
+                            lang = ext.lstrip(".") or "other"
+                            lang_stats[lang] = lang_stats.get(lang, 0) + loc
 
                         if len(files) > MAX_REPO_FILES or total_bytes > MAX_REPO_BYTES:
                             if is_temp and temp_dir:
@@ -888,6 +910,7 @@ class RepositoryIngestor:
             files=files,
             file_tree="\n".join(tree_lines),
             total_loc=total_loc,
+            data_loc=data_loc,
             language_stats=lang_stats,
             skipped_vendor_files=skipped_vendor_count,
             assets=assets,

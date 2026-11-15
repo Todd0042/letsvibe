@@ -127,6 +127,7 @@ class FunctionComplexity(BaseModel):
 
 class DeterministicMetrics(BaseModel):
     total_loc: int = 0
+    data_loc: int = 0
     total_files: int = 0
     languages: Dict[str, int] = Field(default_factory=dict)
     avg_cyclomatic_complexity: float = 0.0

@@ -149,24 +149,111 @@ const OFFLINE_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+const SNAPSHOT_BANNER = `<div id="letsvibe-offline-banner" style="position:sticky;top:0;z-index:9999;background:rgba(15,23,42,0.96);border-bottom:1px solid rgba(251,191,36,0.45);color:#fde68a;padding:9px 16px;font-size:0.85rem;display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;backdrop-filter:blur(8px);"><span><strong>Read-only snapshot:</strong> The local GPU grading server is currently resting. You can browse cached rankings and reports; live repo submissions are paused.</span></div>`;
+
+function injectSnapshotBanner(html) {
+  if (!html || html.includes("letsvibe-offline-banner")) return html;
+  const idx = html.indexOf("<body");
+  if (idx === -1) return SNAPSHOT_BANNER + html;
+  const closeIdx = html.indexOf(">", idx);
+  if (closeIdx === -1) return SNAPSHOT_BANNER + html;
+  return html.slice(0, closeIdx + 1) + SNAPSHOT_BANNER + html.slice(closeIdx + 1);
+}
+
+const STATIC_HTML_ROUTES = new Set(["/", "/leaderboard", "/how-it-works", "/faq", "/privacy", "/terms", "/grading-curve"]);
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     try {
       const response = await fetch(request);
       if (!OFFLINE_STATUSES.has(response.status)) {
         return response;
       }
     } catch (_err) {
-      // Origin unreachable / tunnel down -> fall through to offline page
+      // Origin unreachable / tunnel down -> fall through to snapshot / offline page
     }
 
     const url = new URL(request.url);
+    const kv = env && env.LETSVIBE_SNAPSHOTS;
+
+    if (request.method === "GET" && kv) {
+      try {
+        if (url.pathname === "/api/leaderboard") {
+          const curveParam = url.searchParams.get("curve");
+          const key = curveParam === "false" ? "api:leaderboard:raw" : "api:leaderboard:curve";
+          const cached = await kv.get(key);
+          if (cached) {
+            return new Response(cached, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "public, max-age=60",
+                "X-LetsVibe-Snapshot": "1",
+              },
+            });
+          }
+        } else if (url.pathname === "/api/engines") {
+          const cached = await kv.get("api:engines");
+          if (cached) {
+            return new Response(cached, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "public, max-age=60",
+                "X-LetsVibe-Snapshot": "1",
+              },
+            });
+          }
+        } else if (url.pathname === "/api/auth/me") {
+          return new Response(JSON.stringify({ authenticated: false, user: null, snapshot_mode: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8", "X-LetsVibe-Snapshot": "1" },
+          });
+        } else if (url.pathname === "/api/queue") {
+          return new Response(JSON.stringify({ tasks: [], snapshot_mode: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8", "X-LetsVibe-Snapshot": "1" },
+          });
+        } else if (url.pathname.startsWith("/api/projects/")) {
+          const slug = decodeURIComponent(url.pathname.slice("/api/projects/".length)).replace(/^\/+|\/+$/g, "").toLowerCase();
+          if (slug) {
+            const cached = await kv.get(`api:project:${slug}`);
+            if (cached) {
+              return new Response(cached, {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/json; charset=utf-8",
+                  "Cache-Control": "public, max-age=60",
+                  "X-LetsVibe-Snapshot": "1",
+                },
+              });
+            }
+          }
+        } else if (STATIC_HTML_ROUTES.has(url.pathname) || url.pathname.startsWith("/project/")) {
+          const pageKey = url.pathname.startsWith("/project/") ? "page:/" : `page:${url.pathname}`;
+          const cachedHtml = await kv.get(pageKey);
+          if (cachedHtml) {
+            return new Response(injectSnapshotBanner(cachedHtml), {
+              status: 200,
+              headers: {
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "public, max-age=60",
+                "X-LetsVibe-Snapshot": "1",
+              },
+            });
+          }
+        }
+      } catch (_kvErr) {
+        // Fall through to 503 offline page if KV read fails
+      }
+    }
+
     const acceptsJson = (request.headers.get("Accept") || "").includes("application/json");
     if (url.pathname.startsWith("/api/") || acceptsJson) {
       return new Response(
         JSON.stringify({
           status: "offline",
-          detail: "LetsVibe server is currently offline / sleeping.",
+          detail: "LetsVibe GPU server is currently offline / sleeping. Live submissions are paused.",
         }),
         {
           status: 503,
