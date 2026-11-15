@@ -213,7 +213,7 @@ class AuditQueueWorker:
 
         task_id = task["id"]
         target = task["target"]
-        mode = task.get("mode", "blend")
+        mode = task.get("mode", "v10")
         force_override = bool(task.get("force_override", 0))
         try:
             submission_meta = json.loads(task.get("submission_meta_json") or "{}")
@@ -269,7 +269,10 @@ class AuditQueueWorker:
                 return _generate(*args, **kwargs)
 
             client.generate_json = _guarded_generate
-            if not client.is_running():
+            client.check_cancelled = lambda: self._check_stop(task_id)
+            mode_l = str(mode or "").strip().lower()
+            is_v10 = mode_l == "v10" or mode_l.startswith("v10.")
+            if not is_v10 and not client.is_running():
                 last_step_msg = "Starting local Ollama daemon..."
                 self._update_task_progress(task_id, last_step_msg, pct=12)
                 if not client.ensure_server_running(timeout_sec=15.0):
@@ -284,12 +287,17 @@ class AuditQueueWorker:
             readme_excerpt = metrics.readme_excerpt
 
             # 2.5 Focused classification: category, platforms, device profile (graders depend on it)
-            last_step_msg = "Classifying project category & target hardware..."
-            self._update_task_progress(task_id, last_step_msg, pct=17)
-            classification = classify_project(
-                client, packed_repo.source_path, platform_info,
-                readme=readme_excerpt, file_tree=packed_repo.file_tree,
-            )
+            if is_v10:
+                from ..evaluator.classifier import find_entry_file, merge_classification
+                classification = merge_classification({}, platform_info)
+                classification.entry_file = find_entry_file(packed_repo.source_path)
+            else:
+                last_step_msg = "Classifying project category & target hardware..."
+                self._update_task_progress(task_id, last_step_msg, pct=17)
+                classification = classify_project(
+                    client, packed_repo.source_path, platform_info,
+                    readme=readme_excerpt, file_tree=packed_repo.file_tree,
+                )
 
             # 3-4. Experience grading (rubric v9): dossier -> cliché check -> per-factor 7B code evidence -> 14B checklists
             #      -> compare (14B settles conflicts) -> Python score -> 14B descriptions. The same recipe as the curve calibration (evaluator/pipeline.py).
