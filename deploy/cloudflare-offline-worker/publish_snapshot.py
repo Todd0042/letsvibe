@@ -37,7 +37,10 @@ def build_snapshot_entries() -> List[Dict[str, str]]:
     entries: List[Dict[str, str]] = []
 
     for page in STATIC_PAGES:
-        entries.append({"key": f"page:{page}", "value": _fetch_text(page)})
+        try:
+            entries.append({"key": f"page:{page}", "value": _fetch_text(page)})
+        except Exception as exc:
+            print(f"Warning: skipping static page {page}: {exc}", file=sys.stderr)
 
     lb_curve_raw = _fetch_text("/api/leaderboard?sort_by=overall&curve=true")
     lb_raw = _fetch_text("/api/leaderboard?sort_by=overall&curve=false")
@@ -52,7 +55,7 @@ def build_snapshot_entries() -> List[Dict[str, str]]:
     for slug in slugs:
         quoted = "/".join(urllib.parse.quote(part, safe="") for part in slug.split("/"))
         try:
-            proj_json = _fetch_text(f"/api/projects/{quoted}")
+            proj_json = _fetch_text(f"/api/project/{quoted}")
             entries.append({"key": f"api:project:{slug.lower()}", "value": proj_json})
         except Exception as exc:
             print(f"Warning: failed to snapshot project {slug}: {exc}", file=sys.stderr)

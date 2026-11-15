@@ -214,8 +214,8 @@ export default {
             status: 200,
             headers: { "Content-Type": "application/json; charset=utf-8", "X-LetsVibe-Snapshot": "1" },
           });
-        } else if (url.pathname.startsWith("/api/projects/")) {
-          const slug = decodeURIComponent(url.pathname.slice("/api/projects/".length)).replace(/^\/+|\/+$/g, "").toLowerCase();
+        } else if (url.pathname.startsWith("/api/project/")) {
+          const slug = decodeURIComponent(url.pathname.slice("/api/project/".length)).replace(/^\/+|\/+$/g, "").toLowerCase();
           if (slug) {
             const cached = await kv.get(`api:project:${slug}`);
             if (cached) {
@@ -230,7 +230,7 @@ export default {
             }
           }
         } else if (STATIC_HTML_ROUTES.has(url.pathname) || url.pathname.startsWith("/project/")) {
-          const pageKey = url.pathname.startsWith("/project/") ? "page:/" : `page:${url.pathname}`;
+          const pageKey = (url.pathname === "/leaderboard" || url.pathname.startsWith("/project/")) ? "page:/" : `page:${url.pathname}`;
           const cachedHtml = await kv.get(pageKey);
           if (cachedHtml) {
             return new Response(injectSnapshotBanner(cachedHtml), {
