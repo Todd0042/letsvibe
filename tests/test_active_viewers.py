@@ -143,3 +143,55 @@ def test_visitor_journeys_record_ordered_steps_and_errors(tmp_path, monkeypatch)
         ("/faq", 200),
         ("/nonexistent-page-xyz", 404),
     ]
+
+
+def test_scraper_probes_ignored_for_cooldown(tmp_path, monkeypatch):
+    from letsvibe.storage import db as db_mod
+
+    test_db = tmp_path / "scraper.db"
+    db_mod.init_db(test_db)
+    monkeypatch.setattr(
+        srv,
+        "record_visitor_journey_step",
+        lambda vk, lbl, cty, p, sc=200: db_mod.record_visitor_journey_step(vk, lbl, cty, p, sc, db_path=test_db),
+    )
+    monkeypatch.setattr(
+        srv,
+        "get_recent_visitor_journeys",
+        lambda limit_visitors=15, steps_per_visitor=12: db_mod.get_recent_visitor_journeys(
+            limit_visitors=limit_visitors, steps_per_visitor=steps_per_visitor, db_path=test_db
+        ),
+    )
+    srv._ACTIVE_VIEWERS.clear()
+    srv._IGNORED_VIEWERS.clear()
+
+    client = TestClient(srv.app)
+
+    # 1) Direct /api/leaderboard scraper (no page load, no same-origin headers) -> ignored
+    scraper_hdrs = {"cf-connecting-ip": "198.51.100.10", "user-agent": "Scraper/1.0"}
+    assert client.get("/api/leaderboard", headers=scraper_hdrs).status_code == 200
+    assert client.get("/", headers=scraper_hdrs).status_code == 200
+
+    # 2) Visitor loads / then probes nonexistent /api/v1/users (404) -> ignored & purged
+    probe_hdrs = {"cf-connecting-ip": "198.51.100.20", "user-agent": "Prober/1.0"}
+    assert client.get("/", headers=probe_hdrs).status_code == 200
+    assert client.get("/api/v1/users", headers=probe_hdrs).status_code == 404
+    assert client.get("/faq", headers=probe_hdrs).status_code == 200
+
+    # 3) Normal visitor loads / then /api/creators -> still tracked
+    real_hdrs = {"cf-connecting-ip": "198.51.100.30", "user-agent": "RealBrowser/1.0"}
+    assert client.get("/", headers=real_hdrs).status_code == 200
+    assert client.get("/api/creators", headers=real_hdrs).status_code == 200
+
+    srv.app.dependency_overrides[srv.require_admin] = lambda: {"username": "Todd0042", "is_admin": True}
+    try:
+        res = client.get("/api/admin/active-viewers")
+    finally:
+        srv.app.dependency_overrides.pop(srv.require_admin, None)
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["count"] == 1
+    assert len(data["viewers"]) == 1
+    assert data["viewers"][0]["path"] == "/?view=creators"
+    srv._IGNORED_VIEWERS.clear()

@@ -279,6 +279,7 @@ def _host_matches_request(header_url: str, request: Request) -> bool:
 
 
 _ACTIVE_VIEWER_WINDOW_SECONDS = 120
+_SCRAPER_IGNORE_SECONDS = 1800  # 30 minutes for /api/ 404 probes or direct API-only scrapers
 _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/static/",
     "/img",
@@ -294,6 +295,7 @@ _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/api/auth/",
 )
 _ACTIVE_VIEWERS: Dict[str, Dict[str, Any]] = {}
+_IGNORED_VIEWERS: Dict[str, float] = {}
 _ACTIVE_VIEWERS_LOCK = threading.Lock()
 
 
@@ -333,21 +335,65 @@ def _resolve_visitor_identity(request: Request) -> tuple[str, str, str]:
     return key, label, country
 
 
+def _has_same_origin_nav_headers(request: Request) -> bool:
+    sec_fetch = (request.headers.get("sec-fetch-site") or "").strip().lower()
+    if sec_fetch == "same-origin":
+        return True
+    referer = request.headers.get("referer")
+    return bool(referer and _host_matches_request(referer, request))
+
+
+def _ignore_viewer(key: str, duration_seconds: int = _SCRAPER_IGNORE_SECONDS) -> None:
+    """Temporarily ignore a scraper/prober visitor key and remove it from active viewers."""
+    if not key or key.startswith("u:"):
+        return
+    now = time.monotonic()
+    with _ACTIVE_VIEWERS_LOCK:
+        _IGNORED_VIEWERS[key] = now + duration_seconds
+        _ACTIVE_VIEWERS.pop(key, None)
+
+
+def _is_viewer_ignored(key: str) -> bool:
+    if not key or key.startswith("u:"):
+        return False
+    now = time.monotonic()
+    with _ACTIVE_VIEWERS_LOCK:
+        expired = [k for k, exp in _IGNORED_VIEWERS.items() if exp <= now]
+        for k in expired:
+            _IGNORED_VIEWERS.pop(k, None)
+        return _IGNORED_VIEWERS.get(key, 0.0) > now
+
+
 def _record_active_viewer(request: Request) -> None:
     if request.method != "GET":
         return
-    path = request.url.path or "/"
-    if path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
+    raw_path = request.url.path or "/"
+    if raw_path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
         return
-    path = _normalize_viewer_path(path)
+    path = _normalize_viewer_path(raw_path)
     now = time.monotonic()
     key, label, country = _resolve_visitor_identity(request)
     with _ACTIVE_VIEWERS_LOCK:
+        expired_ignores = [k for k, exp in _IGNORED_VIEWERS.items() if exp <= now]
+        for k in expired_ignores:
+            _IGNORED_VIEWERS.pop(k, None)
+        if _IGNORED_VIEWERS.get(key, 0.0) > now:
+            return
         cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
         stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
         for k in stale:
             _ACTIVE_VIEWERS.pop(k, None)
         prev = _ACTIVE_VIEWERS.get(key)
+        prev_saw_page = bool(prev and prev.get("saw_page"))
+        if (
+            raw_path.startswith("/api/")
+            and not prev_saw_page
+            and not _has_same_origin_nav_headers(request)
+            and not key.startswith("u:")
+        ):
+            _IGNORED_VIEWERS[key] = now + _SCRAPER_IGNORE_SECONDS
+            _ACTIVE_VIEWERS.pop(key, None)
+            return
         raw_pages = dict(prev.get("pages") or {}) if prev else {}
         prev_page = raw_pages.get(path)
         if isinstance(prev_page, dict):
@@ -363,6 +409,7 @@ def _record_active_viewer(request: Request) -> None:
             "country": country or (prev["country"] if prev else ""),
             "path": path,
             "pages": raw_pages,
+            "saw_page": prev_saw_page or (not raw_path.startswith("/api/")),
             "first_seen": prev["first_seen"] if (prev and "first_seen" in prev) else now,
             "last_seen": now,
             "hits": (prev["hits"] + 1) if prev else 1,
@@ -406,10 +453,13 @@ def _get_active_viewers(exclude_username: Optional[str] = None) -> list[Dict[str
 
 
 def _record_non_admin_page_view(request: Request, path: str) -> None:
-    """Increment persistent page view count unless the requester is an admin."""
+    """Increment persistent page view count unless the requester is an admin or ignored scraper."""
     if is_admin_request(request):
         return
     try:
+        key, _, _ = _resolve_visitor_identity(request)
+        if _is_viewer_ignored(key):
+            return
         record_page_view(path)
     except Exception:  # nosec B110 - never break page serving on analytics write
         pass
@@ -437,12 +487,15 @@ async def security_headers_and_csrf_middleware(request: Request, call_next):
     ):
         try:
             key, label, country = _resolve_visitor_identity(request)
-            norm = _normalize_viewer_path(raw_path)
-            if request.method == "POST":
-                norm = f"POST {norm}"
-            elif request.query_params.get("registration") == "closed":
-                norm = "/?registration=closed"
-            record_visitor_journey_step(key, label, country, norm, response.status_code)
+            if raw_path.startswith("/api/") and response.status_code == 404:
+                _ignore_viewer(key)
+            elif not _is_viewer_ignored(key):
+                norm = _normalize_viewer_path(raw_path)
+                if request.method == "POST":
+                    norm = f"POST {norm}"
+                elif request.query_params.get("registration") == "closed":
+                    norm = "/?registration=closed"
+                record_visitor_journey_step(key, label, country, norm, response.status_code)
         except Exception:  # nosec B110 - never break responses on analytics write
             pass
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
