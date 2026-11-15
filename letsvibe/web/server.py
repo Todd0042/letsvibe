@@ -97,6 +97,8 @@ from ..storage.db import (
     remove_chat_message_tag,
     list_admin_chat_tags,
     list_admin_chat_messages_by_tag,
+    get_page_views,
+    record_page_view,
 )
 from ..storage.identity import parse_repo_identity
 from ..core.moderation import analyze_appeal_text
@@ -309,6 +311,16 @@ def _get_active_viewers(exclude_username: Optional[str] = None) -> list[Dict[str
         ]
     items.sort(key=lambda x: x["seconds_ago"])
     return items
+
+
+def _record_non_admin_page_view(request: Request, path: str) -> None:
+    """Increment persistent page view count unless the requester is an admin."""
+    if is_admin_request(request):
+        return
+    try:
+        record_page_view(path)
+    except Exception:  # nosec B110 - never break page serving on analytics write
+        pass
 
 
 @app.middleware("http")
@@ -1449,15 +1461,17 @@ async def api_taxonomy():
 
 
 @app.get("/api/creators")
-async def api_creators(sort_by: str = Query("peak", description="'peak' or 'avg'")):
+async def api_creators(request: Request, sort_by: str = Query("peak", description="'peak' or 'avg'")):
     """Retrieves creator leaderboard ranked by peak score or portfolio average score."""
+    _record_non_admin_page_view(request, "/?view=creators")
     data = get_creators_leaderboard(sort_by=sort_by)
     return {"status": "ok", "count": len(data), "items": data}
 
 
 @app.get("/api/hall-of-fame")
-async def api_hall_of_fame():
+async def api_hall_of_fame(request: Request):
     """Retrieves all-time podium champions and historic badge holders."""
+    _record_non_admin_page_view(request, "/?view=hof")
     data = get_hall_of_fame()
     return {"status": "ok", "count": len(data), "items": data}
 
@@ -1487,6 +1501,10 @@ async def api_project(full_slug: str, request: Request, report: Optional[int] = 
     if not is_admin:
         for k in _INTERNAL_PROJECT_FIELDS:
             data.pop(k, None)
+    referer_path = urllib.parse.urlparse(request.headers.get("referer") or "").path.rstrip("/")
+    target_path = f"/project/{full_slug}".rstrip("/")
+    if referer_path != target_path:
+        _record_non_admin_page_view(request, target_path)
     return {"status": "ok", "project": data}
 
 
@@ -2237,6 +2255,7 @@ async def api_admin_active_viewers(_admin: Dict[str, Any] = Depends(require_admi
         "count": len(viewers),
         "window_seconds": _ACTIVE_VIEWER_WINDOW_SECONDS,
         "viewers": viewers,
+        "page_views": get_page_views(limit=30),
     }
 
 
@@ -2569,8 +2588,11 @@ async def api_admin_task_override(req: TaskOverrideRequest, _admin: Dict[str, An
 from .ui import PAGES, render_admin_messages_html, render_dashboard_html, render_page
 
 @app.get("/", response_class=HTMLResponse)
-async def user_dashboard():
+async def user_dashboard(request: Request):
     """Serves the polished interactive Leaderboard & User UI."""
+    view = (request.query_params.get("view") or "").strip().lower()
+    if view not in ("creators", "hof", "reviews", "admin"):
+        _record_non_admin_page_view(request, "/")
     return HTMLResponse(render_dashboard_html(view="user"))
 
 
@@ -2593,14 +2615,16 @@ async def admin_messages_page(request: Request):
 
 
 @app.get("/{page_slug}", response_class=HTMLResponse, include_in_schema=False)
-async def content_page(page_slug: str):
+async def content_page(page_slug: str, request: Request):
     """Content pages: how-it-works, faq, privacy, cookies, terms, remove, support, changelog, my-data."""
     if page_slug not in PAGES:
         raise HTTPException(status_code=404, detail="Page not found.")
+    _record_non_admin_page_view(request, f"/{page_slug}")
     return HTMLResponse(render_page(page_slug), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/project/{full_slug:path}", response_class=HTMLResponse)
-async def project_page_view(full_slug: str):
+async def project_page_view(full_slug: str, request: Request):
     """Serves the dedicated project scorecard & telemetry page."""
+    _record_non_admin_page_view(request, f"/project/{full_slug}")
     return HTMLResponse(render_dashboard_html(view="project", project_slug=full_slug))

@@ -266,6 +266,11 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
         CREATE INDEX IF NOT EXISTS idx_chat_tags_tag ON chat_message_tags(tag, message_id);
+        CREATE TABLE IF NOT EXISTS page_views (
+            path TEXT PRIMARY KEY,
+            views INTEGER NOT NULL DEFAULT 0,
+            last_viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """)
         # Safe migrations for existing databases
         try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
@@ -3143,5 +3148,45 @@ def list_admin_chat_messages_by_tag(
         ).fetchall()
         msgs = [dict(r) for r in rows]
         return _attach_message_tags(conn, msgs)
+    finally:
+        conn.close()
+
+
+def record_page_view(path: str, db_path: Path = DEFAULT_DB_PATH) -> None:
+    """Increment the persistent view counter for a page path."""
+    clean = (path or "/").strip() or "/"
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO page_views (path, views, last_viewed_at)
+            VALUES (?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(path) DO UPDATE SET
+                views = views + 1,
+                last_viewed_at = CURRENT_TIMESTAMP
+            """,
+            (clean,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_page_views(limit: int = 30, db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    """Return persistent per-page view counts ordered by most viewed."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT path, views, last_viewed_at
+            FROM page_views
+            ORDER BY views DESC, last_viewed_at DESC
+            LIMIT ?
+            """,
+            (max(1, int(limit)),),
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()

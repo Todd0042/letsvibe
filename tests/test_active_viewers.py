@@ -60,3 +60,39 @@ def test_active_viewers_excludes_requesting_admin():
     assert "@Todd0042" not in labels
     assert "@otheruser" in labels
     assert data["count"] == 1
+
+
+def test_page_views_recorded_for_non_admin_and_excluded_for_admin(tmp_path, monkeypatch):
+    from letsvibe.storage import db as db_mod
+    from letsvibe.core import auth as auth_mod
+
+    test_db = tmp_path / "views.db"
+    db_mod.init_db(test_db)
+    monkeypatch.setattr(srv, "record_page_view", lambda path: db_mod.record_page_view(path, db_path=test_db))
+    monkeypatch.setattr(srv, "get_page_views", lambda limit=30: db_mod.get_page_views(limit=limit, db_path=test_db))
+
+    client = TestClient(srv.app)
+
+    # Guest hits /, /faq, and /api/creators
+    assert client.get("/").status_code == 200
+    assert client.get("/faq").status_code == 200
+    assert client.get("/api/creators").status_code == 200
+
+    # Admin hits / and /faq — should NOT increment counts
+    monkeypatch.setattr(srv, "is_admin_request", lambda req: req.cookies.get("test_admin") == "1")
+    client.cookies.set("test_admin", "1")
+    assert client.get("/").status_code == 200
+    assert client.get("/faq").status_code == 200
+    client.cookies.clear()
+
+    srv.app.dependency_overrides[srv.require_admin] = lambda: {"username": "Todd0042", "is_admin": True}
+    try:
+        res = client.get("/api/admin/active-viewers")
+    finally:
+        srv.app.dependency_overrides.pop(srv.require_admin, None)
+
+    assert res.status_code == 200
+    pv_map = {item["path"]: item["views"] for item in res.json()["page_views"]}
+    assert pv_map.get("/") == 1
+    assert pv_map.get("/faq") == 1
+    assert pv_map.get("/?view=creators") == 1
