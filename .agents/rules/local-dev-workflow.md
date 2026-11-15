@@ -16,5 +16,10 @@ description: Local development vs. live Docker deployment workflow for LetsVibe
    - LAN devices (phone/tablet): `http://<lan-ip>:8001` (Cloudflare Tunnel only routes `:8000`, so `:8001` stays private).
 3. **Verify before deploying:**
    - Stop the `:8001` dev server.
-   - Run `pytest` and confirm all tests pass.
-   - Commit/push changes, then run `deploy-to-docker` to rebuild and restart the live `letsvibe` container on `:8000`.
+   - Run `PYTHONPATH=.:../letsvibe-engine .venv/bin/pytest --ignore=tests/ui -q` and confirm all tests pass.
+   - Commit changes.
+4. **Deploy to live (`:8000`) with zero downtime:**
+   - Sync repo to `/home/todd/storage/letsvibe-docker/app/` (always excluding `.git`, `.venv`, `data`, `.env`, `__pycache__`, `.pytest_cache`).
+   - **UI-only edits (`letsvibe/web/templates/` or `letsvibe/web/static/`):** `rsync` alone applies them immediately via hot-mounts — **no container restart or swap needed**.
+   - **Web/Python edits:** Run `/home/todd/storage/letsvibe-docker/app/deploy/blue-green/deploy.sh` to build the idle slot (`blue` `:8011` ↔ `green` `:8012`), verify `/api/health`, reload `letsvibe-proxy` (`:8000`), and stop the old slot.
+   - **Worker/DB/Evaluator edits:** Only rebuild `letsvibe-worker` (`docker compose -f /home/todd/storage/letsvibe-docker/app/deploy/blue-green/docker-compose.yml up -d --build letsvibe-worker`) when no Ollama audit is actively running.
