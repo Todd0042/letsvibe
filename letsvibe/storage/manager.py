@@ -57,6 +57,16 @@ class ReportStorageManager:
                     identity.repo_icon_url = resolve_icon_url(identity.owner, identity.repo_name, check_dir, identity.get_report_dir())
                 except Exception:
                     identity.repo_icon_url = None
+        if identity.provider == "github" and not report.screenshots and not report.asset_preview:
+            check_dir = source_path or (Path(target) if Path(target).is_dir() else None)
+            if check_dir and Path(check_dir).exists():
+                try:
+                    from ..core.screenshots import discover_visuals_local
+                    shots, preview = discover_visuals_local(identity.owner, identity.repo_name, check_dir)
+                    report.screenshots = shots
+                    report.asset_preview = preview
+                except Exception:
+                    pass
 
         report_dir = identity.get_report_dir()
 

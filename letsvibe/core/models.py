@@ -190,6 +190,8 @@ class VibeReport(BaseModel):
     # Two-part feedback: standing among vibe coders, and what a professional team would do next
     peer_summary: str = ""
     pro_next_steps: List[str] = Field(default_factory=list)
+    screenshots: List[str] = Field(default_factory=list)
+    asset_preview: Dict[str, List[str]] = Field(default_factory=dict)
     # Internal only, never published: set when the safety check fails so the report is held for an
     # owner explanation instead of being published. Stripped before any report is stored publicly.
     integrity_hold: bool = False

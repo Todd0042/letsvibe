@@ -84,6 +84,17 @@ from ..storage.db import (
     ReportRateLimitError,
     toggle_project_upvote,
     get_upvote_map,
+    get_user_chat_unread_count,
+    get_user_chat_thread,
+    send_user_chat_message,
+    get_admin_chat_unread_count,
+    list_admin_chat_threads,
+    get_admin_chat_thread,
+    reply_admin_chat_thread,
+    add_chat_message_tag,
+    remove_chat_message_tag,
+    list_admin_chat_tags,
+    list_admin_chat_messages_by_tag,
 )
 from ..storage.identity import parse_repo_identity
 from ..core.moderation import analyze_appeal_text
@@ -627,12 +638,12 @@ async def api_dev_user_login(req: DevUserLoginRequest, request: Request):
 # ==========================================
 
 @app.get("/img", include_in_schema=False)
-async def api_image_proxy(u: str = Query(..., max_length=500)):
-    """Same-origin proxy for GitHub avatars/icons so visitors' browsers never contact GitHub."""
+async def api_image_proxy(u: str = Query(..., max_length=500), nocache: bool = False):
+    """Same-origin proxy for GitHub avatars/icons/screenshots so visitors' browsers never contact GitHub."""
     from fastapi.concurrency import run_in_threadpool
 
     try:
-        result = await run_in_threadpool(fetch_image, u)
+        result = await run_in_threadpool(fetch_image, u, not nocache)
     except httpx.HTTPError:
         result = None
     if not result:
@@ -1049,7 +1060,143 @@ async def api_admin_reviews(_admin: Dict[str, Any] = Depends(require_admin)):
 
 @app.get("/api/admin/reviews/count")
 async def api_admin_reviews_count(_admin: Dict[str, Any] = Depends(require_admin)):
-    return {"status": "ok", **count_pending_reviews()}
+    return {"status": "ok", **count_pending_reviews(), "chat_unread": get_admin_chat_unread_count()}
+
+
+# ==========================================
+# Direct Chat & Admin Tagging Endpoints
+# ==========================================
+
+class ChatMessageRequest(BaseModel):
+    body: str
+
+
+class ChatTagRequest(BaseModel):
+    tag: str
+
+
+@app.get("/api/me/chat/unread")
+async def api_me_chat_unread(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return {"unread": 0}
+    return {"unread": get_user_chat_unread_count(str(user.get("github_id", "")))}
+
+
+@app.get("/api/me/chat")
+async def api_me_chat(request: Request, mark_read: bool = True):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="GitHub authentication required.")
+    return get_user_chat_thread(
+        github_id=str(user.get("github_id", "")),
+        username=user.get("username", ""),
+        avatar_url=user.get("avatar_url"),
+        mark_read=mark_read,
+    )
+
+
+@app.post("/api/me/chat/messages")
+async def api_me_chat_send(req: ChatMessageRequest, request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="GitHub authentication required.")
+    try:
+        msg = send_user_chat_message(
+            github_id=str(user.get("github_id", "")),
+            username=user.get("username", ""),
+            avatar_url=user.get("avatar_url"),
+            body=req.body,
+        )
+        return {"status": "ok", "message": msg}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/admin/chat/unread")
+async def api_admin_chat_unread(_admin: Dict[str, Any] = Depends(require_admin)):
+    return {"unread": get_admin_chat_unread_count()}
+
+
+@app.get("/api/admin/chat/threads")
+async def api_admin_chat_threads(
+    q: str = "",
+    sort: str = "unread",
+    _admin: Dict[str, Any] = Depends(require_admin),
+):
+    return {"threads": list_admin_chat_threads(search=q, sort=sort)}
+
+
+@app.get("/api/admin/chat/threads/{thread_id}")
+async def api_admin_chat_thread_detail(
+    thread_id: int,
+    mark_read: bool = True,
+    _admin: Dict[str, Any] = Depends(require_admin),
+):
+    thread = get_admin_chat_thread(thread_id, mark_read=mark_read)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Chat thread not found.")
+    return thread
+
+
+@app.post("/api/admin/chat/threads/{thread_id}/reply")
+async def api_admin_chat_reply(
+    thread_id: int,
+    req: ChatMessageRequest,
+    admin: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        msg = reply_admin_chat_thread(
+            thread_id=thread_id,
+            admin_username=admin.get("username", ADMIN_GITHUB_USER),
+            body=req.body,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not msg:
+        raise HTTPException(status_code=404, detail="Chat thread not found.")
+    return {"status": "ok", "message": msg}
+
+
+@app.get("/api/admin/chat/tags")
+async def api_admin_chat_tags(_admin: Dict[str, Any] = Depends(require_admin)):
+    return {"tags": list_admin_chat_tags()}
+
+
+@app.get("/api/admin/chat/messages")
+async def api_admin_chat_messages_by_tag(
+    tag: str = "",
+    sort: str = "newest",
+    _admin: Dict[str, Any] = Depends(require_admin),
+):
+    return {"tag": tag, "sort": sort, "messages": list_admin_chat_messages_by_tag(tag=tag, sort=sort)}
+
+
+@app.post("/api/admin/chat/messages/{message_id}/tags")
+async def api_admin_add_chat_tag(
+    message_id: int,
+    req: ChatTagRequest,
+    _admin: Dict[str, Any] = Depends(require_admin),
+):
+    try:
+        tags = add_chat_message_tag(message_id=message_id, raw_tag=req.tag)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if tags is None:
+        raise HTTPException(status_code=404, detail="Message not found.")
+    return {"status": "ok", "tags": tags}
+
+
+@app.delete("/api/admin/chat/messages/{message_id}/tags/{tag}")
+async def api_admin_remove_chat_tag(
+    message_id: int,
+    tag: str,
+    _admin: Dict[str, Any] = Depends(require_admin),
+):
+    tags = remove_chat_message_tag(message_id=message_id, raw_tag=tag)
+    if tags is None:
+        raise HTTPException(status_code=404, detail="Message not found.")
+    return {"status": "ok", "tags": tags}
 
 
 @app.post("/api/admin/held/{held_id}/publish")
@@ -1999,6 +2146,20 @@ async def api_admin_reclassify_all(_admin: Dict[str, Any] = Depends(require_admi
         "message": f"Queued {len(targets)} projects for reclassification (~5-15s each, no regrade).",
     }
 
+
+@app.post("/api/admin/backfill-screenshots")
+async def api_admin_backfill_screenshots(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin: discover screenshot links for already-analyzed GitHub repos without regrading."""
+    from fastapi.concurrency import run_in_threadpool
+    from ..core.screenshots import backfill_missing_screenshots
+
+    summary = await run_in_threadpool(backfill_missing_screenshots, None, 4, None, True)
+    return {
+        "status": "ok",
+        **summary,
+        "message": f"Checked {summary['checked']} repos: updated {summary['updated']}, none found for {summary['skipped']}.",
+    }
+
 @app.post("/api/admin/clear-database")
 async def api_admin_clear_database(_admin: Dict[str, Any] = Depends(require_admin)):
     """Admin endpoint: Wipes all database tables for a clean test or launch reset."""
@@ -2312,7 +2473,7 @@ async def api_admin_task_override(req: TaskOverrideRequest, _admin: Dict[str, An
 # Frontend Dashboard HTML
 # ==========================================
 
-from .ui import PAGES, render_dashboard_html, render_page
+from .ui import PAGES, render_admin_messages_html, render_dashboard_html, render_page
 
 @app.get("/", response_class=HTMLResponse)
 async def user_dashboard():
@@ -2327,6 +2488,15 @@ async def admin_dashboard(request: Request):
     if not user or not user.get("is_admin"):
         return RedirectResponse(url="/", status_code=302)
     return HTMLResponse(render_dashboard_html(view="admin"))
+
+
+@app.get("/admin/messages", response_class=HTMLResponse)
+async def admin_messages_page(request: Request):
+    """Serves the dedicated split-screen Admin Chat & Tag Triage UI."""
+    user = get_current_user(request)
+    if not user or not user.get("is_admin"):
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(render_admin_messages_html(), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/{page_slug}", response_class=HTMLResponse, include_in_schema=False)

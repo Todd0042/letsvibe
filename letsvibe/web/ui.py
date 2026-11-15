@@ -236,3 +236,8 @@ def render_dashboard_html(view: str = "user", project_slug: Optional[str] = None
                  f"<script>window.__INITIAL_VIEW__ = {js(view)}; window.__PROJECT_SLUG__ = {js(project_slug)};</script>\n</head>")
     html = html.replace("<!--SITE_FOOTER-->", render_footer(), 1)
     return html.replace("</head>", injection, 1)
+
+
+def render_admin_messages_html() -> str:
+    """Serves the dedicated full-page admin direct-chat & tag triage workspace."""
+    return (TEMPLATES_DIR / "admin_messages.html").read_text(encoding="utf-8")

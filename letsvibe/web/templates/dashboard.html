@@ -1177,6 +1177,171 @@
       grid-template-columns: 1fr 1fr;
       gap: 1.75rem;
     }
+    .shot-gallery {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .shot-stage {
+      width: 100%;
+      background: #060a14;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 12px;
+      padding: 6px;
+      cursor: zoom-in;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s ease;
+    }
+    .shot-stage:hover {
+      border-color: var(--accent-cyan);
+    }
+    .shot-stage img {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .shot-stage.shot-portrait {
+      height: 440px;
+      border-radius: 18px;
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .shot-stage.shot-landscape {
+      height: 270px;
+    }
+    .shot-stage.shot-square {
+      height: 340px;
+    }
+    .shot-thumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+    .shot-thumb {
+      width: 68px;
+      height: 48px;
+      border-radius: 8px;
+      background: #060a14;
+      border: 2px solid rgba(148, 163, 184, 0.2);
+      padding: 2px;
+      cursor: pointer;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.72;
+      transition: opacity 0.15s ease, border-color 0.15s ease;
+    }
+    .shot-thumb:hover,
+    .shot-thumb.active {
+      opacity: 1;
+      border-color: var(--accent-cyan);
+    }
+    .shot-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 5px;
+      display: block;
+    }
+    .project-layout {
+      display: block;
+    }
+    .project-report-main {
+      min-width: 0;
+    }
+    @media (min-width: 1220px) {
+      .project-layout.has-screenshots {
+        display: grid;
+        grid-template-columns: 400px minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+      }
+      .project-layout.has-screenshots #project-screenshots-card {
+        padding: 1.1rem;
+        margin-bottom: 0;
+      }
+    }
+    @media (min-width: 1720px) {
+      .project-layout.has-screenshots {
+        margin-left: -424px;
+      }
+    }
+    .scene-preview-stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      min-height: 270px;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: zoom-in;
+      background: linear-gradient(180deg, #0b1220 0%, #060a14 100%);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      transition: border-color 0.15s ease;
+    }
+    .scene-preview-stage:hover {
+      border-color: var(--accent-cyan);
+    }
+    .scene-preview-stage.lightbox-stage {
+      width: min(820px, 92vw);
+      aspect-ratio: 16 / 10;
+      min-height: 420px;
+      cursor: zoom-out;
+    }
+    .scene-preview-stage img.scene-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .scene-preview-stage .scene-chars {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: space-evenly;
+      align-items: flex-end;
+      gap: 6px;
+      padding: 0 6px 4px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .scene-preview-stage img.scene-char {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: none;
+      max-height: none;
+      flex: 0 0 auto;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.75));
+    }
+    .shot-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 9800;
+      background: rgba(2, 6, 23, 0.88);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      cursor: zoom-out;
+    }
+    .shot-lightbox.open { display: flex; }
+    .shot-lightbox img {
+      max-width: 94vw;
+      max-height: 90vh;
+      border-radius: 10px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+    }
     @media (max-width: 860px) {
       .report-grid-2 { grid-template-columns: 1fr; }
     }
@@ -1634,8 +1799,8 @@
         <div class="filter-group">
           <span class="filter-label">Grading:</span>
           <span class="seg" role="group" aria-label="Grading scale">
-            <button type="button" class="scale-toggle-btn active" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
-            <button type="button" class="scale-toggle-btn" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
+            <button type="button" class="scale-toggle-btn active" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
+            <button type="button" class="scale-toggle-btn" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
           </span>
           <label for="sort-select" class="filter-label" style="margin-left: 0.35rem;">Sort By:</label>
           <select id="sort-select" class="select-dropdown" onchange="fetchLeaderboard()">
@@ -1686,8 +1851,8 @@
             <i class="fa-solid fa-arrow-left"></i> Back
           </button>
           <span class="seg" role="group" aria-label="Grading scale">
-            <button type="button" class="scale-toggle-btn active" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
-            <button type="button" class="scale-toggle-btn" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
+            <button type="button" class="scale-toggle-btn active" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
+            <button type="button" class="scale-toggle-btn" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
           </span>
         </div>
         <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
@@ -1712,6 +1877,19 @@
         </div>
       </div>
 
+      <div id="project-layout" class="project-layout">
+        <!-- Project Screenshots (left margin rail on desktop, stacked on mobile; proxied without storing images on disk) -->
+        <aside id="project-screenshots-card" class="report-card" hidden>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <h2 style="font-size: 1rem; font-weight: 700; margin: 0;">
+              <i class="fa-solid fa-images" style="color: var(--accent-cyan);"></i> Screenshots
+            </h2>
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Click to zoom</span>
+          </div>
+          <div id="project-screenshots-gallery" class="shot-gallery"></div>
+        </aside>
+
+        <div class="project-report-main">
       <!-- Executive Header -->
       <div class="project-header-card" id="project-header-card">
         <div class="scan-picker" id="scan-picker-wrap" hidden>
@@ -1925,6 +2103,8 @@
       </aside>
       <p id="project-rubric-note" class="rubric-note" hidden></p>
       <div id="project-corrections" class="rubric-note" hidden></div>
+        </div><!-- /.project-report-main -->
+      </div><!-- /#project-layout -->
       <p id="report-error-wrap" hidden>
         <button type="button" class="btn btn-secondary" onclick="openErrorReport()" style="font-size: 0.85rem;">
           <i class="fa-solid fa-flag"></i> Report an error in this review
@@ -2030,11 +2210,16 @@
     </main>
 
     <main id="tab-admin" style="display: none;">
-      <div style="margin: 2rem 0 1.5rem;">
-        <h1 style="font-size: 1.75rem; font-weight: 800;">⚙️ Admin Queue &amp; Engine Console</h1>
-        <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem;">
-          Control repository evaluation queue, pause/resume processing, manually trigger audits, manage projects in the database, and inspect local Ollama diagnostics.
-        </p>
+      <div style="margin: 2rem 0 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+        <div>
+          <h1 style="font-size: 1.75rem; font-weight: 800;">⚙️ Admin Queue &amp; Engine Console</h1>
+          <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem;">
+            Control repository evaluation queue, pause/resume processing, manually trigger audits, manage projects in the database, and inspect local Ollama diagnostics.
+          </p>
+        </div>
+        <a href="/admin/messages" class="btn btn-primary" style="text-decoration: none; white-space: nowrap;">
+          <i class="fa-solid fa-comments"></i> Direct Messages &amp; Tags
+        </a>
       </div>
 
       <div class="admin-grid">
@@ -2176,9 +2361,14 @@
               Re-runs only the build-file scan and the quick 7B classify call for every project, updating its Category, System
               and device profile filters. Scores are not changed. Takes roughly 5&ndash;15 seconds per project through the queue.
           </p>
-          <button id="btn-reclassify-all" class="btn btn-secondary" onclick="triggerReclassifyAll()">
-              <i class="fa-solid fa-tags"></i> Reclassify All Projects
-          </button>
+          <div style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
+            <button id="btn-reclassify-all" class="btn btn-secondary" onclick="triggerReclassifyAll()">
+                <i class="fa-solid fa-tags"></i> Reclassify All Projects
+            </button>
+            <button id="btn-backfill-screenshots" class="btn btn-secondary" onclick="triggerBackfillScreenshots()">
+                <i class="fa-solid fa-images"></i> Refresh All Screenshots
+            </button>
+          </div>
           <p id="reclassify-status" style="font-size: 0.85rem; margin-top: 0.75rem; color: var(--accent-green);" hidden></p>
       </div>
 
@@ -3049,7 +3239,7 @@
     }
     const MINI_BARS = [['resonance', 'VAL'], ['creativity', 'CRT'], ['user_journey', 'JRN'], ['functionality', 'FNC'], ['ui_ux', 'UI']];
     // Presentation-layer grading scale toggle ('curve' = bell curve score/grade; 'raw' = uncurved rubric score/grade)
-    let scoreScale = 'curve';
+    let scoreScale = 'raw';
     try {
       const savedScale = localStorage.getItem('letsvibe_score_scale');
       if (savedScale === 'raw' || savedScale === 'curve') scoreScale = savedScale;
@@ -3866,6 +4056,157 @@
       return `${testPrefix}${date} · ${score}${rubric}${isLatest ? ' (latest)' : ''}`;
     }
 
+    function _ensureShotLightbox() {
+      let lb = document.getElementById('shot-lightbox');
+      if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'shot-lightbox';
+        lb.className = 'shot-lightbox';
+        lb.onclick = () => lb.classList.remove('open');
+        document.addEventListener('keydown', e => {
+          if (e.key === 'Escape') lb.classList.remove('open');
+        });
+        document.body.appendChild(lb);
+      }
+      return lb;
+    }
+
+    function _buildSceneStage(bgUrl, chars, isLightbox = false) {
+      const stage = document.createElement('div');
+      stage.className = 'scene-preview-stage' + (isLightbox ? ' lightbox-stage' : '');
+      let bgImg = null;
+      const charImgs = [];
+
+      const applyScale = () => {
+        const sw = stage.clientWidth || (isLightbox ? 820 : 368);
+        const sh = stage.clientHeight || (isLightbox ? 512 : 276);
+        let scale = sw / 960;
+        if (bgImg && bgImg.complete && bgImg.naturalWidth > 0 && bgImg.naturalHeight > 0) {
+          scale = Math.max(sw / bgImg.naturalWidth, sh / bgImg.naturalHeight);
+        }
+        const maxW = Math.max(24, Math.round(sw * 0.28));
+        const maxH = Math.max(24, Math.round(sh * 0.55));
+        charImgs.forEach(ch => {
+          if (ch.complete && ch.naturalWidth > 0) {
+            const w = Math.max(18, Math.round(ch.naturalWidth * scale));
+            ch.style.width = Math.min(w, maxW) + 'px';
+            ch.style.height = 'auto';
+            ch.style.maxWidth = maxW + 'px';
+            ch.style.maxHeight = maxH + 'px';
+            ch.style.objectFit = 'contain';
+          }
+        });
+      };
+
+      if (bgUrl) {
+        bgImg = document.createElement('img');
+        bgImg.className = 'scene-bg';
+        bgImg.loading = 'lazy';
+        bgImg.alt = 'Repository background asset';
+        bgImg.onload = applyScale;
+        bgImg.onerror = () => { bgImg.remove(); bgImg = null; applyScale(); };
+        bgImg.src = '/img?u=' + encodeURIComponent(bgUrl) + '&nocache=1';
+        stage.appendChild(bgImg);
+      }
+      if (chars.length) {
+        const row = document.createElement('div');
+        row.className = 'scene-chars';
+        chars.slice(0, 3).forEach(chUrl => {
+          const ch = document.createElement('img');
+          ch.className = 'scene-char';
+          ch.loading = 'lazy';
+          ch.alt = 'Repository character asset';
+          ch.onload = applyScale;
+          ch.onerror = () => ch.remove();
+          ch.src = '/img?u=' + encodeURIComponent(chUrl) + '&nocache=1';
+          charImgs.push(ch);
+          row.appendChild(ch);
+        });
+        stage.appendChild(row);
+      }
+      requestAnimationFrame(applyScale);
+      return stage;
+    }
+
+    function renderProjectScreenshots(urls, assetPreview) {
+      const layout = document.getElementById('project-layout');
+      const card = document.getElementById('project-screenshots-card');
+      const gallery = document.getElementById('project-screenshots-gallery');
+      const titleEl = card ? card.querySelector('h2') : null;
+      if (!card || !gallery) return;
+      gallery.innerHTML = '';
+      const list = Array.isArray(urls) ? urls.filter(Boolean) : [];
+      const bgs = (assetPreview && Array.isArray(assetPreview.backgrounds)) ? assetPreview.backgrounds.filter(Boolean) : [];
+      const chars = (assetPreview && Array.isArray(assetPreview.characters)) ? assetPreview.characters.filter(Boolean) : [];
+
+      if (!list.length && (bgs.length || chars.length)) {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-layer-group" style="color: var(--accent-cyan);"></i> Asset Preview';
+        card.hidden = false;
+        if (layout) layout.classList.add('has-screenshots');
+        const stages = bgs.length ? bgs.slice(0, 2) : [''];
+        stages.forEach((bgUrl, idx) => {
+          let stageChars = [];
+          if (chars.length === 1) {
+            stageChars = idx === 0 ? [chars[0]] : [];
+          } else if (chars.length >= 2) {
+            const c1 = chars[(idx * 2) % chars.length];
+            const c2 = chars[(idx * 2 + 1) % chars.length];
+            stageChars = c1 === c2 ? [c1] : [c1, c2];
+          }
+          const stage = _buildSceneStage(bgUrl, stageChars, false);
+          stage.onclick = () => {
+            const lb = _ensureShotLightbox();
+            lb.innerHTML = '';
+            lb.appendChild(_buildSceneStage(bgUrl, stageChars, true));
+            lb.classList.add('open');
+          };
+          gallery.appendChild(stage);
+        });
+        return;
+      }
+
+      if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-images" style="color: var(--accent-cyan);"></i> Screenshots';
+      if (!list.length) {
+        card.hidden = true;
+        if (layout) layout.classList.remove('has-screenshots');
+        return;
+      }
+      card.hidden = false;
+      if (layout) layout.classList.add('has-screenshots');
+
+      list.forEach(rawUrl => {
+        const proxied = '/img?u=' + encodeURIComponent(rawUrl) + '&nocache=1';
+        const stage = document.createElement('div');
+        stage.className = 'shot-stage shot-landscape';
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.alt = 'Repository screenshot';
+        img.src = proxied;
+        img.onload = () => {
+          const ratio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+          stage.classList.remove('shot-portrait', 'shot-landscape', 'shot-square');
+          if (ratio < 0.85) stage.classList.add('shot-portrait');
+          else if (ratio >= 1.25) stage.classList.add('shot-landscape');
+          else stage.classList.add('shot-square');
+        };
+        img.onerror = () => {
+          stage.remove();
+          if (!gallery.children.length) {
+            card.hidden = true;
+            if (layout) layout.classList.remove('has-screenshots');
+          }
+        };
+        stage.onclick = () => {
+          const lb = _ensureShotLightbox();
+          lb.innerHTML = '<img alt="Zoomed screenshot">';
+          lb.querySelector('img').src = proxied;
+          lb.classList.add('open');
+        };
+        stage.appendChild(img);
+        gallery.appendChild(stage);
+      });
+    }
+
     function applyScaleToProjectHeader(p) {
       if (!p) return;
       const rep = p.full_report || {};
@@ -3991,6 +4332,10 @@
 
         // Grade, Score & Standing (respects Raw Rubric vs Bell Curve toggle)
         applyScaleToProjectHeader(p);
+        renderProjectScreenshots(
+          (rep && rep.screenshots) || p.screenshots || [],
+          (rep && rep.asset_preview) || p.asset_preview || {},
+        );
 
 
         const deleteBtn = document.getElementById('btn-delete-project-admin');
@@ -6192,6 +6537,28 @@ ${t.status === 'running' ? `
       }
     }
 
+    async function triggerBackfillScreenshots() {
+      const btn = document.getElementById('btn-backfill-screenshots');
+      const status = document.getElementById('reclassify-status');
+      const origText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning GitHub...';
+      try {
+        const res = await fetch('/api/admin/backfill-screenshots', { method: 'POST' });
+        const data = await res.json();
+        status.style.color = res.ok ? 'var(--accent-green)' : 'var(--danger)';
+        status.textContent = res.ok ? data.message : ('Error: ' + (data.detail || 'could not backfill screenshots.'));
+        status.hidden = false;
+      } catch (err) {
+        status.style.color = 'var(--danger)';
+        status.textContent = 'Failed to backfill screenshots: ' + err.message;
+        status.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+      }
+    }
+
     async function triggerClearDatabase() {
       if (!confirm("⚠️ DANGER: Are you absolutely sure you want to wipe the entire database?\n\nThis will permanently delete all projects, scorecards, historical badges, and queue items. This cannot be undone!")) {
           return;
@@ -6226,5 +6593,6 @@ ${t.status === 'running' ? `
     }
 
   </script>
+  <script src="/static/chat-widget.js"></script>
 </body>
 </html>

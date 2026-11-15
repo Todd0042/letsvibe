@@ -240,6 +240,32 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, github_id)
         );
+        CREATE TABLE IF NOT EXISTS chat_threads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            github_id TEXT NOT NULL UNIQUE,
+            username TEXT NOT NULL,
+            avatar_url TEXT,
+            unread_admin INTEGER NOT NULL DEFAULT 0,
+            unread_user INTEGER NOT NULL DEFAULT 0,
+            last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+            sender_role TEXT NOT NULL,
+            sender_username TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS chat_message_tags (
+            message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+            tag TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (message_id, tag)
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
+        CREATE INDEX IF NOT EXISTS idx_chat_tags_tag ON chat_message_tags(tag, message_id);
         """)
         # Safe migrations for existing databases
         try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
@@ -1749,6 +1775,7 @@ def delete_user_account(github_id: str, username: str, db_path: Path = DEFAULT_D
             conn.execute("UPDATE projects SET submitted_by_user_id = NULL WHERE submitted_by_user_id = ?", (github_id,))
             conn.execute("UPDATE projects SET claimed_by_user_id = NULL WHERE claimed_by_user_id = ?", (github_id,))
             conn.execute("DELETE FROM project_upvotes WHERE github_id = ?", (github_id,))
+            conn.execute("DELETE FROM chat_threads WHERE github_id = ?", (github_id,))
             cur = conn.execute("DELETE FROM users WHERE github_id = ?", (github_id,))
             return cur.rowcount > 0
     finally:
@@ -1869,6 +1896,12 @@ def export_user_data(github_id: str, username: str, db_path: Path = DEFAULT_DB_P
             "FROM error_reports WHERE lower(owner) = lower(?) ORDER BY id",
             (username,),
         ).fetchall()
+        chats = conn.execute(
+            "SELECT m.sender_role, m.sender_username, m.body, m.created_at "
+            "FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id "
+            "WHERE t.github_id = ? ORDER BY m.id",
+            (github_id,),
+        ).fetchall()
         return {
             "exported_at": datetime.now().isoformat(),
             "account": dict(user) if user else None,
@@ -1879,6 +1912,7 @@ def export_user_data(github_id: str, username: str, db_path: Path = DEFAULT_DB_P
             "badges": [dict(b) for b in badges],
             "appeals": [dict(r) for r in appeals],
             "queue_history": [dict(r) for r in queue],
+            "direct_messages": [dict(r) for r in chats],
         }
     finally:
         conn.close()
@@ -2461,6 +2495,91 @@ def update_report_classification(
         conn.close()
 
 
+def list_github_projects_missing_screenshots(
+    db_path: Optional[Path] = None,
+    only_missing: bool = True,
+) -> List[Dict[str, str]]:
+    """Returns latest GitHub project reports (all when `only_missing=False`, else only those missing visuals)."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT p.owner, p.repo_name, p.full_slug, r.report_data_json
+            FROM projects p
+            JOIN reports r ON r.id = (
+                SELECT r2.id FROM reports r2
+                WHERE r2.project_id = p.id
+                ORDER BY (COALESCE(r2.is_test, 0) = 0) DESC, COALESCE(r2.rubric_rank, 0) DESC, r2.id DESC
+                LIMIT 1
+            )
+            WHERE p.provider = 'github'
+            ORDER BY r.id DESC
+            """
+        ).fetchall()
+        missing: List[Dict[str, str]] = []
+        for row in rows:
+            shots: Any = None
+            preview: Any = None
+            blob = row["report_data_json"]
+            if only_missing and blob:
+                try:
+                    parsed = json.loads(blob)
+                    shots = parsed.get("screenshots")
+                    preview = parsed.get("asset_preview")
+                except (ValueError, TypeError, AttributeError):
+                    shots = None
+                    preview = None
+            if not only_missing or (not shots and not preview):
+                missing.append({
+                    "owner": row["owner"],
+                    "repo_name": row["repo_name"],
+                    "full_slug": row["full_slug"],
+                })
+        return missing
+    finally:
+        conn.close()
+
+
+def update_report_screenshots(
+    full_slug: str,
+    screenshots: List[str],
+    asset_preview: Optional[Dict[str, List[str]]] = None,
+    db_path: Optional[Path] = None,
+) -> Optional[int]:
+    """Writes `screenshots` (and optional `asset_preview`) into `report_data_json` for all reports of `full_slug`."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            rows = conn.execute(
+                "SELECT id, report_data_json FROM reports WHERE full_slug = ? ORDER BY id DESC",
+                (full_slug,),
+            ).fetchall()
+            if not rows:
+                return None
+            updated_id: Optional[int] = None
+            for row in rows:
+                if not row["report_data_json"]:
+                    continue
+                try:
+                    data = json.loads(row["report_data_json"])
+                except (ValueError, TypeError):
+                    continue
+                data["screenshots"] = list(screenshots)
+                if asset_preview is not None:
+                    data["asset_preview"] = asset_preview
+                conn.execute(
+                    "UPDATE reports SET report_data_json = ? WHERE id = ?",
+                    (json.dumps(data), row["id"]),
+                )
+                if updated_id is None:
+                    updated_id = row["id"]
+            return updated_id
+    finally:
+        conn.close()
+
+
 MAX_OPEN_CONTENT_REPORTS_PER_USER = 3
 MAX_CONTENT_REPORTS_PER_USER_24H = 5
 
@@ -2661,5 +2780,368 @@ def get_upvote_map(
             for r in conn.execute("SELECT project_id FROM project_upvotes WHERE github_id = ?", (viewer_github_id,)):
                 mine.add(int(r["project_id"]))
         return counts, mine
+    finally:
+        conn.close()
+
+
+# ==========================================
+# Direct Chat & Admin Message Tagging
+# ==========================================
+
+MAX_CHAT_BODY_LEN = 2000
+MAX_USER_CHAT_PER_HOUR = 20
+
+
+def _normalize_chat_tag(raw: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9_-]+", "-", (raw or "").strip().lower()).strip("-")
+    return cleaned[:32]
+
+
+def _attach_message_tags(conn: sqlite3.Connection, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not messages:
+        return messages
+    msg_ids = [int(m["id"]) for m in messages]
+    placeholders = ",".join("?" for _ in msg_ids)
+    tag_rows = conn.execute(
+        f"SELECT message_id, tag FROM chat_message_tags WHERE message_id IN ({placeholders}) ORDER BY tag ASC",
+        msg_ids,
+    ).fetchall()
+    tags_by_id: Dict[int, List[str]] = {}
+    for row in tag_rows:
+        tags_by_id.setdefault(int(row["message_id"]), []).append(row["tag"])
+    for m in messages:
+        m["tags"] = tags_by_id.get(int(m["id"]), [])
+    return messages
+
+
+def get_user_chat_unread_count(github_id: str, db_path: Path = DEFAULT_DB_PATH) -> int:
+    if not github_id:
+        return 0
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT unread_user FROM chat_threads WHERE github_id = ?",
+            (str(github_id),),
+        ).fetchone()
+        return int(row["unread_user"]) if row else 0
+    finally:
+        conn.close()
+
+
+def get_user_chat_thread(
+    github_id: str,
+    username: str,
+    avatar_url: Optional[str] = None,
+    mark_read: bool = False,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Dict[str, Any]:
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            row = conn.execute(
+                "SELECT * FROM chat_threads WHERE github_id = ?",
+                (str(github_id),),
+            ).fetchone()
+            if not row:
+                return {"thread_id": None, "unread_user": 0, "messages": []}
+            if mark_read and int(row["unread_user"] or 0) > 0:
+                conn.execute(
+                    "UPDATE chat_threads SET unread_user = 0 WHERE id = ?",
+                    (row["id"],),
+                )
+            elif username and (row["username"] != username or (avatar_url and row["avatar_url"] != avatar_url)):
+                conn.execute(
+                    "UPDATE chat_threads SET username = ?, avatar_url = COALESCE(?, avatar_url) WHERE id = ?",
+                    (username, avatar_url, row["id"]),
+                )
+            msgs = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT id, thread_id, sender_role, sender_username, body, created_at "
+                    "FROM chat_messages WHERE thread_id = ? ORDER BY id ASC",
+                    (row["id"],),
+                ).fetchall()
+            ]
+            return {
+                "thread_id": int(row["id"]),
+                "unread_user": 0 if mark_read else int(row["unread_user"] or 0),
+                "messages": msgs,
+            }
+    finally:
+        conn.close()
+
+
+def send_user_chat_message(
+    github_id: str,
+    username: str,
+    avatar_url: Optional[str],
+    body: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Dict[str, Any]:
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("Message cannot be empty.")
+    if len(text) > MAX_CHAT_BODY_LEN:
+        raise ValueError(f"Message exceeds {MAX_CHAT_BODY_LEN} characters.")
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            now_iso = datetime.now().isoformat()
+            row = conn.execute(
+                "SELECT id FROM chat_threads WHERE github_id = ?",
+                (str(github_id),),
+            ).fetchone()
+            if row:
+                thread_id = int(row["id"])
+                recent = conn.execute(
+                    "SELECT COUNT(*) AS c FROM chat_messages "
+                    "WHERE thread_id = ? AND sender_role = 'user' "
+                    "AND datetime(created_at) >= datetime('now', '-1 hour')",
+                    (thread_id,),
+                ).fetchone()
+                if recent and int(recent["c"]) >= MAX_USER_CHAT_PER_HOUR:
+                    raise ValueError("Rate limit reached: please wait a bit before sending more messages.")
+                conn.execute(
+                    "UPDATE chat_threads SET username = ?, avatar_url = COALESCE(?, avatar_url), "
+                    "unread_admin = unread_admin + 1, unread_user = 0, last_message_at = ? WHERE id = ?",
+                    (username, avatar_url, now_iso, thread_id),
+                )
+            else:
+                cur = conn.execute(
+                    "INSERT INTO chat_threads (github_id, username, avatar_url, unread_admin, unread_user, last_message_at, created_at) "
+                    "VALUES (?, ?, ?, 1, 0, ?, ?)",
+                    (str(github_id), username, avatar_url, now_iso, now_iso),
+                )
+                thread_id = int(cur.lastrowid)
+            cur = conn.execute(
+                "INSERT INTO chat_messages (thread_id, sender_role, sender_username, body, created_at) "
+                "VALUES (?, 'user', ?, ?, ?)",
+                (thread_id, username, text, now_iso),
+            )
+            msg = conn.execute(
+                "SELECT id, thread_id, sender_role, sender_username, body, created_at FROM chat_messages WHERE id = ?",
+                (cur.lastrowid,),
+            ).fetchone()
+            return dict(msg)
+    finally:
+        conn.close()
+
+
+def get_admin_chat_unread_count(db_path: Path = DEFAULT_DB_PATH) -> int:
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        row = conn.execute("SELECT COALESCE(SUM(unread_admin), 0) AS total FROM chat_threads").fetchone()
+        return int(row["total"] or 0) if row else 0
+    finally:
+        conn.close()
+
+
+def list_admin_chat_threads(
+    search: str = "",
+    sort: str = "unread",
+    db_path: Path = DEFAULT_DB_PATH,
+) -> List[Dict[str, Any]]:
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        order_clause = {
+            "newest": "t.last_message_at DESC, t.id DESC",
+            "oldest": "t.last_message_at ASC, t.id ASC",
+        }.get(sort, "(t.unread_admin > 0) DESC, t.last_message_at DESC, t.id DESC")
+
+        params: List[Any] = []
+        where_clause = ""
+        q = (search or "").strip().lower()
+        if q:
+            where_clause = "WHERE lower(t.username) LIKE ?"
+            params.append(f"%{q}%")
+
+        rows = conn.execute(
+            f"""
+            SELECT t.id, t.github_id, t.username, t.avatar_url, t.unread_admin, t.unread_user,
+                   t.last_message_at, t.created_at,
+                   (SELECT body FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.id DESC LIMIT 1) AS last_body,
+                   (SELECT sender_role FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.id DESC LIMIT 1) AS last_sender_role,
+                   (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id = t.id) AS message_count
+            FROM chat_threads t
+            {where_clause}
+            ORDER BY {order_clause}
+            """,
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_admin_chat_thread(
+    thread_id: int,
+    mark_read: bool = True,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[Dict[str, Any]]:
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            row = conn.execute("SELECT * FROM chat_threads WHERE id = ?", (thread_id,)).fetchone()
+            if not row:
+                return None
+            if mark_read and int(row["unread_admin"] or 0) > 0:
+                conn.execute("UPDATE chat_threads SET unread_admin = 0 WHERE id = ?", (thread_id,))
+            msgs = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT id, thread_id, sender_role, sender_username, body, created_at "
+                    "FROM chat_messages WHERE thread_id = ? ORDER BY id ASC",
+                    (thread_id,),
+                ).fetchall()
+            ]
+            _attach_message_tags(conn, msgs)
+            thread = dict(row)
+            if mark_read:
+                thread["unread_admin"] = 0
+            thread["messages"] = msgs
+            return thread
+    finally:
+        conn.close()
+
+
+def reply_admin_chat_thread(
+    thread_id: int,
+    admin_username: str,
+    body: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[Dict[str, Any]]:
+    text = (body or "").strip()
+    if not text:
+        raise ValueError("Reply cannot be empty.")
+    if len(text) > MAX_CHAT_BODY_LEN:
+        raise ValueError(f"Reply exceeds {MAX_CHAT_BODY_LEN} characters.")
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            row = conn.execute("SELECT id FROM chat_threads WHERE id = ?", (thread_id,)).fetchone()
+            if not row:
+                return None
+            now_iso = datetime.now().isoformat()
+            cur = conn.execute(
+                "INSERT INTO chat_messages (thread_id, sender_role, sender_username, body, created_at) "
+                "VALUES (?, 'admin', ?, ?, ?)",
+                (thread_id, admin_username, text, now_iso),
+            )
+            conn.execute(
+                "UPDATE chat_threads SET unread_user = unread_user + 1, unread_admin = 0, last_message_at = ? WHERE id = ?",
+                (now_iso, thread_id),
+            )
+            msg = dict(
+                conn.execute(
+                    "SELECT id, thread_id, sender_role, sender_username, body, created_at FROM chat_messages WHERE id = ?",
+                    (cur.lastrowid,),
+                ).fetchone()
+            )
+            msg["tags"] = []
+            return msg
+    finally:
+        conn.close()
+
+
+def add_chat_message_tag(
+    message_id: int,
+    raw_tag: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[List[str]]:
+    tag = _normalize_chat_tag(raw_tag)
+    if not tag:
+        raise ValueError("Tag must contain letters or numbers.")
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            exists = conn.execute("SELECT id FROM chat_messages WHERE id = ?", (message_id,)).fetchone()
+            if not exists:
+                return None
+            conn.execute(
+                "INSERT OR IGNORE INTO chat_message_tags (message_id, tag) VALUES (?, ?)",
+                (message_id, tag),
+            )
+            rows = conn.execute(
+                "SELECT tag FROM chat_message_tags WHERE message_id = ? ORDER BY tag ASC",
+                (message_id,),
+            ).fetchall()
+            return [r["tag"] for r in rows]
+    finally:
+        conn.close()
+
+
+def remove_chat_message_tag(
+    message_id: int,
+    raw_tag: str,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> Optional[List[str]]:
+    tag = _normalize_chat_tag(raw_tag)
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            exists = conn.execute("SELECT id FROM chat_messages WHERE id = ?", (message_id,)).fetchone()
+            if not exists:
+                return None
+            if tag:
+                conn.execute(
+                    "DELETE FROM chat_message_tags WHERE message_id = ? AND tag = ?",
+                    (message_id, tag),
+                )
+            rows = conn.execute(
+                "SELECT tag FROM chat_message_tags WHERE message_id = ? ORDER BY tag ASC",
+                (message_id,),
+            ).fetchall()
+            return [r["tag"] for r in rows]
+    finally:
+        conn.close()
+
+
+def list_admin_chat_tags(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT tag, COUNT(*) AS count FROM chat_message_tags GROUP BY tag ORDER BY count DESC, tag ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_admin_chat_messages_by_tag(
+    tag: str,
+    sort: str = "newest",
+    db_path: Path = DEFAULT_DB_PATH,
+) -> List[Dict[str, Any]]:
+    norm = _normalize_chat_tag(tag)
+    if not norm:
+        return []
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        order = "m.created_at ASC, m.id ASC" if sort == "oldest" else "m.created_at DESC, m.id DESC"
+        rows = conn.execute(
+            f"""
+            SELECT m.id, m.thread_id, m.sender_role, m.sender_username, m.body, m.created_at,
+                   t.username AS thread_username, t.avatar_url AS thread_avatar_url
+            FROM chat_message_tags mt
+            JOIN chat_messages m ON m.id = mt.message_id
+            JOIN chat_threads t ON t.id = m.thread_id
+            WHERE mt.tag = ?
+            ORDER BY {order}
+            """,
+            (norm,),
+        ).fetchall()
+        msgs = [dict(r) for r in rows]
+        return _attach_message_tags(conn, msgs)
     finally:
         conn.close()

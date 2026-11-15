@@ -72,12 +72,12 @@ def purge_owner(owner: str) -> int:
     return removed
 
 
-def fetch_image(url: str) -> Optional[Tuple[bytes, str]]:
-    """Returns (bytes, content_type) for an allowed image URL, from cache when possible; None otherwise."""
+def fetch_image(url: str, cache: bool = True) -> Optional[Tuple[bytes, str]]:
+    """Returns (bytes, content_type) for an allowed image URL; skips disk cache when cache=False."""
     if not is_allowed(url):
         return None
     data_path, type_path = _cache_paths(url)
-    if data_path.exists() and type_path.exists():
+    if cache and data_path.exists() and type_path.exists():
         return data_path.read_bytes(), type_path.read_text().strip()
 
     current = url
@@ -98,10 +98,11 @@ def fetch_image(url: str) -> Optional[Tuple[bytes, str]]:
             body = resp.content
             if len(body) > MAX_BYTES:
                 return None
-            CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            data_path.write_bytes(body)
-            type_path.write_text(ctype)
-            data_path.with_suffix(".owner").write_text(owner_of(url))
+            if cache:
+                CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                data_path.write_bytes(body)
+                type_path.write_text(ctype)
+                data_path.with_suffix(".owner").write_text(owner_of(url))
             return body, ctype
     return None
 
