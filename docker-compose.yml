@@ -16,8 +16,12 @@ services:
     environment:
       - LETSVIBE_DB_PATH=/app/data/letsvibe.db
       - LETSVIBE_BACKUP_DIR=/backups
+      - LETSVIBE_TEMPLATES_DIR=/app/web/templates
+      - LETSVIBE_STATIC_DIR=/app/web/static
       - PYTHONPATH=/engine
     volumes:
       - ./data:/app/data
       - /home/todd/letsvibe-backups:/backups
+      - ./letsvibe/web/templates:/app/web/templates:ro
+      - ./letsvibe/web/static:/app/web/static:ro
       - ${LETSVIBE_ENGINE_PATH:-../letsvibe-engine}:/engine:ro

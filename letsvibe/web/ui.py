@@ -4,10 +4,15 @@ Loads and prepares the frontend dashboard HTML.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
-TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR = (
+    Path(os.environ["LETSVIBE_TEMPLATES_DIR"])
+    if os.environ.get("LETSVIBE_TEMPLATES_DIR")
+    else (Path(__file__).parent / "templates")
+)
 
 # Content pages: slug -> (title, meta description). Bodies live in templates/pages/<slug>.html
 PAGES = {

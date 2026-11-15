@@ -139,13 +139,55 @@ from ..core.models import VibeReport
 from .worker import AuditQueueWorker
 
 
-worker: Optional[AuditQueueWorker] = None
+class _RemoteWorkerProxy:
+    """Proxies queue worker status and control calls to the standalone letsvibe-worker daemon."""
+
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
+
+    @property
+    def current_task_info(self) -> Optional[Dict[str, Any]]:
+        try:
+            res = httpx.get(f"{self.base_url}/status", timeout=1.0)
+            if res.status_code == 200:
+                return res.json().get("worker_running")
+        except Exception:  # nosec B110 - worker may be restarting
+            return None
+        return None
+
+    def request_stop(self, task_id: int) -> bool:
+        try:
+            res = httpx.post(f"{self.base_url}/stop/{int(task_id)}", timeout=2.0)
+            return res.status_code == 200 and bool(res.json().get("ok"))
+        except Exception:
+            return False
+
+    def process_task_now(self, task_id: int) -> bool:
+        try:
+            res = httpx.post(f"{self.base_url}/run-now/{int(task_id)}", timeout=2.0)
+            return res.status_code == 200 and bool(res.json().get("ok"))
+        except Exception:
+            return False
+
+
+worker: Optional[Any] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global worker
-    # 1. Clean up orphaned temporary clone directories from previous crashes
+    external_worker = os.environ.get("LETSVIBE_EXTERNAL_WORKER", "").strip().lower() in ("1", "true", "yes")
+
+    # 1. Initialize DB
+    init_db()
+
+    if external_worker:
+        worker = _RemoteWorkerProxy(os.environ.get("LETSVIBE_WORKER_URL", "http://127.0.0.1:8099"))
+        yield
+        worker = None
+        return
+
+    # 2. Clean up orphaned temporary clone directories from previous crashes
     temp_pattern = os.path.join(tempfile.gettempdir(), "letsvibe_clone_*")
     for orphan_dir in glob.glob(temp_pattern):
         try:
@@ -153,8 +195,7 @@ async def lifespan(app: FastAPI):
         except Exception:  # nosec B110 - deliberate best-effort fallback
             pass
 
-    # 2. Initialize DB and recover any zombie tasks left running
-    init_db()
+    # 3. Recover any zombie tasks left running
     conn = get_db_connection()
     try:
         with conn:
@@ -170,16 +211,16 @@ async def lifespan(app: FastAPI):
     finally:
         conn.close()
 
-    # 3. Check and start Ollama in background if needed
+    # 4. Check and start Ollama in background if needed
     client = OllamaClient()
     if not client.is_running():
         client.ensure_server_running(timeout_sec=5.0)
 
-    # 4. Start background queue worker
+    # 5. Start background queue worker
     worker = AuditQueueWorker()
     worker.start()
 
-    # 5. Weekly rolling backups (2 kept); deletions are applied to them too
+    # 6. Weekly rolling backups (2 kept); deletions are applied to them too
     backup_scheduler.start()
 
     yield
@@ -409,7 +450,11 @@ async def security_headers_and_csrf_middleware(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "same-origin")
     return response
 
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = (
+    Path(os.environ["LETSVIBE_STATIC_DIR"])
+    if os.environ.get("LETSVIBE_STATIC_DIR")
+    else (Path(__file__).parent / "static")
+)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
