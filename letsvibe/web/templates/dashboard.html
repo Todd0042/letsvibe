@@ -1255,9 +1255,12 @@
       min-width: 0;
     }
     @media (min-width: 1220px) {
+      .container:has(#project-layout.has-screenshots) {
+        max-width: min(1680px, calc(100vw - 2rem));
+      }
       .project-layout.has-screenshots {
         display: grid;
-        grid-template-columns: 360px minmax(0, 1fr);
+        grid-template-columns: 380px minmax(0, 1fr);
         gap: 1.5rem;
         align-items: start;
       }
