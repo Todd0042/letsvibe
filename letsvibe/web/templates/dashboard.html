@@ -1812,6 +1812,15 @@
       <section class="podium-container">
         <h1 class="podium-title">🏆 Top Graded Vibe-Coded Repositories</h1>
         <p class="podium-subtitle">Graded 100% locally on what people experience: value, creativity and the user journey</p>
+        <div class="optin-subbanner" style="display: flex; align-items: center; justify-content: center; gap: 0.65rem; flex-wrap: wrap; margin: 0.65rem auto 1.4rem;">
+          <span style="display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.36rem 0.85rem; border-radius: 999px; background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.24); color: #cbd5e1; font-size: 0.8rem;">
+            <i class="fa-solid fa-lock" style="color: var(--accent-cyan);"></i>
+            <span><strong style="color: #fff;">Strict Opt-In Policy:</strong> Only repo owners can submit via GitHub OAuth</span>
+          </span>
+          <button type="button" class="btn btn-primary" style="padding: 0.38rem 0.95rem; font-size: 0.82rem; border-radius: 999px;" onclick="openSubmitModal()">
+            <i class="fa-solid fa-plus"></i> Grade Your Repo Free
+          </button>
+        </div>
         <div class="podium-grid" id="podium-cards">
           <div style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">Loading podium rankings...</div>
         </div>
@@ -3871,6 +3880,11 @@
       }
     }
 
+    function ownerFlairPill(owner) {
+      if (String(owner || '').toLowerCase() !== 'todd0042') return '';
+      return ' <span class="meta-tag" title="Reference benchmark run by the LetsVibe creator while founding community slots fill" style="font-size: 0.65rem; padding: 0.1rem 0.45rem; border-color: rgba(245, 158, 11, 0.38); color: #fbbf24; background: rgba(245, 158, 11, 0.1);">Creator Benchmark</span>';
+    }
+
     function renderPodium(top3) {
       const container = document.getElementById('podium-cards');
       if (!top3 || top3.length === 0) {
@@ -3899,7 +3913,7 @@
             <img src="${appIcon}" class="podium-avatar" alt="${escapeHtml(displayRepoName)}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
             <div class="podium-repo">${escapeHtml(displayRepoName)}${isTestRow ? ' <span class="test-tag" title="Admin test grading: only you can see this result"><i class="fa-solid fa-flask"></i> Test</span>' : ''}${item.rubric_version ? ` <span class="meta-tag" title="Graded with ${escapeHtml(item.rubric_version)}" style="font-size: 0.65rem;">${escapeHtml(item.rubric_version)}</span>` : ''}</div>
             <div class="podium-owner">
-              <img src="${creatorAvatar}" class="creator-mini-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}
+              <img src="${creatorAvatar}" class="creator-mini-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}${ownerFlairPill(item.owner)}
             </div>
             <div class="score-spark-row">${scorePill(item, false)}${sparkUpvoteBtn(item)}</div>
             <div class="podium-archetype">${escapeHtml(item.archetype_name || 'Software Project')}</div>
@@ -3949,7 +3963,7 @@
                   <div class="repo-header-line">
                     <span class="repo-title" title="${escapeHtml(item.full_slug)}" onclick="navigateTo('project', '${escapeHtml(item.full_slug)}'${targetRepArg})">${escapeHtml(displayRepoName)}${isTestRow ? ' <span class="test-tag" title="Admin test grading: only you can see this result"><i class="fa-solid fa-flask"></i> Test</span>' : ''}${item.rubric_version ? ` <span class="meta-tag" title="Graded with ${escapeHtml(item.rubric_version)}" style="font-size: 0.65rem;">${escapeHtml(item.rubric_version)}</span>` : ''}</span>
                     <span class="repo-meta">
-                      <img src="${creatorAvatar}" class="creator-micro-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)} • ${escapeHtml(item.primary_language || 'Code')} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC
+                      <img src="${creatorAvatar}" class="creator-micro-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}${ownerFlairPill(item.owner)} • ${escapeHtml(item.primary_language || 'Code')} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC
                     </span>
                   </div>
                 </div>
