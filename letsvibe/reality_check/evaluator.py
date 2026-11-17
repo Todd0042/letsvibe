@@ -92,7 +92,7 @@ Rules:
   "pricing_recommendation": {
     "suggested_price": "<realistic price + billing cadence, $0 (Free/OSS), or Do Not Monetize>",
     "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
-    "reasoning": "2-3 blunt sentences explaining what price—compared to happy, established competitors—would actually lead to sales, or why even free won't make users switch."
+    "reasoning": "2-3 blunt sentences comparing actual competitor dollar prices, value delivered, and the size/satisfaction of their existing user bases to explain what price—if any—would actually win sales."
   },
   "marketing_playbook": {
     "difficulty": "Brutal | Hard | Moderate",
