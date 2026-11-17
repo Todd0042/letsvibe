@@ -1,0 +1,16 @@
+name = "letsvibe-anna-worker"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+account_id = "bdd9bdc9985a946811787e55ff2e446b"
+
+routes = [
+  { pattern = "anna-api.todd0042.dev", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "letsvibe-anna-db"
+database_id = "25adcd69-413f-4cdd-80a4-bd6cea66c76b"
+
+[triggers]
+crons = ["0 3 * * *"]
