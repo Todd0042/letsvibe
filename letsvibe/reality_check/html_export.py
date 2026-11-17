@@ -23,8 +23,8 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
     dim_rows = "".join(
         f"<tr><td><strong>{_esc(d.get('label') or k)}</strong></td>"
         f"<td>{int(d.get('weight') or 0)}%</td>"
-        f"<td style='color:#22d3ee;font-weight:700;white-space:nowrap'>{float(d.get('score') or 0):.1f}/100"
-        f"<div class='lv-bar'><div class='lv-bar-fill' style='width:{min(100, max(0, float(d.get('score') or 0))):.1f}%'></div></div></td>"
+        f"<td style='color:#22d3ee;font-weight:700;white-space:nowrap'>{float(d.get('score') or 0):.1f}/10"
+        f"<div class='lv-bar'><div class='lv-bar-fill' style='width:{min(100, max(0, float(d.get('score') or 0) * 10.0)):.1f}%'></div></div></td>"
         f"<td>{_esc(d.get('reasoning'))}</td></tr>"
         for k, d in dims.items()
         if isinstance(d, dict)
@@ -103,7 +103,7 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
     </div>
     <div class="grade">
       <div class="letter">{_esc(verdict)}</div>
-      <div class="pts">{float(report.get('viability_score') or 0):.1f} / 100</div>
+      <div class="pts">{float(report.get('viability_score') or 0):.1f} / 10</div>
       <div class="scale-tag">Viability Score</div>
     </div>
   </div>

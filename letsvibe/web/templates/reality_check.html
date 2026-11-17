@@ -258,8 +258,8 @@
         return `<tr>
           <td><strong>${esc(d.label || k)}</strong></td>
           <td>${Number(d.weight || 0)}%</td>
-          <td style="color:#22d3ee;font-weight:700;white-space:nowrap">${sc.toFixed(1)}/100
-            <div class="lv-bar"><div class="lv-bar-fill" style="width:${Math.min(100, Math.max(0, sc))}%"></div></div>
+          <td style="color:#22d3ee;font-weight:700;white-space:nowrap">${sc.toFixed(1)}/10
+            <div class="lv-bar"><div class="lv-bar-fill" style="width:${Math.min(100, Math.max(0, sc * 10))}%"></div></div>
           </td>
           <td>${esc(d.reasoning)}</td>
         </tr>`;
@@ -302,7 +302,7 @@
             </div>
             <div class="verdict-stamp ${cls}">
               <div class="v-label">${esc(v)}</div>
-              <div class="v-score">${Number(rep.viability_score || 0).toFixed(1)} / 100</div>
+              <div class="v-score">${Number(rep.viability_score || 0).toFixed(1)} / 10</div>
               <div class="muted" style="font-size:0.75rem;">Viability Score</div>
             </div>
           </div>

@@ -18,7 +18,8 @@ Rules:
 1. NEVER kiss ass or use empty flattery ("Exciting idea!", "Great potential!", "Innovative concept!"). Be clinical, direct, and realistic.
 2. Ground your saturation assessment in the real GitHub/npm market data provided AND your knowledge of existing commercial/open-source incumbents.
 3. Evaluate the user's "unique twist" skeptically: is it a real moat, or a minor setting an incumbent can add in 10 minutes?
-4. Output STRICT JSON ONLY matching this schema:
+4. ALL dimension `score` values and `viability_score` MUST be on a **0 to 10** scale (e.g. `1` = garbage, `5` = mediocre, `8` = strong, `9` = exceptional). Keep `saturation_pct` as a 0–100 percentage.
+5. Output STRICT JSON ONLY matching this schema:
 {
   "verdict": "DO NOT BUILD | NICHE ONLY | ACTUALLY VIABLE",
   "headline": "Blunt 5-10 word verdict headline",
@@ -31,39 +32,39 @@ Rules:
   "dimensions": {
     "market_saturation": {
       "label": "Market Saturation & Crowding",
-      "score": 0,
+      "score": 5,
       "weight": 25,
-      "reasoning": "2-3 detailed sentences citing existing competitors and crowd density (higher score = LESS saturated / better opportunity)."
+      "reasoning": "0-10 score + 2-3 detailed sentences citing existing competitors and crowd density (higher score = LESS saturated / better opportunity)."
     },
     "switching_friction": {
       "label": "Switching Motivation",
-      "score": 0,
+      "score": 5,
       "weight": 20,
-      "reasoning": "2-3 detailed sentences on why users would or wouldn't leave their current tool (higher score = stronger reason to switch)."
+      "reasoning": "0-10 score + 2-3 detailed sentences on why users would or wouldn't leave their current tool (higher score = stronger reason to switch)."
     },
     "niche_moat": {
       "label": "Niche Twist & Moat",
-      "score": 0,
+      "score": 5,
       "weight": 20,
-      "reasoning": "2-3 detailed sentences auditing whether the user's twist is defensible or trivial."
+      "reasoning": "0-10 score + 2-3 detailed sentences auditing whether the user's twist is defensible or trivial."
     },
     "real_demand": {
       "label": "Real Demand & Distribution",
-      "score": 0,
+      "score": 5,
       "weight": 15,
-      "reasoning": "2-3 detailed sentences on whether real people actively look for/pay for this."
+      "reasoning": "0-10 score + 2-3 detailed sentences on whether real people actively look for/pay for this."
     },
     "effort_vs_payoff": {
       "label": "Build Effort vs. Payoff",
-      "score": 0,
+      "score": 5,
       "weight": 10,
-      "reasoning": "2-3 detailed sentences comparing engineering time to realistic adoption."
+      "reasoning": "0-10 score + 2-3 detailed sentences comparing engineering time to realistic adoption."
     },
     "wrapper_risk": {
       "label": "Anti-Slop / Originality",
-      "score": 0,
+      "score": 5,
       "weight": 10,
-      "reasoning": "2-3 detailed sentences on whether this is a thin AI/CRUD wrapper vs. genuine engineering (higher score = NOT slop)."
+      "reasoning": "0-10 score + 2-3 detailed sentences on whether this is a thin AI/CRUD wrapper vs. genuine engineering (higher score = NOT slop)."
     }
   },
   "existing_competitors": [
@@ -150,7 +151,19 @@ def evaluate_idea(
     npm_txt = "\n".join(
         f"- {p['name']}: {p['description']}"
         for p in (grounding.get("npm_top_packages") or [])
-    ) or "(none checked)"
+    ) or "(none)"
+    app_txt = "\n".join(
+        f"- {a['name']} ({a['price']}, {a['rating']}★, {a['reviews']} reviews)"
+        for a in (grounding.get("app_store_hits") or [])
+    ) or "(none)"
+    hn_txt = "\n".join(
+        f"- {h['title']} ({h['points']} pts, {h['comments']} comments)"
+        for h in (grounding.get("hn_stories") or [])
+    ) or "(none)"
+    so_txt = "\n".join(
+        f"- {q['title']} (score {q['score']})"
+        for q in (grounding.get("so_questions") or [])
+    ) or "(none)"
 
     user_prompt = f"""{tone_note}
 
@@ -161,14 +174,19 @@ App Idea Pitch:
 Supposed Unique Twist / Niche Feature:
 {twist or "(none provided)"}
 
-Live Market Grounding:
-- Search keywords: {', '.join(grounding.get('keywords') or [])}
+Live Market Grounding (query: "{grounding.get('query', '')}"):
 - GitHub matching repositories: {grounding.get('github_total_count', 0)} total
 Top GitHub matches:
 {repos_txt}
 - npm matching packages: {grounding.get('npm_total_count', 0)} total
 Top npm matches:
 {npm_txt}
+- Apple App Store / macOS Store matches:
+{app_txt}
+- Hacker News stories ({grounding.get('hn_total_hits', 0)} total):
+{hn_txt}
+- Stack Overflow top questions:
+{so_txt}
 """
 
     emit("Acquiring shared AI engine turn (round-robin with LetsVibe)...", 35)
@@ -185,18 +203,24 @@ Top npm matches:
     total_w = 0.0
     for key, d in dims.items():
         if isinstance(d, dict):
-            sc = max(0.0, min(100.0, float(d.get("score") or 0.0)))
+            sc = float(d.get("score") or 0.0)
+            if sc > 10.0:
+                sc = sc / 10.0
+            sc = max(0.0, min(10.0, sc))
             w = float(d.get("weight") or 0.0)
             d["score"] = round(sc, 1)
             weighted_sum += sc * w
             total_w += w
-    computed_viability = round(weighted_sum / total_w, 1) if total_w > 0 else round(float(parsed.get("viability_score") or 0.0), 1)
+    raw_vs = float(parsed.get("viability_score") or 0.0)
+    if raw_vs > 10.0:
+        raw_vs = raw_vs / 10.0
+    computed_viability = round(weighted_sum / total_w, 1) if total_w > 0 else round(max(0.0, min(10.0, raw_vs)), 1)
 
     raw_verdict = str(parsed.get("verdict") or "").strip().upper()
     if raw_verdict not in ("DO NOT BUILD", "NICHE ONLY", "ACTUALLY VIABLE"):
-        if computed_viability < 42.0:
+        if computed_viability < 4.2:
             raw_verdict = "DO NOT BUILD"
-        elif computed_viability < 68.0:
+        elif computed_viability < 6.8:
             raw_verdict = "NICHE ONLY"
         else:
             raw_verdict = "ACTUALLY VIABLE"
