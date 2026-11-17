@@ -30,8 +30,8 @@ Rules:
   "viability_score": 0,
   "saturation_pct": 0,
   "demand_tier": "Wrapper Slop | Crowded Commodity | Tiny Hobby Niche | Underserved Pain | Real Market Gap",
-  "wasted_hours_estimate": "e.g. 40-80 hrs",
-  "wasted_tokens_estimate": "e.g. ~150k-400k LLM tokens",
+  "wasted_hours_estimate": "<estimated engineering hours>",
+  "wasted_tokens_estimate": "<estimated LLM tokens>",
   "executive_summary": "2-3 blunt paragraphs explaining exactly why this verdict was reached, who already owns this market, and whether real users would actually switch.",
   "dimensions": {
     "market_saturation": {
@@ -90,7 +90,7 @@ Rules:
     }
   ],
   "pricing_recommendation": {
-    "suggested_price": "e.g. $29 one-time | $0 (Free/OSS) | Do Not Monetize",
+    "suggested_price": "<realistic price + billing cadence, $0 (Free/OSS), or Do Not Monetize>",
     "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
     "reasoning": "2-3 blunt sentences explaining what price—compared to happy, established competitors—would actually lead to sales, or why even free won't make users switch."
   },
