@@ -52,6 +52,7 @@ from ..evaluator.llama_supervisor_client import get_engine_status, sleep_engine,
 from ..evaluator.ollama import OllamaClient, find_ollama_binary, get_free_vram_mb
 from ..storage.anna_db import init_anna_db
 from .anna_routes import router as anna_router
+from ..reality_check.routes import rc_home, router as reality_check_router
 from ..storage.db import (
     clear_finished_tasks,
     clear_pending_tasks,
@@ -252,7 +253,7 @@ _ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "LETSVIBE_ALLOWED_ORIGINS",
-        "https://anna.partners,https://apps.anna.partners,https://letsvibe.todd0042.dev,https://home.todd0042.dev,https://todd0042.dev,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8088,http://127.0.0.1:8088,http://localhost:5180,http://127.0.0.1:5180",
+        "https://anna.partners,https://apps.anna.partners,https://letsvibe.todd0042.dev,https://letsviberc.todd0042.dev,https://home.todd0042.dev,https://todd0042.dev,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8088,http://127.0.0.1:8088,http://localhost:5180,http://127.0.0.1:5180",
     ).split(",")
     if o.strip()
 ]
@@ -265,6 +266,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 app.include_router(anna_router)
+app.include_router(reality_check_router)
 
 
 def _host_matches_request(header_url: str, request: Request) -> bool:
@@ -3107,7 +3109,10 @@ from .ui import PAGES, render_admin_messages_html, render_dashboard_html, render
 
 @app.get("/", response_class=HTMLResponse)
 async def user_dashboard(request: Request):
-    """Serves the polished interactive Leaderboard & User UI."""
+    """Serves the polished interactive Leaderboard & User UI (or Reality Check on letsviberc.*)."""
+    req_host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip().lower()
+    if req_host.startswith("letsviberc."):
+        return await rc_home()
     view = (request.query_params.get("view") or "").strip().lower()
     if view not in ("creators", "hof", "reviews", "admin"):
         _record_non_admin_page_view(request, "/")

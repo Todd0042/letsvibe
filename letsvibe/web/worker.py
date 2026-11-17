@@ -22,7 +22,7 @@ from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from ..core.vibe_detector import VibeDetector
 from ..evaluator.classifier import classify_project
-from ..evaluator.llama_supervisor_client import ensure_llama_awake, touch_engine
+from ..evaluator.llama_supervisor_client import ensure_llama_awake, llm_lease, touch_engine
 from ..evaluator.ollama import CpuSpilloverError, OllamaClient
 from ..storage.db import (
     DEFAULT_DB_PATH,
@@ -333,16 +333,17 @@ class AuditQueueWorker:
                 last_step_msg = step_text
                 self._update_task_progress(task_id, step_text, pct=pct)
 
-            report = evaluate(
-                client,
-                packed_repo,
-                target,
-                metrics,
-                classification,
-                progress_callback=on_llm_progress,
-                engine_id=mode,
-                submission_meta=submission_meta,
-            )
+            with llm_lease("letsvibe", str(task_id), on_wait=lambda msg: on_llm_progress(msg, 35)):
+                report = evaluate(
+                    client,
+                    packed_repo,
+                    target,
+                    metrics,
+                    classification,
+                    progress_callback=on_llm_progress,
+                    engine_id=mode,
+                    submission_meta=submission_meta,
+                )
             if is_v10:
                 touch_engine()
 

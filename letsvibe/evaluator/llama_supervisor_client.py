@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable, Dict, Optional
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, Optional
 
 
 def supervisor_url() -> str:
@@ -32,11 +34,19 @@ def _http_json(
     method: str = "GET",
     token: str = "",
     timeout: float = 2.0,
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, method=method, headers=headers, data=b"" if method == "POST" else None)
+    data: Optional[bytes] = None
+    if method == "POST":
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(payload).encode("utf-8")
+        else:
+            data = b""
+    req = urllib.request.Request(url, method=method, headers=headers, data=data)
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - localhost supervisor/llama URLs only
         raw = resp.read().decode("utf-8", errors="replace")
         return json.loads(raw) if raw.strip() else {}
@@ -135,3 +145,87 @@ def ensure_llama_awake(
         time.sleep(poll_interval_sec)
 
     return {"ok": False, "error": f"Timed out waiting {int(max_wait_sec)}s for llama-server to load."}
+
+
+def get_llm_lock_status(timeout: float = 1.5) -> Dict[str, Any]:
+    """Returns current shared LLM lock status and round-robin queue depths."""
+    try:
+        return _http_json(f"{supervisor_url()}/lock/status", method="GET", timeout=timeout)
+    except Exception:
+        return {"busy": False, "holder_app": None, "queue_depths": {"letsvibe": 0, "letsvibe_rc": 0}}
+
+
+@contextmanager
+def llm_lease(
+    app_id: str,
+    job_id: str = "",
+    ttl_sec: float = 300.0,
+    wait_timeout_sec: float = 240.0,
+    on_wait: Optional[Callable[[str], None]] = None,
+) -> Iterator[Dict[str, Any]]:
+    """
+    Acquires an exclusive round-robin lease on the shared llama-server via
+    letsvibe-llama-supervisor, keeps it alive with a background heartbeat, and
+    releases it cleanly on exit. Falls back to no-op if supervisor is offline.
+    """
+    lease_id = ""
+    stop_hb = threading.Event()
+    hb_thread: Optional[threading.Thread] = None
+
+    try:
+        st = get_llm_lock_status(timeout=1.5)
+        if st.get("busy") and on_wait:
+            holder = "LetsVibe Audit" if st.get("holder_app") == "letsvibe" else "LetsVibe Reality Check"
+            on_wait(f"Waiting for shared AI engine turn (currently serving {holder})...")
+        res = _http_json(
+            f"{supervisor_url()}/lock/acquire",
+            method="POST",
+            token=supervisor_token(),
+            timeout=wait_timeout_sec + 5.0,
+            payload={
+                "app_id": app_id,
+                "job_id": job_id,
+                "ttl_sec": ttl_sec,
+                "wait_timeout_sec": wait_timeout_sec,
+            },
+        )
+        if not res.get("acquired"):
+            raise TimeoutError(res.get("detail") or "Timed out waiting for shared LLM lease.")
+        lease_id = str(res.get("lease_id") or "")
+
+        def _hb_loop() -> None:
+            interval = max(15.0, ttl_sec / 3.0)
+            while not stop_hb.wait(interval):
+                try:
+                    _http_json(
+                        f"{supervisor_url()}/lock/heartbeat",
+                        method="POST",
+                        token=supervisor_token(),
+                        timeout=3.0,
+                        payload={"lease_id": lease_id, "ttl_sec": ttl_sec},
+                    )
+                except Exception:
+                    break
+
+        if lease_id:
+            hb_thread = threading.Thread(target=_hb_loop, daemon=True)
+            hb_thread.start()
+        yield res
+    except urllib.error.URLError:
+        # Supervisor unreachable (e.g. unit test / direct llama-server): proceed without blocking
+        yield {"acquired": True, "lease_id": "", "fallback": True}
+    finally:
+        stop_hb.set()
+        if hb_thread is not None:
+            hb_thread.join(timeout=0.5)
+        if lease_id:
+            try:
+                _http_json(
+                    f"{supervisor_url()}/lock/release",
+                    method="POST",
+                    token=supervisor_token(),
+                    timeout=3.0,
+                    payload={"lease_id": lease_id},
+                )
+            except Exception:
+                pass

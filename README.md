@@ -375,6 +375,10 @@ LetsVibe is vibe-coded too: by this site's own definition, it is exactly the kin
 
 This public repository starts at v1.0.0 as a single commit. The earlier development history, including the trial and error behind rubrics v1 to v7, is summarized on the site's [rubric changelog](https://letsvibe.todd0042.dev/changelog).
 
+### 🔍 LetsVibe: Reality Check (`LetsVibeRC.todd0042.dev`)
+* **Pre-Build Idea Filter:** Evaluates an app idea pitch, target platform, and supposed unique twist *before* writing code, querying GitHub Search & npm for real competitors and returning a candid 6-dimension viability & market saturation report (`DO NOT BUILD` / `NICHE ONLY` / `ACTUALLY VIABLE`) with shareable links (`/r/<id>`) and standalone HTML export.
+* **Shared Round-Robin LLM Arbitration:** `letsvibe-llama-supervisor` (`127.0.0.1:11436`) arbitrates exclusive leases (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` repository audits and `letsvibe_rc` reality checks so both share the same `llama-server` instance without interference.
+
 ### ⚖️ 4. License
 * **[PolyForm Shield License 1.0.0](LICENSE)**: you may read, use, modify and share LetsVibe — for personal, educational, nonprofit or commercial purposes — as long as you don't use it to provide a product or service that competes with LetsVibe (for example, running a rival leaderboard for vibe-coded software). See the [LICENSE](LICENSE) for the exact terms.
 * **The LetsVibe name and logo are not licensed.** The license covers the code only; please don't use the name or logo for your own projects or services.

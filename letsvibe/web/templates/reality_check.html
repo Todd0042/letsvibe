@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LetsVibe: Reality Check — Pre-Build Idea &amp; Market Saturation Check</title>
+  <meta name="description" content="Check whether your app idea is actually needed before burning LLM tokens building it. Realistic, zero-sugarcoating market saturation and viability analysis powered by LetsVibe's local AI.">
+  <link rel="icon" type="image/webp" href="/static/website-icon.webp?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="/static/site.css">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(30, 41, 59, 0.95);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-magenta: #ff2a85;
+      --accent-green: #10b981;
+      --accent-blue: #38bdf8;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    button, input, select, textarea { font-family: inherit; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top center, #172136 0%, #0b0f19 80%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+    }
+    .container { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+    header {
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      flex-wrap: wrap; margin-bottom: 1.75rem; padding-bottom: 1rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--text); }
+    .brand-logo-img { width: 38px; height: 38px; border-radius: 10px; }
+    .brand-logo { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+    .brand-tag {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0.2rem 0.55rem; border-radius: 999px;
+      background: rgba(0, 240, 255, 0.12); color: var(--accent-cyan);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+    .nav-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .btn-link {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      padding: 0.5rem 0.95rem; border-radius: 10px; text-decoration: none;
+      font-size: 0.88rem; font-weight: 600; color: var(--text);
+      background: rgba(255, 255, 255, 0.06); border: 1px solid var(--card-border);
+      transition: all 0.15s ease;
+    }
+    .btn-link:hover { background: var(--card-hover); border-color: rgba(0, 240, 255, 0.35); color: var(--accent-cyan); }
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.75rem 1.35rem; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 0.95rem; font-weight: 700; color: #061018;
+      background: linear-gradient(135deg, #00f0ff, #10b981);
+      transition: transform 0.12s ease, opacity 0.15s ease;
+    }
+    .btn-primary:hover { transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 1.5rem; margin-bottom: 1.25rem;
+      backdrop-filter: blur(12px);
+    }
+    .hero-title { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .muted { color: var(--text-muted); font-size: 0.92rem; }
+    .form-grid { display: grid; gap: 1rem; margin-top: 1.25rem; }
+    .form-row-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    label { display: block; font-size: 0.84rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem; }
+    textarea, select, input[type="text"] {
+      width: 100%; padding: 0.7rem 0.85rem; border-radius: 10px;
+      background: rgba(15, 23, 42, 0.85); color: var(--text);
+      border: 1px solid rgba(148, 163, 184, 0.25); font-size: 0.92rem;
+    }
+    textarea:focus, select:focus, input[type="text"]:focus {
+      outline: none; border-color: var(--accent-cyan);
+    }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.78rem; padding: 0.25rem 0.65rem; border-radius: 999px;
+      background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan);
+      border: 1px solid rgba(0, 240, 255, 0.28);
+    }
+    .prog-track {
+      width: 100%; height: 8px; border-radius: 999px;
+      background: rgba(148, 163, 184, 0.16); overflow: hidden; margin-top: 0.75rem;
+    }
+    .prog-fill {
+      height: 100%; width: 0%; border-radius: 999px;
+      background: linear-gradient(90deg, #00f0ff, #10b981);
+      transition: width 0.25s ease;
+    }
+    .verdict-hero { display: flex; justify-content: space-between; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+    .verdict-stamp {
+      min-width: 190px; text-align: center; padding: 1rem 1.2rem;
+      border-radius: 14px; background: rgba(15, 23, 42, 0.9); border: 2px solid var(--accent-cyan);
+    }
+    .verdict-stamp.bad { border-color: var(--danger); }
+    .verdict-stamp.bad .v-label { color: #fca5a5; }
+    .verdict-stamp.niche { border-color: var(--accent-cyan); }
+    .verdict-stamp.niche .v-label { color: var(--accent-cyan); }
+    .verdict-stamp.good { border-color: var(--accent-green); }
+    .verdict-stamp.good .v-label { color: #34d399; }
+    .v-label { font-size: 1.15rem; font-weight: 900; letter-spacing: 0.03em; }
+    .v-score { font-size: 1.5rem; font-weight: 800; margin-top: 0.25rem; }
+    .meta-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+    .lv-pill {
+      display: inline-block; font-size: 0.76rem; padding: 0.2rem 0.6rem;
+      border-radius: 999px; background: rgba(0, 240, 255, 0.12); color: var(--accent-cyan);
+      border: 1px solid rgba(0, 240, 255, 0.28);
+    }
+    .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+    th { color: var(--text-muted); font-size: 0.76rem; text-transform: uppercase; }
+    .lv-bar { width: 84px; height: 5px; background: rgba(148, 163, 184, 0.18); border-radius: 999px; margin-top: 5px; overflow: hidden; }
+    .lv-bar-fill { height: 100%; background: linear-gradient(90deg, #00f0ff, #10b981); border-radius: 999px; }
+    .card-warn { border-left: 4px solid #f87171; }
+    .card-solid { border-left: 4px solid #34d399; }
+    .item-box {
+      padding: 0.85rem; border: 1px solid var(--card-border);
+      border-radius: 10px; background: rgba(15, 23, 42, 0.55); margin-bottom: 0.75rem;
+    }
+    .item-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.35rem; }
+    ul.clean { padding-left: 1.15rem; }
+    ul.clean li { margin-bottom: 0.45rem; }
+    .err-box {
+      padding: 0.9rem 1rem; border-radius: 10px; background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5; margin-top: 1rem;
+    }
+    footer.rc-footer {
+      margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--card-border);
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+      color: var(--text-muted); font-size: 0.85rem;
+    }
+    footer.rc-footer a { color: var(--accent-cyan); text-decoration: none; }
+    footer.rc-footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a class="brand" href="/">
+        <img src="/static/website-icon.webp?v=2" alt="LetsVibe" class="brand-logo-img">
+        <span class="brand-logo">LetsVibe: Reality Check</span>
+        <span class="brand-tag">Pre-Build Filter</span>
+      </a>
+      <nav class="nav-actions" aria-label="Main">
+        <span id="llm-queue-pill" class="status-pill"><i class="fa-solid fa-microchip"></i> Checking shared AI…</span>
+        <a class="btn-link" href="https://letsvibe.todd0042.dev"><i class="fa-solid fa-trophy"></i> LetsVibe Auditor</a>
+      </nav>
+    </header>
+
+    <section class="card">
+      <h1 class="hero-title">Save Your Tokens Before You Write Line 1</h1>
+      <p class="muted">
+        Pitch your app idea and supposed niche twist. We query live GitHub &amp; package registries for real competitors, then run LetsVibe's local AI for a zero-sugarcoating viability verdict.
+      </p>
+      <form id="rc-form" class="form-grid">
+        <div>
+          <label for="rc-pitch">App Idea Pitch</label>
+          <textarea id="rc-pitch" rows="3" minlength="15" maxlength="1500" required placeholder="e.g. An AI-powered daily task manager with dark mode, Pomodoro timer, and smart reminders for developers…"></textarea>
+        </div>
+        <div class="form-row-2">
+          <div>
+            <label for="rc-platform">Target Platform</label>
+            <select id="rc-platform">
+              <option value="Web">Web App</option>
+              <option value="Android">Android</option>
+              <option value="iOS">iOS</option>
+              <option value="Desktop">Desktop</option>
+              <option value="CLI">CLI / Dev Tool</option>
+              <option value="SaaS / API">SaaS / API</option>
+            </select>
+          </div>
+          <div>
+            <label for="rc-tone">Feedback Tone</label>
+            <select id="rc-tone">
+              <option value="realistic">Realistic (No Sugarcoating)</option>
+              <option value="brutal">Brutal / No Mercy</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label for="rc-twist">Your "Unique Twist" / Niche Feature (optional)</label>
+          <input id="rc-twist" type="text" maxlength="600" placeholder="e.g. Offline-first SQLite sync + keyboard-only shortcuts" />
+        </div>
+        <div style="display:flex;gap:0.85rem;align-items:center;flex-wrap:wrap;">
+          <button id="rc-submit" type="submit" class="btn-primary"><i class="fa-solid fa-scale-balanced"></i> Run Reality Check</button>
+          <span class="muted" style="font-size:0.82rem;">Shares the host GPU round-robin with LetsVibe audits.</span>
+        </div>
+      </form>
+      <div id="rc-error" class="err-box" hidden></div>
+    </section>
+
+    <section id="rc-progress-card" class="card" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <strong id="rc-progress-msg">Starting Reality Check…</strong>
+        <span id="rc-progress-pct" class="lv-pill">0%</span>
+      </div>
+      <div class="prog-track"><div id="rc-progress-bar" class="prog-fill"></div></div>
+    </section>
+
+    <section id="rc-report" hidden></section>
+
+    <footer class="rc-footer">
+      <div>
+        <strong>LetsVibe: Reality Check</strong> — Honest pre-build viability checks powered by LetsVibe's local AI.
+      </div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+        <a href="https://letsvibe.todd0042.dev">LetsVibe Code Auditor &amp; Leaderboard</a>
+        <a href="https://github.com/Todd0042/letsvibe" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const PRELOADED = __PRELOADED_REPORT_JSON__;
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+    }
+
+    async function refreshLockStatus() {
+      try {
+        const res = await fetch("/api/rc/status");
+        if (!res.ok) return;
+        const d = await res.json();
+        const pill = document.getElementById("llm-queue-pill");
+        const lk = d.lock || {};
+        if (lk.busy) {
+          const holder = lk.holder_app === "letsvibe" ? "LetsVibe Audit" : "Reality Check";
+          pill.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> Shared AI busy (${esc(holder)})`;
+        } else {
+          pill.innerHTML = `<i class="fa-solid fa-bolt"></i> Shared AI Ready`;
+        }
+      } catch {}
+    }
+
+    function renderReport(rep) {
+      const root = document.getElementById("rc-report");
+      root.hidden = false;
+      const v = String(rep.verdict || "DO NOT BUILD");
+      const cls = v === "ACTUALLY VIABLE" ? "good" : (v === "NICHE ONLY" ? "niche" : "bad");
+
+      const dims = rep.dimensions || {};
+      const dimRows = Object.entries(dims).map(([k, d]) => {
+        const sc = Number(d.score || 0);
+        return `<tr>
+          <td><strong>${esc(d.label || k)}</strong></td>
+          <td>${Number(d.weight || 0)}%</td>
+          <td style="color:#22d3ee;font-weight:700;white-space:nowrap">${sc.toFixed(1)}/100
+            <div class="lv-bar"><div class="lv-bar-fill" style="width:${Math.min(100, Math.max(0, sc))}%"></div></div>
+          </td>
+          <td>${esc(d.reasoning)}</td>
+        </tr>`;
+      }).join("");
+
+      const flaws = (rep.fatal_flaws || []).map(x => `<li>⚠️ ${esc(x)}</li>`).join("") || "<li>None flagged.</li>";
+      const redeeming = (rep.redeeming_angles || []).map(x => `<li>✅ ${esc(x)}</li>`).join("") || "<li>No major redeeming angles identified.</li>";
+      const comps = (rep.existing_competitors || []).map(c => `
+        <div class="item-box">
+          <div class="item-head"><strong>${esc(c.name)}</strong><span class="lv-pill">${esc(c.type)}</span></div>
+          <p class="muted" style="font-size:0.86rem;">${esc(c.why_it_wins)}</p>
+        </div>`).join("") || `<p class="muted">No direct competitors listed.</p>`;
+
+      const pivots = (rep.pivots || []).map(p => `
+        <div class="item-box">
+          <div class="item-head"><strong>${esc(p.title)}</strong><span class="lv-pill">${esc(p.impact)} Impact · ${esc(p.effort)} Effort</span></div>
+          <p style="margin-bottom:0.35rem;">${esc(p.why_it_matters)}</p>
+          <p class="muted" style="font-size:0.85rem;"><strong>How:</strong> ${esc(p.how)}</p>
+        </div>`).join("") || `<p class="muted">No viable pivots suggested.</p>`;
+
+      const shareUrl = rep.id ? `${location.origin}/r/${encodeURIComponent(rep.id)}` : "";
+      const htmlUrl = rep.id ? `/api/rc/report/${encodeURIComponent(rep.id)}/html` : "";
+
+      root.innerHTML = `
+        <div class="card">
+          <div class="verdict-hero">
+            <div style="flex:1;min-width:260px;">
+              <div class="meta-pills">
+                <span class="lv-pill">Platform: ${esc(rep.platform)}</span>
+                <span class="lv-pill">Saturation: ${Number(rep.saturation_pct || 0).toFixed(0)}%</span>
+                <span class="lv-pill">${esc(rep.demand_tier)}</span>
+                <span class="lv-pill">Est. Waste: ${esc(rep.wasted_hours_estimate)} / ${esc(rep.wasted_tokens_estimate)}</span>
+              </div>
+              <h2 style="font-size:1.5rem;margin-bottom:0.6rem;">${esc(rep.headline)}</h2>
+              <p style="color:#cbd5e1;white-space:pre-line;">${esc(rep.executive_summary)}</p>
+              <div style="display:flex;gap:0.6rem;margin-top:1rem;flex-wrap:wrap;">
+                ${htmlUrl ? `<a class="btn-link" href="${htmlUrl}"><i class="fa-solid fa-download"></i> Download HTML Report</a>` : ""}
+                ${shareUrl ? `<button type="button" class="btn-link" onclick="navigator.clipboard.writeText('${shareUrl}');this.textContent='✓ Link Copied';"><i class="fa-solid fa-link"></i> Copy Share Link</button>` : ""}
+              </div>
+            </div>
+            <div class="verdict-stamp ${cls}">
+              <div class="v-label">${esc(v)}</div>
+              <div class="v-score">${Number(rep.viability_score || 0).toFixed(1)} / 100</div>
+              <div class="muted" style="font-size:0.75rem;">Viability Score</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">📊 6-Dimension Reality Breakdown</h2>
+          <table>
+            <thead><tr><th>Dimension</th><th>Weight</th><th>Score</th><th>Detailed Analysis</th></tr></thead>
+            <tbody>${dimRows}</tbody>
+          </table>
+        </div>
+
+        <div class="grid2">
+          <div class="card card-warn">
+            <h2 style="color:#f87171;margin-bottom:0.75rem;">⚠️ Fatal Flaws &amp; Friction</h2>
+            <ul class="clean">${flaws}</ul>
+          </div>
+          <div class="card card-solid">
+            <h2 style="color:#34d399;margin-bottom:0.75rem;">💎 Redeeming Angles</h2>
+            <ul class="clean">${redeeming}</ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">🏁 Existing Competitors &amp; Incumbents</h2>
+          ${comps}
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">🧭 Viable Pivots / Alternatives</h2>
+          ${pivots}
+        </div>`;
+    }
+
+    document.getElementById("rc-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById("rc-error");
+      const btn = document.getElementById("rc-submit");
+      const progCard = document.getElementById("rc-progress-card");
+      const progBar = document.getElementById("rc-progress-bar");
+      const progMsg = document.getElementById("rc-progress-msg");
+      const progPct = document.getElementById("rc-progress-pct");
+
+      errEl.hidden = true;
+      btn.disabled = true;
+      progCard.hidden = false;
+      progBar.style.width = "8%";
+      progPct.textContent = "8%";
+      progMsg.textContent = "Submitting Reality Check…";
+
+      try {
+        const res = await fetch("/api/rc/evaluate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pitch: document.getElementById("rc-pitch").value,
+            platform: document.getElementById("rc-platform").value,
+            twist: document.getElementById("rc-twist").value,
+            tone: document.getElementById("rc-tone").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to start Reality Check.");
+
+        const jobId = data.job_id;
+        while (true) {
+          await new Promise(r => setTimeout(r, 1200));
+          const jr = await fetch(`/api/rc/job/${encodeURIComponent(jobId)}`);
+          const j = await jr.json();
+          const pct = Number(j.progress_pct || 0);
+          progBar.style.width = `${pct}%`;
+          progPct.textContent = `${pct}%`;
+          progMsg.textContent = j.message || "Analyzing…";
+          if (j.status === "completed" && j.report) {
+            progCard.hidden = true;
+            renderReport(j.report);
+            if (j.report_id && location.pathname === "/") {
+              history.replaceState(null, "", `/r/${j.report_id}`);
+            }
+            break;
+          }
+          if (j.status === "failed") {
+            throw new Error(j.error || "Reality Check failed.");
+          }
+        }
+      } catch (err) {
+        progCard.hidden = true;
+        errEl.textContent = err?.message || String(err);
+        errEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        refreshLockStatus();
+      }
+    });
+
+    if (PRELOADED) {
+      document.getElementById("rc-pitch").value = PRELOADED.pitch || "";
+      document.getElementById("rc-platform").value = PRELOADED.platform || "Web";
+      document.getElementById("rc-twist").value = PRELOADED.twist || "";
+      document.getElementById("rc-tone").value = PRELOADED.tone || "realistic";
+      renderReport(PRELOADED);
+    }
+    refreshLockStatus();
+    setInterval(refreshLockStatus, 8000);
+  </script>
+</body>
+</html>

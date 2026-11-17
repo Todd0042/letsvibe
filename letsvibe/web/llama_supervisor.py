@@ -18,9 +18,11 @@ import sys
 import threading
 import time
 import urllib.request
+import uuid
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Deque, Dict, Optional
 
 
 class LlamaSupervisor:
@@ -37,10 +39,17 @@ class LlamaSupervisor:
         self.token = token.strip()
 
         self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
         self._proc: Optional[subprocess.Popen[bytes]] = None
         self._last_activity: float = time.monotonic()
         self._last_error: Optional[str] = None
         self._stop_event = threading.Event()
+
+        # Round-robin LLM lease arbiter shared by "letsvibe" and "letsvibe_rc"
+        self._queues: Dict[str, Deque[str]] = {"letsvibe": deque(), "letsvibe_rc": deque()}
+        self._last_served: str = "letsvibe_rc"
+        self._active_lease: Optional[Dict[str, Any]] = None
+
         self._watcher = threading.Thread(target=self._idle_loop, daemon=True)
         self._watcher.start()
 
@@ -153,6 +162,101 @@ class LlamaSupervisor:
             if should_sleep:
                 self.sleep()
 
+    def _expire_stale_lease_locked(self) -> None:
+        if self._active_lease and time.monotonic() >= float(self._active_lease["expires_at"]):
+            self._active_lease = None
+            self._cond.notify_all()
+
+    def _pick_next_app_locked(self) -> Optional[str]:
+        order = ("letsvibe_rc", "letsvibe") if self._last_served == "letsvibe" else ("letsvibe", "letsvibe_rc")
+        for app_id in order:
+            if self._queues[app_id]:
+                return app_id
+        return None
+
+    def lock_status(self) -> Dict[str, Any]:
+        with self._cond:
+            self._expire_stale_lease_locked()
+            return {
+                "busy": self._active_lease is not None,
+                "holder_app": self._active_lease["app_id"] if self._active_lease else None,
+                "holder_job": self._active_lease["job_id"] if self._active_lease else None,
+                "queue_depths": {k: len(v) for k, v in self._queues.items()},
+                "last_served": self._last_served,
+            }
+
+    def acquire_lock(self, app_id: str, job_id: str = "", ttl_sec: float = 300.0, wait_timeout_sec: float = 180.0) -> Dict[str, Any]:
+        norm_app = "letsvibe_rc" if str(app_id).strip().lower() in ("letsvibe_rc", "rc", "reality_check") else "letsvibe"
+        ticket = f"{norm_app}:{job_id or uuid.uuid4().hex[:8]}:{uuid.uuid4().hex[:6]}"
+        ttl = max(30.0, min(900.0, float(ttl_sec)))
+        deadline = time.monotonic() + max(1.0, float(wait_timeout_sec))
+
+        with self._cond:
+            self._queues[norm_app].append(ticket)
+            try:
+                while True:
+                    self._expire_stale_lease_locked()
+                    if self._active_lease is None:
+                        next_app = self._pick_next_app_locked()
+                        if next_app == norm_app and self._queues[norm_app] and self._queues[norm_app][0] == ticket:
+                            self._queues[norm_app].popleft()
+                            self._last_served = norm_app
+                            lease_id = uuid.uuid4().hex[:16]
+                            self._active_lease = {
+                                "lease_id": lease_id,
+                                "app_id": norm_app,
+                                "job_id": job_id,
+                                "expires_at": time.monotonic() + ttl,
+                            }
+                            self._last_activity = time.monotonic()
+                            return {
+                                "acquired": True,
+                                "lease_id": lease_id,
+                                "app_id": norm_app,
+                                "ttl_sec": ttl,
+                                "queue_depths": {k: len(v) for k, v in self._queues.items()},
+                            }
+                    rem = deadline - time.monotonic()
+                    if rem <= 0:
+                        return {
+                            "acquired": False,
+                            "detail": "Timed out waiting for shared LLM turn.",
+                            "queue_depths": {k: len(v) for k, v in self._queues.items()},
+                        }
+                    self._cond.wait(timeout=min(1.0, rem))
+            except Exception:
+                if ticket in self._queues[norm_app]:
+                    self._queues[norm_app].remove(ticket)
+                self._cond.notify_all()
+                raise
+            finally:
+                # Ensure cancelled/timed-out tickets don't clog the queue
+                if ticket in self._queues[norm_app] and (not self._active_lease or self._active_lease.get("job_id") != job_id):
+                    try:
+                        self._queues[norm_app].remove(ticket)
+                    except ValueError:
+                        pass
+                    self._cond.notify_all()
+
+    def heartbeat_lock(self, lease_id: str, ttl_sec: float = 300.0) -> Dict[str, Any]:
+        ttl = max(30.0, min(900.0, float(ttl_sec)))
+        with self._cond:
+            self._expire_stale_lease_locked()
+            if self._active_lease and self._active_lease["lease_id"] == lease_id:
+                self._active_lease["expires_at"] = time.monotonic() + ttl
+                self._last_activity = time.monotonic()
+                return {"ok": True, "lease_id": lease_id, "ttl_sec": ttl}
+            return {"ok": False, "detail": "Lease not found or expired."}
+
+    def release_lock(self, lease_id: str) -> Dict[str, Any]:
+        with self._cond:
+            released = False
+            if self._active_lease and self._active_lease["lease_id"] == lease_id:
+                self._active_lease = None
+                released = True
+                self._cond.notify_all()
+            return {"ok": released, "queue_depths": {k: len(v) for k, v in self._queues.items()}}
+
     def shutdown(self) -> None:
         self._stop_event.set()
         self.sleep()
@@ -190,9 +294,27 @@ def make_handler(sup: LlamaSupervisor):
                 return False
             return hmac.compare_digest(hdr[7:].strip(), sup.token)
 
+        def _read_json_body(self) -> Dict[str, Any]:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return {}
+            if length <= 0 or length > 65536:
+                return {}
+            raw = self.rfile.read(length).decode("utf-8", errors="replace")
+            try:
+                val = json.loads(raw)
+                return val if isinstance(val, dict) else {}
+            except Exception:
+                return {}
+
         def do_GET(self) -> None:  # noqa: N802
-            if self.path.split("?")[0] == "/status":
+            path = self.path.split("?")[0]
+            if path == "/status":
                 self._send_json(200, sup.status())
+                return
+            if path == "/lock/status":
+                self._send_json(200, sup.lock_status())
                 return
             self._send_json(404, {"detail": "Not found"})
 
@@ -207,6 +329,21 @@ def make_handler(sup: LlamaSupervisor):
                 self._send_json(200, sup.sleep())
             elif path == "/touch":
                 self._send_json(200, sup.touch())
+            elif path == "/lock/acquire":
+                body = self._read_json_body()
+                res = sup.acquire_lock(
+                    app_id=str(body.get("app_id") or "letsvibe"),
+                    job_id=str(body.get("job_id") or ""),
+                    ttl_sec=float(body.get("ttl_sec") or 300.0),
+                    wait_timeout_sec=float(body.get("wait_timeout_sec") or 180.0),
+                )
+                self._send_json(200 if res.get("acquired") else 409, res)
+            elif path == "/lock/heartbeat":
+                body = self._read_json_body()
+                self._send_json(200, sup.heartbeat_lock(str(body.get("lease_id") or ""), float(body.get("ttl_sec") or 300.0)))
+            elif path == "/lock/release":
+                body = self._read_json_body()
+                self._send_json(200, sup.release_lock(str(body.get("lease_id") or "")))
             else:
                 self._send_json(404, {"detail": "Not found"})
 
