@@ -20,12 +20,13 @@ _STOPWORDS = {
     "wedding", "event", "djs", "techs", "developers", "teams", "live", "real", "time",
     "local", "network", "over", "one", "click", "five", "minute", "minutes", "daily",
     "common", "expensive", "cheap", "free", "paid", "new", "better",
+    "zero-install", "self-hosted", "built-in", "low-latency", "unlimited", "anywhere",
+    "screens", "screen", "practice", "private", "before", "stage", "party",
 }
 
 
 def extract_keywords(pitch: str, twist: str = "", limit: int = 4) -> List[str]:
-    # Weight twist + pitch so technical/domain nouns aren't crowded out by intro filler
-    text = f"{twist} {pitch}".lower()
+    text = f"{pitch} {twist}".lower()
     tokens = re.findall(r"[a-z0-9][a-z0-9+-]{2,}", text)
     seen: List[str] = []
     for tok in tokens:
