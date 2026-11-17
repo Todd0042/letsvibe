@@ -350,9 +350,9 @@ export default {
       const user = await extractUser(req, env.SESSION_SECRET);
       if (!user) return jsonRes(req, { detail: "Sign in with GitHub to upvote." }, 401);
       const slug = `${decodeURIComponent(upvoteMatch[1])}/${decodeURIComponent(upvoteMatch[2])}`;
-      const proj = await env.DB.prepare("SELECT id FROM projects WHERE lower(full_slug) = lower(?) AND deleted_at IS NULL")
+      const proj = await env.DB.prepare("SELECT id, owner FROM projects WHERE lower(full_slug) = lower(?) AND deleted_at IS NULL")
         .bind(slug)
-        .first<{ id: number }>();
+        .first<{ id: number; owner: string }>();
       if (!proj) return jsonRes(req, { detail: "Project not found." }, 404);
 
       const existing = await env.DB.prepare("SELECT id FROM upvotes WHERE project_id = ? AND lower(user_login) = lower(?)")
@@ -362,24 +362,26 @@ export default {
       if (existing) {
         await env.DB.prepare("DELETE FROM upvotes WHERE id = ?").bind(existing.id).run();
       } else {
-        const other = await env.DB.prepare(
-          `SELECT u.id, p.full_slug
-           FROM upvotes u
-           JOIN projects p ON p.id = u.project_id
-           WHERE lower(u.user_login) = lower(?) AND u.project_id != ? AND p.deleted_at IS NULL
-           LIMIT 1`
-        )
-          .bind(user.username, proj.id)
-          .first<{ id: number; full_slug: string }>();
-        if (other) {
-          return jsonRes(
-            req,
-            {
-              detail: `You already upvoted ${other.full_slug}. Remove that upvote first (1 upvote per user).`,
-              existing_slug: other.full_slug,
-            },
-            409
-          );
+        if ((proj.owner || "").toLowerCase() === user.username.toLowerCase()) {
+          const otherOwn = await env.DB.prepare(
+            `SELECT u.id, p.full_slug
+             FROM upvotes u
+             JOIN projects p ON p.id = u.project_id
+             WHERE lower(u.user_login) = lower(?) AND lower(p.owner) = lower(?) AND u.project_id != ? AND p.deleted_at IS NULL
+             LIMIT 1`
+          )
+            .bind(user.username, user.username, proj.id)
+            .first<{ id: number; full_slug: string }>();
+          if (otherOwn) {
+            return jsonRes(
+              req,
+              {
+                detail: `You already upvoted your own repo ${otherOwn.full_slug}. Remove that upvote first (1 self-upvote per user).`,
+                existing_slug: otherOwn.full_slug,
+              },
+              409
+            );
+          }
         }
         await env.DB.prepare("INSERT INTO upvotes (project_id, user_login, created_at) VALUES (?, ?, ?)")
           .bind(proj.id, user.username, new Date().toISOString())
