@@ -8,7 +8,7 @@ scores (prompts, weights, aggregation, grade curve, checklist).
 
 from typing import Dict, List
 
-RUBRIC_VERSION = "v10.3"
+RUBRIC_VERSION = "v13"
 
 GRADE_CUTOFFS = (
     (94.0, "A+"),
@@ -33,6 +33,16 @@ def calculate_letter_grade(score: float) -> str:
 
 # Newest first. Plain language: this is shown publicly on /changelog.
 RUBRIC_CHANGELOG: List[Dict[str, object]] = [
+    {
+        "version": "v13",
+        "date": "2026-11-17",
+        "title": "Unified Stratified Bucketing, Dynamic Category Weights & Tri-State Probes",
+        "changes": [
+            "Replaced alphabetical batching with Stratified Role-Based Bucketing (Entrypoints, Core Domain, UI/Templates/Onboarding, Tests/Docs) so large multi-language repos always surface frontend/UI and onboarding code.",
+            "Added canonical deep_audit telemetry parity, manifest-first Android/iOS platform priority, and tailscale.com installer allowlisting.",
+            "Unified v13/v13a scoring with tri-state atomic probes, dynamic category weights, and exact static LOC for file split plans.",
+        ],
+    },
     {
         "version": "v10.3",
         "date": "2026-11-16",

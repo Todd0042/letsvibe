@@ -58,9 +58,9 @@ def gather_metrics(packed_repo) -> Tuple[DeterministicMetrics, Any]:
 
 
 def build_batches(packed_repo) -> Tuple[List[Tuple[str, str]], Dict[str, Tuple[int, int]]]:
-    """(chunks for the 7B, {role: (files reviewed, files in role)})."""
+    """(chunks for the evaluator, {role: (files reviewed, files in role)})."""
     keep, coverage, _ = select_for_review(packed_repo.files)
-    batches = packed_repo.get_coverage_manifests(max_batch_tokens=CHUNK_TOKENS, distill=True, only=keep, local_tree=True)
+    batches = packed_repo.get_stratified_manifests(max_batch_tokens=CHUNK_TOKENS, max_batches=8, distill=True, only=keep)
     return batches, coverage
 
 

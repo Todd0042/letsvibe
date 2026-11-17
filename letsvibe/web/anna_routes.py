@@ -304,8 +304,8 @@ async def anna_import_report(req: AnnaImportRequest, request: Request):
 
     rep = dict(req.report or {})
     rv = str(rep.get("rubric_version") or "").strip().lower()
-    if rv not in ("v10a", "v10.3a", "v11a", "v12a", "anna-v1"):
-        raise HTTPException(status_code=400, detail="Only Anna edition reports (v10a/v10.3a/v11a/v12a) can be imported here.")
+    if rv not in ("v10a", "v10.3a", "v11a", "v12a", "v13", "v13a", "anna-v1"):
+        raise HTTPException(status_code=400, detail="Only Anna edition reports (v10a/v10.3a/v11a/v12a/v13/v13a) can be imported here.")
 
     raw_target = str(rep.get("repo_source") or rep.get("full_slug") or "").strip()
     if not raw_target:

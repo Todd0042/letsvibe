@@ -12,7 +12,7 @@ PATTERNS = [
     ("crypto miner", re.compile(r"stratum\+tcp://|xmrig|cryptonight|coinhive|minexmr|nicehash", re.I)),
     ("runs base64-decoded code", re.compile(r"(eval|exec)\s*\(\s*(base64\.b64decode|atob|Buffer\.from\([^)]*['\"]base64['\"]\))", re.I)),
     ("reads browser or chat-app credentials", re.compile(r"Login Data|Local Storage[\\/]+leveldb|Cookies['\"]?\s*\)|\\\\Discord\\\\|discord(app)?[\\/]+Local Storage|keychain-db|Local State['\"].{0,80}encrypted_key", re.I | re.S)),
-    ("downloads and runs a script from an unknown host", re.compile(r"(curl|wget)\s+[^|\n]*https?://(?!(?:raw\.githubusercontent\.com|github\.com|get\.docker\.com|sh\.rustup\.rs|astral\.sh|install\.python-poetry\.org|deb\.nodesource\.com|bun\.sh)\b)[^\s|]+\s*\|\s*(sudo\s+)?(ba)?sh", re.I)),
+    ("downloads and runs a script from an unknown host", re.compile(r"(curl|wget)\s+[^|\n]*https?://(?!(?:raw\.githubusercontent\.com|github\.com|get\.docker\.com|sh\.rustup\.rs|astral\.sh|install\.python-poetry\.org|deb\.nodesource\.com|bun\.sh|tailscale\.com)\b)[^\s|]+\s*\|\s*(sudo\s+)?(ba)?sh", re.I)),
     ("sends data to a hard-coded webhook", re.compile(r"discord(app)?\.com/api/webhooks/\d+/[\w-]{20,}|api\.telegram\.org/bot\d+:[\w-]{20,}/send", re.I)),
 ]
 CODE_EXT = (".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".sh", ".bash", ".ps1", ".bat", ".cmd", ".kt", ".java", ".go", ".rs", ".cs", ".php", ".rb", ".lua", ".gd")

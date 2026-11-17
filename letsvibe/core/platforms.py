@@ -244,10 +244,14 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
         if any("ble" in p or "bluetooth" in p for p in lower):
             profile.append("uses Bluetooth/BLE")
 
-    # Mobile
-    if "androidmanifest.xml" in names:
-        hit(["android"], "AndroidManifest.xml")
-    if any_path(lambda p: ".xcodeproj/" in p or p.endswith(".xcworkspace/")):
+    # Mobile (prioritize explicit mobile manifests before generic helper scripts)
+    if "androidmanifest.xml" in names or any(
+        "com.android.application" in _read(root, p, 30_000)
+        for p in paths
+        if os.path.basename(p).lower() in ("build.gradle", "build.gradle.kts")
+    ):
+        hit(["android"], "AndroidManifest.xml / com.android.application")
+    if any_path(lambda p: ".xcodeproj/" in p or p.endswith(".xcworkspace/")) or "package.swift" in names:
         pbx = next((p for p in paths if p.lower().endswith("project.pbxproj")), None)
         pbx_text = _read(root, pbx) if pbx else ""
         if "iphoneos" in pbx_text.lower() or not pbx_text:

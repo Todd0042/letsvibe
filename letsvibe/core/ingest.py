@@ -666,6 +666,110 @@ class PackedRepository:
             batches = localized
         return batches
 
+    @staticmethod
+    def _role_bucket(rel_path: str) -> int:
+        """Assigns a source file to 1=Entrypoints/Routes, 2=Core Domain, 3=UI/Frontend, 4=Tests/Docs/Packaging."""
+        low = rel_path.lower().replace("\\", "/")
+        base = low.rsplit("/", 1)[-1]
+
+        if (
+            low.startswith(("tests/", "test/", ".github/", "docs/", "scripts/"))
+            or base.startswith("test_")
+            or base.endswith(("_test.py", ".test.js", ".test.ts", ".spec.js", ".spec.ts"))
+            or base in (
+                "readme.md", "dockerfile", "docker-compose.yml", "pyproject.toml",
+                "package.json", "requirements.txt", "setup.py",
+            )
+            or base.endswith((".sh", ".spec", ".md"))
+        ):
+            return 4
+
+        if (
+            any(seg in low for seg in ("templates/", "static/", "views/", "components/", "pages/", "bundle/", "ui/"))
+            or low.endswith((".html", ".css", ".scss", ".jsx", ".tsx", ".vue", ".svelte"))
+            or (low.endswith((".js", ".ts")) and not low.startswith(("routes/", "api/", "server/")))
+        ):
+            return 3
+
+        if (
+            low.startswith(("routes/", "api/", "controllers/", "endpoints/"))
+            or base in (
+                "app.py", "main.py", "cli.py", "server.py", "index.js", "index.ts",
+                "manifest.json", "app.json", "executa.json", "androidmanifest.xml",
+                "package.swift", "info.plist", "mainactivity.kt", "mainactivity.java",
+            )
+        ):
+            return 1
+
+        return 2
+
+    def get_stratified_manifests(
+        self,
+        max_batch_tokens: int = 6500,
+        max_batches: int = 8,
+        distill: bool = True,
+        only: Optional[Dict[str, str]] = None,
+    ) -> List[Tuple[str, str]]:
+        """Packs files into 4 role buckets and interleaves round-robin so all layers are covered."""
+        source = only if only is not None else self.files
+        files_to_pack = {p: distill_code(p, c) for p, c in source.items()} if distill else dict(source)
+        if not files_to_pack:
+            return [("Full Codebase", "No source files selected.")]
+
+        bucket_names = {
+            1: "Entrypoints & Routes",
+            2: "Core Domain & Engines",
+            3: "UI, Templates & Onboarding",
+            4: "Tests, Docs & Packaging",
+        }
+        buckets: Dict[int, Dict[str, str]] = {1: {}, 2: {}, 3: {}, 4: {}}
+        for rel_path, content in sorted(files_to_pack.items()):
+            buckets[self._role_bucket(rel_path)][rel_path] = content
+
+        max_chars = int(max_batch_tokens * 3.6)
+        per_bucket_batches: Dict[int, List[Tuple[str, str]]] = {1: [], 2: [], 3: [], 4: []}
+        for b_id in (1, 2, 3, 4):
+            b_files = buckets[b_id]
+            if not b_files:
+                continue
+            label = bucket_names[b_id]
+            chunks: List[Tuple[str, str]] = []
+            cur_lines: List[str] = []
+            cur_names: List[str] = []
+            cur_chars = 0
+            for rel_path, content in b_files.items():
+                snippet = content[: max_chars - 500] if len(content) > max_chars - 500 else content
+                block = f"\n--- START FILE: {rel_path} ---\n{snippet}\n--- END FILE: {rel_path} ---\n"
+                if cur_lines and cur_chars + len(block) > max_chars:
+                    hdr = f"# BUCKET {b_id}: {label} (Part {len(chunks) + 1})\n# FILES: {', '.join(cur_names)}\n\n"
+                    chunks.append((f"{label} (Part {len(chunks) + 1})", hdr + "".join(cur_lines)))
+                    cur_lines, cur_names, cur_chars = [], [], 0
+                cur_lines.append(block)
+                cur_names.append(rel_path)
+                cur_chars += len(block)
+            if cur_lines:
+                part_suffix = f" (Part {len(chunks) + 1})" if chunks else ""
+                hdr = f"# BUCKET {b_id}: {label}{part_suffix}\n# FILES: {', '.join(cur_names)}\n\n"
+                chunks.append((f"{label}{part_suffix}", hdr + "".join(cur_lines)))
+            per_bucket_batches[b_id] = chunks
+
+        selected: List[Tuple[str, str]] = []
+        round_idx = 0
+        while len(selected) < max_batches:
+            added_any = False
+            for b_id in (1, 2, 3, 4):
+                if len(selected) >= max_batches:
+                    break
+                b_list = per_bucket_batches[b_id]
+                if round_idx < len(b_list):
+                    selected.append(b_list[round_idx])
+                    added_any = True
+            if not added_any:
+                break
+            round_idx += 1
+
+        return selected or [("Full Codebase", self.get_full_manifest(max_tokens=max_batch_tokens, files_map=files_to_pack))]
+
 
 def is_safe_repo_file(repo_root: Path, candidate: Path) -> bool:
     """True only when `candidate` is a regular file (never a symlink) resolved strictly inside `repo_root`."""

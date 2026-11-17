@@ -477,7 +477,7 @@ export default {
       const body = (await req.json().catch(() => ({}))) as { report?: Record<string, any> };
       const rep = body.report || {};
       const rv = String(rep.rubric_version || "").trim().toLowerCase();
-      if (!["v10a", "v10.3a", "v11a", "v12a", "anna-v1"].includes(rv)) {
+      if (!["v10a", "v10.3a", "v11a", "v12a", "v13", "v13a", "anna-v1"].includes(rv)) {
         return jsonRes(req, { detail: "Only Anna edition reports can be imported here." }, 400);
       }
 
