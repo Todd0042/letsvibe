@@ -300,6 +300,16 @@
         ${mp.biggest_distribution_trap ? `<p class="muted" style="margin-bottom:0.85rem;"><strong>⚠️ Biggest Trap:</strong> ${esc(mp.biggest_distribution_trap)}</p>` : ""}
         ${channels || `<p class="muted">No distribution channels suggested.</p>`}` : `<p class="muted">No marketing playbook generated.</p>`;
 
+      const le = rep.liability_and_entity || {};
+      const prots = (le.must_have_protections || []).map(p => `<li>🛡️ ${esc(p)}</li>`).join("");
+      const liabilityHtml = (le.recommendation || le.reasoning) ? `
+        <div class="item-box">
+          <div class="item-head"><strong>${esc(le.recommendation || "Personal / Indie")}</strong><span class="lv-pill">Risk: ${esc(le.risk_level || "Low")}</span></div>
+          <p style="margin-bottom:0.5rem;">${esc(le.reasoning || "")}</p>
+          ${prots ? `<ul class="clean">${prots}</ul>` : ""}
+          <p class="muted" style="font-size:0.76rem;margin-top:0.5rem;">Informational only — not legal or tax advice.</p>
+        </div>` : `<p class="muted">No entity/liability assessment generated.</p>`;
+
       const shareUrl = rep.id ? `${location.origin}/r/${encodeURIComponent(rep.id)}` : "";
       const htmlUrl = rep.id ? `/api/rc/report/${encodeURIComponent(rep.id)}/html` : "";
 
@@ -355,6 +365,11 @@
         <div class="card">
           <h2 style="margin-bottom:0.85rem;">📣 How to Market It — The Actual Hard Part</h2>
           ${marketingHtml}
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">⚖️ Personal Publish vs. LLC (Liability Check)</h2>
+          ${liabilityHtml}
         </div>
 
         <div class="card">

@@ -105,6 +105,12 @@ Rules:
         "first_step": "Concrete Day-1 action (never generic 'use social media' advice)"
       }
     ]
+  },
+  "liability_and_entity": {
+    "recommendation": "Personal / Indie | Single-Member LLC | LLC + Commercial Insurance",
+    "risk_level": "Low | Moderate | High",
+    "reasoning": "2-3 blunt sentences on real legal/financial exposure (handling money, PII, health/safety, live hardware, or B2B contracts vs. harmless OSS/free utility) and whether LLC filing fees are justified yet.",
+    "must_have_protections": ["2-3 practical protections (e.g. Merchant of Record like Paddle/Stripe, AS-IS Terms/warranty disclaimer, avoid storing sensitive PII)."]
   }
 }"""
 
@@ -267,6 +273,7 @@ Top npm matches:
         "pivots": list(parsed.get("pivots") or [])[:4],
         "pricing_recommendation": parsed.get("pricing_recommendation") if isinstance(parsed.get("pricing_recommendation"), dict) else {},
         "marketing_playbook": parsed.get("marketing_playbook") if isinstance(parsed.get("marketing_playbook"), dict) else {},
+        "liability_and_entity": parsed.get("liability_and_entity") if isinstance(parsed.get("liability_and_entity"), dict) else {},
         "grounding": grounding,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -107,6 +107,12 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
                 "biggest_distribution_trap": "Posting to dev forums instead of actual buyers.",
                 "distribution_channels": [{"channel": "None", "why": "Saturated", "first_step": "Skip building."}],
             },
+            "liability_and_entity": {
+                "recommendation": "Personal / Indie",
+                "risk_level": "Low",
+                "reasoning": "Harmless local app if not monetized.",
+                "must_have_protections": ["AS-IS Terms of Service disclaimer"],
+            },
         }
 
     monkeypatch.setattr(rc_eval, "gather_market_grounding", fake_grounding)

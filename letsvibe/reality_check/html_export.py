@@ -80,6 +80,19 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
     else:
         marketing_html = "<p class='lv-muted'>No marketing playbook generated.</p>"
 
+    le = report.get("liability_and_entity") or {}
+    if le:
+        prot = "".join(f"<li>🛡️ {_esc(p)}</li>" for p in (le.get("must_have_protections") or []))
+        liability_html = (
+            f"<div class='lv-card-item'><div class='lv-item-head'><strong>{_esc(le.get('recommendation') or 'Personal / Indie')}</strong>"
+            f"<span class='lv-pill'>Risk: {_esc(le.get('risk_level') or 'Low')}</span></div>"
+            f"<p style='margin:0 0 8px'>{_esc(le.get('reasoning') or '')}</p>"
+            + (f"<ul>{prot}</ul>" if prot else "")
+            + "<p class='lv-muted' style='margin:6px 0 0;font-size:.76rem'>Informational only — not legal or tax advice.</p></div>"
+        )
+    else:
+        liability_html = "<p class='lv-muted'>No entity/liability assessment generated.</p>"
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -166,6 +179,11 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
   <div class="card">
     <h2>📣 How to Market It — The Actual Hard Part</h2>
     {marketing_html}
+  </div>
+
+  <div class="card">
+    <h2>⚖️ Personal Publish vs. LLC (Liability Check)</h2>
+    {liability_html}
   </div>
 
   <div class="card">
