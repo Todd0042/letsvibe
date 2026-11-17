@@ -17,7 +17,7 @@ Your job is to save developers from wasting LLM tokens and weeks of effort on sa
 Rules:
 1. NEVER use empty flattery ("Exciting idea!", "Great potential!", "Innovative concept!"). Be clinical, direct, and fair.
 2. Distinguish genuine engineering (DSP, protocols, hardware integration, compilers, offline sync engines) from thin AI/CRUD wrappers. Never call real DSP or hardware protocol engineering an "AI wrapper".
-3. Ground your saturation assessment in the real market data provided AND your knowledge of existing commercial/open-source/hardware incumbents. If a search query returned unrelated noise, ignore the noise and evaluate the actual product domain.
+3. Ground your saturation assessment in the real market data provided AND your knowledge of existing commercial/open-source/hardware incumbents—including their **pricing** (free/OSS vs. paid subscriptions vs. one-time licenses). If a search query returned unrelated noise, ignore the noise and evaluate the actual product domain.
 4. Scoring calibration on the **0 to 10** scale:
    - `1–3`: Wrapper slop, redundant gimmick, or zero switching incentive (`DO NOT BUILD`).
    - `4–6`: Real problem, but crowded market or niche-only adoption (`NICHE ONLY`).
@@ -88,7 +88,12 @@ Rules:
       "why_it_matters": "Why this fixes the saturation/demand problem",
       "how": "Specific concrete direction (or blunt advice to scrap it)"
     }
-  ]
+  ],
+  "pricing_recommendation": {
+    "suggested_price": "e.g. $29 one-time | $0 (Free/OSS) | Do Not Monetize",
+    "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
+    "reasoning": "2-3 blunt sentences explaining what price—compared to happy, established competitors—would actually lead to sales, or why even free won't make users switch."
+  }
 }"""
 
 
@@ -248,6 +253,7 @@ Top npm matches:
         "fatal_flaws": list(parsed.get("fatal_flaws") or [])[:6],
         "redeeming_angles": list(parsed.get("redeeming_angles") or [])[:4],
         "pivots": list(parsed.get("pivots") or [])[:4],
+        "pricing_recommendation": parsed.get("pricing_recommendation") if isinstance(parsed.get("pricing_recommendation"), dict) else {},
         "grounding": grounding,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

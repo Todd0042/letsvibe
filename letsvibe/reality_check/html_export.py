@@ -49,6 +49,15 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
         if isinstance(p, dict)
     ) or "<p class='lv-muted'>No viable pivots suggested.</p>"
 
+    pr = report.get("pricing_recommendation") or {}
+    pricing_html = (
+        f"<div class='lv-card-item'><div class='lv-item-head'><strong>{_esc(pr.get('suggested_price') or 'N/A')}</strong>"
+        f"<span class='lv-pill'>{_esc(pr.get('model') or 'Pricing')}</span></div>"
+        f"<p class='lv-muted' style='margin:0'>{_esc(pr.get('reasoning') or '')}</p></div>"
+        if pr
+        else "<p class='lv-muted'>No pricing recommendation generated.</p>"
+    )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -125,6 +134,11 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
       <h2 style="color:#34d399">💎 Redeeming Angles</h2>
       <ul>{redeeming}</ul>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>💵 Pricing &amp; Market Cost Reality</h2>
+    {pricing_html}
   </div>
 
   <div class="card">

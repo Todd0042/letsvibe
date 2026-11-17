@@ -100,6 +100,7 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
             "fatal_flaws": ["Extreme saturation", "<script>alert(1)</script>"],
             "redeeming_angles": ["Good weekend learning exercise"],
             "pivots": [{"title": "Target a regulated industry checklist", "impact": "high", "effort": "medium", "why_it_matters": "Compliance creates real demand", "how": "Build offline audit trails"}],
+            "pricing_recommendation": {"suggested_price": "Do Not Monetize", "model": "Do Not Monetize", "reasoning": "Free incumbents already cover this."},
         }
 
     monkeypatch.setattr(rc_eval, "gather_market_grounding", fake_grounding)

@@ -280,6 +280,13 @@
           <p class="muted" style="font-size:0.85rem;"><strong>How:</strong> ${esc(p.how)}</p>
         </div>`).join("") || `<p class="muted">No viable pivots suggested.</p>`;
 
+      const pr = rep.pricing_recommendation || {};
+      const pricingHtml = (pr.suggested_price || pr.reasoning) ? `
+        <div class="item-box">
+          <div class="item-head"><strong>${esc(pr.suggested_price || "N/A")}</strong><span class="lv-pill">${esc(pr.model || "Pricing")}</span></div>
+          <p class="muted" style="font-size:0.88rem;">${esc(pr.reasoning || "")}</p>
+        </div>` : `<p class="muted">No pricing recommendation generated.</p>`;
+
       const shareUrl = rep.id ? `${location.origin}/r/${encodeURIComponent(rep.id)}` : "";
       const htmlUrl = rep.id ? `/api/rc/report/${encodeURIComponent(rep.id)}/html` : "";
 
@@ -325,6 +332,11 @@
             <h2 style="color:#34d399;margin-bottom:0.75rem;">💎 Redeeming Angles</h2>
             <ul class="clean">${redeeming}</ul>
           </div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">💵 Pricing &amp; Market Cost Reality</h2>
+          ${pricingHtml}
         </div>
 
         <div class="card">
