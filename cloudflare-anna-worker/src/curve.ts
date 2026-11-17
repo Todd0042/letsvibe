@@ -20,6 +20,12 @@ const GRADE_CUTOFFS: [number, string][] = [
   [40.0, "D"],
 ];
 
+export function upvoteScoreBonus(upvoteCount: number): number {
+  const n = Math.max(0, Math.floor(Number(upvoteCount || 0)));
+  if (n <= 0) return 0.0;
+  return Math.round(0.5 * Math.log2(1 + n) * 100) / 100;
+}
+
 export function calculateLetterGrade(score: number): string {
   for (const [cutoff, grade] of GRADE_CUTOFFS) {
     if (score >= cutoff) return grade;

@@ -1,6 +1,6 @@
 import { extractUser, isAdminUser, popupAuthHtml, SessionUser, signToken } from "./auth";
 import { renderBadgeSvg } from "./badge";
-import { calculateLetterGrade, computeCurvedScore, rubricVersionRank } from "./curve";
+import { calculateLetterGrade, computeCurvedScore, rubricVersionRank, upvoteScoreBonus } from "./curve";
 
 export interface Env {
   DB: D1Database;
@@ -76,16 +76,18 @@ async function recomputeCurve(db: D1Database): Promise<void> {
 
   const { results: allReports } = await db
     .prepare(
-      "SELECT r.id, r.project_id, r.final_score, r.is_latest, p.deleted_at, COALESCE(p.is_test, 0) AS is_test FROM reports r JOIN projects p ON p.id = r.project_id",
+      "SELECT r.id, r.project_id, r.final_score, r.is_latest, p.deleted_at, COALESCE(p.is_test, 0) AS is_test, COALESCE(p.upvote_count, 0) AS upvote_count FROM reports r JOIN projects p ON p.id = r.project_id",
     )
-    .all<{ id: number; project_id: number; final_score: number; is_latest: number; deleted_at: string | null; is_test: number }>();
+    .all<{ id: number; project_id: number; final_score: number; is_latest: number; deleted_at: string | null; is_test: number; upvote_count: number }>();
 
   const stmts: D1PreparedStatement[] = [];
   for (const r of allReports) {
     const raw = Number(r.final_score);
     const activeLatest = r.is_latest === 1 && !r.deleted_at && r.is_test === 0;
     const scores = activeLatest ? cohort : [...cohort, raw];
-    const curved = computeCurvedScore(raw, scores);
+    const curvedBase = computeCurvedScore(raw, scores);
+    const upBonus = r.is_latest === 1 ? upvoteScoreBonus(Number(r.upvote_count || 0)) : 0.0;
+    const curved = Math.min(100.0, Math.round((curvedBase + upBonus) * 10) / 10);
     const cGrade = calculateLetterGrade(curved);
     stmts.push(
       db.prepare("UPDATE reports SET curved_score = ?, curved_letter_grade = ? WHERE id = ?").bind(curved, cGrade, r.id),
@@ -391,7 +393,19 @@ export default {
       const cntRow = await env.DB.prepare("SELECT COUNT(*) AS c FROM upvotes WHERE project_id = ?").bind(proj.id).first<{ c: number }>();
       const cnt = Number(cntRow?.c || 0);
       await env.DB.prepare("UPDATE projects SET upvote_count = ? WHERE id = ?").bind(cnt, proj.id).run();
-      return jsonRes(req, { status: "ok", full_slug: slug, upvote_count: cnt, user_upvoted: upvoted });
+      await recomputeCurve(env.DB);
+      const updated = await env.DB.prepare("SELECT curved_score, curved_letter_grade FROM projects WHERE id = ?")
+        .bind(proj.id)
+        .first<{ curved_score: number; curved_letter_grade: string }>();
+      return jsonRes(req, {
+        status: "ok",
+        full_slug: slug,
+        upvote_count: cnt,
+        upvote_bonus: upvoteScoreBonus(cnt),
+        user_upvoted: upvoted,
+        curved_score: updated?.curved_score ?? null,
+        curved_letter_grade: updated?.curved_letter_grade ?? null,
+      });
     }
 
     // 8. Project detail & reports history
