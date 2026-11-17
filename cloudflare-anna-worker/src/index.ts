@@ -362,6 +362,25 @@ export default {
       if (existing) {
         await env.DB.prepare("DELETE FROM upvotes WHERE id = ?").bind(existing.id).run();
       } else {
+        const other = await env.DB.prepare(
+          `SELECT u.id, p.full_slug
+           FROM upvotes u
+           JOIN projects p ON p.id = u.project_id
+           WHERE lower(u.user_login) = lower(?) AND u.project_id != ? AND p.deleted_at IS NULL
+           LIMIT 1`
+        )
+          .bind(user.username, proj.id)
+          .first<{ id: number; full_slug: string }>();
+        if (other) {
+          return jsonRes(
+            req,
+            {
+              detail: `You already upvoted ${other.full_slug}. Remove that upvote first (1 upvote per user).`,
+              existing_slug: other.full_slug,
+            },
+            409
+          );
+        }
         await env.DB.prepare("INSERT INTO upvotes (project_id, user_login, created_at) VALUES (?, ?, ?)")
           .bind(proj.id, user.username, new Date().toISOString())
           .run();
