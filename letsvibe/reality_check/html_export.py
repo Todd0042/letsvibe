@@ -58,6 +58,28 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
         else "<p class='lv-muted'>No pricing recommendation generated.</p>"
     )
 
+    mp = report.get("marketing_playbook") or {}
+    if mp:
+        hangouts = "".join(f"<span class='lv-pill'>{_esc(h)}</span> " for h in (mp.get("where_buyers_hang_out") or []))
+        channels = "".join(
+            f"<div class='lv-card-item'><div class='lv-item-head'><strong>{_esc(ch.get('channel'))}</strong></div>"
+            f"<p style='margin:0 0 6px'>{_esc(ch.get('why'))}</p>"
+            f"<p class='lv-muted' style='margin:0'><strong>Day-1 Step:</strong> {_esc(ch.get('first_step'))}</p></div>"
+            for ch in (mp.get("distribution_channels") or [])
+            if isinstance(ch, dict)
+        )
+        trap = (
+            f"<p class='lv-muted' style='margin:0 0 10px'><strong>⚠️ Biggest Trap:</strong> {_esc(mp.get('biggest_distribution_trap'))}</p>"
+            if mp.get("biggest_distribution_trap")
+            else ""
+        )
+        marketing_html = (
+            f"<div class='meta' style='margin-bottom:10px'><span class='lv-pill'>Difficulty: {_esc(mp.get('difficulty') or 'Hard')}</span>{hangouts}</div>"
+            f"{trap}{channels}"
+        )
+    else:
+        marketing_html = "<p class='lv-muted'>No marketing playbook generated.</p>"
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -139,6 +161,11 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
   <div class="card">
     <h2>💵 Pricing &amp; Market Cost Reality</h2>
     {pricing_html}
+  </div>
+
+  <div class="card">
+    <h2>📣 How to Market It — The Actual Hard Part</h2>
+    {marketing_html}
   </div>
 
   <div class="card">

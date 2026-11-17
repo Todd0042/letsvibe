@@ -287,6 +287,19 @@
           <p class="muted" style="font-size:0.88rem;">${esc(pr.reasoning || "")}</p>
         </div>` : `<p class="muted">No pricing recommendation generated.</p>`;
 
+      const mp = rep.marketing_playbook || {};
+      const hangouts = (mp.where_buyers_hang_out || []).map(h => `<span class="lv-pill">${esc(h)}</span>`).join(" ");
+      const channels = (mp.distribution_channels || []).map(ch => `
+        <div class="item-box">
+          <div class="item-head"><strong>${esc(ch.channel)}</strong></div>
+          <p style="margin-bottom:0.35rem;">${esc(ch.why)}</p>
+          <p class="muted" style="font-size:0.85rem;"><strong>Day-1 Step:</strong> ${esc(ch.first_step)}</p>
+        </div>`).join("");
+      const marketingHtml = (mp.difficulty || channels) ? `
+        <div class="meta-pills" style="margin-bottom:0.75rem;"><span class="lv-pill">Difficulty: ${esc(mp.difficulty || "Hard")}</span> ${hangouts}</div>
+        ${mp.biggest_distribution_trap ? `<p class="muted" style="margin-bottom:0.85rem;"><strong>⚠️ Biggest Trap:</strong> ${esc(mp.biggest_distribution_trap)}</p>` : ""}
+        ${channels || `<p class="muted">No distribution channels suggested.</p>`}` : `<p class="muted">No marketing playbook generated.</p>`;
+
       const shareUrl = rep.id ? `${location.origin}/r/${encodeURIComponent(rep.id)}` : "";
       const htmlUrl = rep.id ? `/api/rc/report/${encodeURIComponent(rep.id)}/html` : "";
 
@@ -337,6 +350,11 @@
         <div class="card">
           <h2 style="margin-bottom:0.85rem;">💵 Pricing &amp; Market Cost Reality</h2>
           ${pricingHtml}
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:0.85rem;">📣 How to Market It — The Actual Hard Part</h2>
+          ${marketingHtml}
         </div>
 
         <div class="card">

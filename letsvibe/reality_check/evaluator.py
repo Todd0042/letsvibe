@@ -93,6 +93,18 @@ Rules:
     "suggested_price": "e.g. $29 one-time | $0 (Free/OSS) | Do Not Monetize",
     "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
     "reasoning": "2-3 blunt sentences explaining what price—compared to happy, established competitors—would actually lead to sales, or why even free won't make users switch."
+  },
+  "marketing_playbook": {
+    "difficulty": "Brutal | Hard | Moderate",
+    "where_buyers_hang_out": ["2-3 exact niche subreddits, forums, Discords, or buyer channels"],
+    "biggest_distribution_trap": "The #1 marketing mistake builders make in this niche (e.g. posting to generic dev forums instead of actual buyers).",
+    "distribution_channels": [
+      {
+        "channel": "Specific distribution channel",
+        "why": "Why this reaches actual buyers",
+        "first_step": "Concrete Day-1 action (never generic 'use social media' advice)"
+      }
+    ]
   }
 }"""
 
@@ -254,6 +266,7 @@ Top npm matches:
         "redeeming_angles": list(parsed.get("redeeming_angles") or [])[:4],
         "pivots": list(parsed.get("pivots") or [])[:4],
         "pricing_recommendation": parsed.get("pricing_recommendation") if isinstance(parsed.get("pricing_recommendation"), dict) else {},
+        "marketing_playbook": parsed.get("marketing_playbook") if isinstance(parsed.get("marketing_playbook"), dict) else {},
         "grounding": grounding,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
