@@ -16,11 +16,16 @@ _STOPWORDS = {
     "create", "helps", "users", "people", "like", "just", "only", "more", "very",
     "want", "need", "would", "could", "should", "will", "have", "has", "are", "is",
     "offline", "online", "small", "big", "shiny", "dark", "mode", "without", "requiring",
+    "desktop", "mobile", "android", "ios", "web", "saas", "cli", "software", "program",
+    "wedding", "event", "djs", "techs", "developers", "teams", "live", "real", "time",
+    "local", "network", "over", "one", "click", "five", "minute", "minutes", "daily",
+    "common", "expensive", "cheap", "free", "paid", "new", "better",
 }
 
 
 def extract_keywords(pitch: str, twist: str = "", limit: int = 4) -> List[str]:
-    text = f"{pitch} {twist}".lower()
+    # Weight twist + pitch so technical/domain nouns aren't crowded out by intro filler
+    text = f"{twist} {pitch}".lower()
     tokens = re.findall(r"[a-z0-9][a-z0-9+-]{2,}", text)
     seen: List[str] = []
     for tok in tokens:
@@ -30,7 +35,7 @@ def extract_keywords(pitch: str, twist: str = "", limit: int = 4) -> List[str]:
             seen.append(tok)
         if len(seen) >= limit:
             break
-    return seen or ["app"]
+    return seen or ["software"]
 
 
 def _get_json(url: str, timeout: float = 4.0) -> Dict[str, Any]:
