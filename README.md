@@ -378,7 +378,7 @@ This public repository starts at v1.0.0 as a single commit. The earlier developm
 ### ⚖️ 4. License
 * **[PolyForm Shield License 1.0.0](LICENSE)**: you may read, use, modify and share LetsVibe — for personal, educational, nonprofit or commercial purposes — as long as you don't use it to provide a product or service that competes with LetsVibe (for example, running a rival leaderboard for vibe-coded software). See the [LICENSE](LICENSE) for the exact terms.
 * **The LetsVibe name and logo are not licensed.** The license covers the code only; please don't use the name or logo for your own projects or services.
-* Questions: **[todd.0042.git@gmail.com](mailto:todd.0042.git@gmail.com)**.
+* Questions: use the in-app **Chat / Support** widget or open a GitHub issue.
 * Third-party components (FastAPI, Uvicorn, Pydantic, Typer, Rich, Lizard, Jinja2, httpx, python-dotenv; Ollama and the Qwen2.5-Coder models at runtime) are used under their own licenses.
 
 ---

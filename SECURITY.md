@@ -8,7 +8,7 @@ addresses), but every report is taken seriously.
 **Please report privately — don't open a public issue.**
 
 * Preferred: GitHub's **[private vulnerability reporting](https://github.com/Todd0042/letsvibe/security/advisories/new)** for this repository.
-* Or email **todd.0042.git@gmail.com** with "LetsVibe security" in the subject.
+* Or reach out privately via the in-app **Chat / Support** widget with "LetsVibe security" in the message.
 
 Please include what you found, how to reproduce it, and what an attacker could do with it. You'll get a
 reply as soon as possible (this is a one-person project), and credit in the fix if you'd like it.

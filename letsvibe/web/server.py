@@ -22,7 +22,7 @@ import httpx
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,15 +48,20 @@ from ..core.auth import (
     generate_oauth_state,
     verify_session_token,
 )
+from ..evaluator.llama_supervisor_client import get_engine_status, sleep_engine, wake_engine
 from ..evaluator.ollama import OllamaClient, find_ollama_binary, get_free_vram_mb
+from ..storage.anna_db import init_anna_db
+from .anna_routes import router as anna_router
 from ..storage.db import (
     clear_finished_tasks,
     clear_pending_tasks,
+    purge_all_queue_tasks,
     export_user_data,
     list_appeals_for_user,
     list_projects_owned_by,
     DEFAULT_DB_PATH,
     check_user_submission_quota,
+    save_report_to_db,
     count_registered_users,
     create_appeal,
     decline_all_flagged_appeals,
@@ -100,6 +105,7 @@ from ..storage.db import (
     get_page_views,
     record_page_view,
     record_visitor_journey_step,
+    clear_visitor_history,
     get_recent_visitor_journeys,
 )
 from ..storage.identity import parse_repo_identity
@@ -221,6 +227,7 @@ async def lifespan(app: FastAPI):
     worker.start()
 
     # 6. Weekly rolling backups (2 kept); deletions are applied to them too
+    init_anna_db()
     backup_scheduler.start()
 
     yield
@@ -245,7 +252,7 @@ _ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "LETSVIBE_ALLOWED_ORIGINS",
-        "https://letsvibe.todd0042.dev,https://home.todd0042.dev,https://todd0042.dev,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8088,http://127.0.0.1:8088",
+        "https://anna.partners,https://apps.anna.partners,https://letsvibe.todd0042.dev,https://home.todd0042.dev,https://todd0042.dev,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8088,http://127.0.0.1:8088,http://localhost:5180,http://127.0.0.1:5180",
     ).split(",")
     if o.strip()
 ]
@@ -255,8 +262,9 @@ app.add_middleware(
     allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+app.include_router(anna_router)
 
 
 def _host_matches_request(header_url: str, request: Request) -> bool:
@@ -289,6 +297,8 @@ _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/robots.txt",
     "/sitemap.xml",
     "/api/health",
+    "/api/engine/status",
+    "/api/live-stats",
     "/api/queue",
     "/api/engines",
     "/api/taxonomy",
@@ -297,8 +307,54 @@ _ACTIVE_VIEWER_SKIP_PREFIXES = (
     "/api/auth/",
 )
 _ACTIVE_VIEWERS: Dict[str, Dict[str, Any]] = {}
+_ACTIVE_BOTS: Dict[str, float] = {}
 _IGNORED_VIEWERS: Dict[str, float] = {}
 _ACTIVE_VIEWERS_LOCK = threading.Lock()
+_LIVE_BOT_WINDOW_SECONDS = 300.0
+_BOT_UA_MARKERS = (
+    "bot", "crawler", "spider", "scraper", "curl/", "python-requests",
+    "python-urllib", "httpx", "aiohttp", "go-http-client", "scrapy",
+    "headless", "wget/", "libwww-perl", "java/", "node-fetch", "undici",
+)
+_BOT_PROBE_PREFIXES = (
+    "/wp-login", "/wp-admin", "/wp-content", "/xmlrpc.php", "/.env",
+    "/.git", "/phpmyadmin", "/pma", "/config.php", "/actuator", "/cgi-bin",
+)
+
+
+def _is_bot_user_agent(request: Request) -> bool:
+    ua = (request.headers.get("user-agent") or "").strip().lower()
+    if not ua:
+        return True
+    return any(m in ua for m in _BOT_UA_MARKERS)
+
+
+def _record_live_bot(key: str) -> None:
+    if not key or key.startswith("u:"):
+        return
+    now = time.monotonic()
+    cutoff = now - _LIVE_BOT_WINDOW_SECONDS
+    with _ACTIVE_VIEWERS_LOCK:
+        stale = [k for k, ts in _ACTIVE_BOTS.items() if ts < cutoff]
+        for k in stale:
+            _ACTIVE_BOTS.pop(k, None)
+        _ACTIVE_BOTS[key] = now
+        _ACTIVE_VIEWERS.pop(key, None)
+
+
+def _get_live_stats() -> Dict[str, int]:
+    now = time.monotonic()
+    v_cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
+    b_cutoff = now - _LIVE_BOT_WINDOW_SECONDS
+    with _ACTIVE_VIEWERS_LOCK:
+        for k in [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < v_cutoff]:
+            _ACTIVE_VIEWERS.pop(k, None)
+        for k in [k for k, ts in _ACTIVE_BOTS.items() if ts < b_cutoff]:
+            _ACTIVE_BOTS.pop(k, None)
+        return {
+            "live_visitors": len(_ACTIVE_VIEWERS),
+            "live_bots": len(_ACTIVE_BOTS),
+        }
 
 
 def _normalize_viewer_path(path: str) -> str:
@@ -370,8 +426,10 @@ def _record_active_viewer(request: Request) -> None:
     if request.method != "GET":
         return
     raw_path = request.url.path or "/"
-    if raw_path == "/robots.txt":
+    path_l = raw_path.lower()
+    if raw_path == "/robots.txt" or path_l.startswith(_BOT_PROBE_PREFIXES) or _is_bot_user_agent(request):
         key, _, _ = _resolve_visitor_identity(request)
+        _record_live_bot(key)
         _ignore_viewer(key)
         return
     if raw_path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES):
@@ -384,6 +442,7 @@ def _record_active_viewer(request: Request) -> None:
         for k in expired_ignores:
             _IGNORED_VIEWERS.pop(k, None)
         if _IGNORED_VIEWERS.get(key, 0.0) > now:
+            _ACTIVE_BOTS[key] = now
             return
         cutoff = now - _ACTIVE_VIEWER_WINDOW_SECONDS
         stale = [k for k, v in _ACTIVE_VIEWERS.items() if v["last_seen"] < cutoff]
@@ -398,6 +457,7 @@ def _record_active_viewer(request: Request) -> None:
             and not key.startswith("u:")
         ):
             _IGNORED_VIEWERS[key] = now + _SCRAPER_IGNORE_SECONDS
+            _ACTIVE_BOTS[key] = now
             _ACTIVE_VIEWERS.pop(key, None)
             return
         raw_pages = dict(prev.get("pages") or {}) if prev else {}
@@ -487,22 +547,15 @@ async def security_headers_and_csrf_middleware(request: Request, call_next):
     response = await call_next(request)
     raw_path = request.url.path or "/"
     if (
-        request.method in ("GET", "POST")
+        response.status_code == 404
         and not raw_path.startswith(_ACTIVE_VIEWER_SKIP_PREFIXES)
         and not is_admin_request(request)
     ):
         try:
-            key, label, country = _resolve_visitor_identity(request)
-            if raw_path.startswith("/api/") and response.status_code == 404:
-                _ignore_viewer(key)
-            elif not _is_viewer_ignored(key):
-                norm = _normalize_viewer_path(raw_path)
-                if request.method == "POST":
-                    norm = f"POST {norm}"
-                elif request.query_params.get("registration") == "closed":
-                    norm = "/?registration=closed"
-                record_visitor_journey_step(key, label, country, norm, response.status_code)
-        except Exception:  # nosec B110 - never break responses on analytics write
+            key, _, _ = _resolve_visitor_identity(request)
+            _record_live_bot(key)
+            _ignore_viewer(key)
+        except Exception:  # nosec B110
             pass
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -538,19 +591,21 @@ async def robots_txt():
 
 class EnqueueRequest(BaseModel):
     target: str
-    mode: str = "blend"
+    mode: str = "v10"
     requested_by: str = "user"
     project_profile: str = "auto"
     provenance: str = "vibe_coded"
     guest_access: str = "auto"
     user_hook: str = ""
+    branch: str = ""
+    references: List[Dict[str, Any]] = []
     accepted_terms_and_ownership: bool = False
     confirmed_no_explicit_content: bool = False
 
 
 class ConsistencyTestRequest(BaseModel):
     target: str
-    mode: str = "blend"
+    mode: str = "v10"
     project_profile: str = "auto"
     provenance: str = "vibe_coded"
     guest_access: str = "auto"
@@ -560,7 +615,7 @@ class ConsistencyTestRequest(BaseModel):
 
 class BatchOwnReposRequest(BaseModel):
     targets: list[str]
-    mode: str = "blend"
+    mode: str = ""
 
 
 class UpvoteRequest(BaseModel):
@@ -638,12 +693,19 @@ def _hide_test_task(task: Optional[Dict[str, Any]], viewer_username: str = "") -
 
 
 def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
-    """Inspects signed session cookie to authenticate the user."""
+    """Inspects signed session cookie (or Authorization Bearer token) to authenticate the user."""
     cookie = request.cookies.get(SESSION_COOKIE_NAME)
     if cookie:
         user = verify_session_token(cookie)
         if user and _session_still_valid(user):
             return user
+    auth_header = (request.headers.get("authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        bearer = auth_header[7:].strip()
+        if bearer:
+            user = verify_session_token(bearer)
+            if user and _session_still_valid(user):
+                return user
     # No header- or env-based test bypass: tests sign real session tokens instead.
     return None
 
@@ -723,7 +785,11 @@ async def api_registration_status():
 
 
 @app.get("/api/auth/github/login")
-async def api_github_login(request: Request, accept_terms: str = Query("", max_length=40)):
+async def api_github_login(
+    request: Request,
+    accept_terms: str = Query("", max_length=40),
+    popup: int = Query(0),
+):
     """
     Starts GitHub sign-in (read:user only) with CSRF protection. Signing in creates an account, so the
     current Terms of Use (and the 18+ age requirement) must be accepted first; the acceptance travels through
@@ -731,7 +797,8 @@ async def api_github_login(request: Request, accept_terms: str = Query("", max_l
     """
     if accept_terms != TERMS_VERSION:
         return RedirectResponse(url="/sign-in", status_code=302)
-    url, state_token = build_github_authorize_url(state=generate_oauth_state(scope_level=TERMS_STATE_PREFIX + TERMS_VERSION))
+    scope_marker = f"anna_popup_{TERMS_STATE_PREFIX}{TERMS_VERSION}" if popup == 1 else (TERMS_STATE_PREFIX + TERMS_VERSION)
+    url, state_token = build_github_authorize_url(state=generate_oauth_state(scope_level=scope_marker))
     res = RedirectResponse(url=url, status_code=302)
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     res.set_cookie(
@@ -755,8 +822,11 @@ async def api_github_callback(code: str, state: str, request: Request):
     cookie_state = request.cookies.get(CSRF_COOKIE_NAME, "")
     if not (is_valid_state and cookie_state and hmac.compare_digest(cookie_state.encode(), state.encode())):
         raise HTTPException(status_code=400, detail="Sign-in could not be verified. Please start the GitHub sign-in again.")
-    if carried != TERMS_STATE_PREFIX + TERMS_VERSION:  # terms not accepted (or an older version): accept first
+    expected_regular = TERMS_STATE_PREFIX + TERMS_VERSION
+    expected_popup = f"anna_popup_{expected_regular}"
+    if carried not in (expected_regular, expected_popup):  # terms not accepted (or an older version): accept first
         return RedirectResponse(url="/sign-in", status_code=302)
+    is_anna_popup = carried == expected_popup
 
     try:
         profile = await exchange_github_code(code)
@@ -792,8 +862,36 @@ async def api_github_callback(code: str, state: str, request: Request):
     }
     session_token = create_session_token(session_payload)
 
-    target_redirect = "/admin" if is_admin else "/"
-    res = RedirectResponse(url=target_redirect, status_code=302)
+    if is_anna_popup:
+        payload_json = json.dumps(
+            {
+                "type": "letsvibe_anna_auth",
+                "token": session_token,
+                "user": {
+                    "username": profile["username"],
+                    "avatar_url": profile["avatar_url"],
+                    "is_admin": is_admin,
+                },
+            }
+        )
+        html = f"""<!doctype html><html><body style="background:#0b0f19;color:#f8fafc;font-family:sans-serif;display:grid;place-items:center;height:100vh;margin:0;">
+<div>Signed in as @{profile["username"]}. Returning to Anna…</div>
+<script>
+(function(){{
+  var msg = {payload_json};
+  var targets = ["https://anna.partners", "https://apps.anna.partners", "http://localhost:5180", "http://127.0.0.1:5180"];
+  if (window.opener) {{
+    for (var i = 0; i < targets.length; i++) {{
+      try {{ window.opener.postMessage(msg, targets[i]); }} catch (e) {{}}
+    }}
+  }}
+  setTimeout(function(){{ window.close(); }}, 250);
+}})();
+</script></body></html>"""
+        res = HTMLResponse(content=html)
+    else:
+        target_redirect = "/admin" if is_admin else "/"
+        res = RedirectResponse(url=target_redirect, status_code=302)
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     expires_dt = datetime.now(timezone.utc) + timedelta(seconds=SESSION_DURATION_SECONDS)
     res.set_cookie(
@@ -931,23 +1029,42 @@ async def api_image_proxy(u: str = Query(..., max_length=500), nocache: bool = F
     return Response(content=body, media_type=ctype, headers=headers)
 
 
+_PUBLIC_SHOWCASE_OWNERS = {
+    x.strip().lower()
+    for x in os.environ.get("LETSVIBE_SHOWCASE_OWNERS", "Todd0042").split(",")
+    if x.strip()
+}
+
+
+def is_public_owner_showcase(owner: str) -> bool:
+    """Returns True for creator benchmark/showcase repos whose owner-only sections are publicly previewable."""
+    return str(owner or "").strip().lower() in _PUBLIC_SHOWCASE_OWNERS
+
+
 @app.get("/api/projects/{owner}/{repo}/maintainer-notes")
 async def api_maintainer_notes(owner: str, repo: str, request: Request):
-    """Code-health notes (never graded), for the project's owner or the admin only."""
+    """Code-health notes (never graded), for the project's owner, admin, or public creator showcase repos."""
     import re
     user = get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Sign in to see maintainer notes.")
-    is_admin = bool(user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
-    if not is_admin and (user.get("username") or "").lower() != owner.lower():
+    is_admin = bool(user and user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
+    is_owner = bool(user and (user.get("username") or "").lower() == owner.lower())
+    is_showcase = is_public_owner_showcase(owner)
+    if not (is_admin or is_owner or is_showcase):
+        if not user:
+            raise HTTPException(status_code=401, detail="Sign in to see maintainer notes.")
         raise HTTPException(status_code=403, detail="Maintainer notes are only shown to the project's owner.")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
         raise HTTPException(status_code=404, detail="No maintainer notes.")
     f = Path("data/reports") / re.sub(r"[^\w\-.]", "_", owner) / re.sub(r"[^\w\-.]", "_", repo) / "maintainer_notes.json"
     if not f.is_file():
-        return {"available": False, "notes": []}
+        return {"available": False, "showcase_preview": bool(is_showcase and not (is_admin or is_owner)), "notes": []}
     data = json.loads(f.read_text())
-    return {"available": True, "lines_of_code": data.get("lines_of_code", 0), "notes": data.get("notes", [])}
+    return {
+        "available": True,
+        "showcase_preview": bool(is_showcase and not (is_admin or is_owner)),
+        "lines_of_code": data.get("lines_of_code", 0),
+        "notes": data.get("notes", []),
+    }
 
 
 def _render_project_export_markdown(project: Dict[str, Any], notes_data: Optional[Dict[str, Any]]) -> str:
@@ -1002,10 +1119,12 @@ async def api_project_export(
     from ..storage.db import strip_safety_details
 
     user = get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Sign in with GitHub to export your project report.")
-    is_admin = bool(user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
-    if not is_admin and not owns_repo(user, owner):
+    is_admin = bool(user and user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
+    is_owner = bool(user and owns_repo(user, owner))
+    is_showcase = is_public_owner_showcase(owner)
+    if not (is_admin or is_owner or is_showcase):
+        if not user:
+            raise HTTPException(status_code=401, detail="Sign in with GitHub to export your project report.")
         raise HTTPException(status_code=403, detail="Only the repository's owner can export its full report.")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
         raise HTTPException(status_code=404, detail="Project report not found.")
@@ -1051,7 +1170,12 @@ async def api_project_export(
 
 
 @app.get("/badge/{owner}/{repo_file}", include_in_schema=False)
-async def api_badge(owner: str, repo_file: str, style: str = Query("classic", max_length=20)):
+async def api_badge(
+    owner: str,
+    repo_file: str,
+    style: str = Query("classic", max_length=20),
+    scale: str = Query("raw", max_length=10),
+):
     """
     "Badge of honor" image (web/badges.py) for READMEs and websites: the project's latest public grade, drawn as SVG.
     Public like the project page; admin test gradings and unknown projects get a neutral "not graded" badge. It sets no
@@ -1065,9 +1189,10 @@ async def api_badge(owner: str, repo_file: str, style: str = Query("classic", ma
     project = None
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", owner) and re.fullmatch(r"[A-Za-z0-9._-]{1,100}", repo):
         project = get_project_detail(f"{owner}/{repo}")  # public projects only (never admin test gradings)
-    svg = render(style if style in STYLES else "classic", project)
+    scale_clean = "curve" if str(scale or "").strip().lower() == "curve" else "raw"
+    svg = render(style if style in STYLES else "classic", project, scale=scale_clean)
     headers = {
-        "Cache-Control": "public, max-age=1800",
+        "Cache-Control": "public, max-age=60",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     }
@@ -1549,6 +1674,126 @@ async def api_health():
     )
 
 
+@app.get("/api/engine/status")
+async def api_engine_status():
+    """Public engine status: awake, waking, dormant (wakes on queue), or unavailable."""
+    st = get_engine_status()
+    return JSONResponse(
+        {
+            "state": st.get("state", "unavailable"),
+            "idle_minutes": st.get("idle_minutes", 0),
+            "idle_seconds_remaining": st.get("idle_seconds_remaining"),
+            "supervisor_online": bool(st.get("supervisor_online", False)),
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+_DOC_PAGE_META = {
+    "how-it-works.html": ("How Grading Works", "/how-it-works"),
+    "faq.html": ("FAQ", "/faq"),
+    "terms.html": ("Terms of Service", "/terms"),
+    "privacy.html": ("Privacy Policy", "/privacy"),
+    "grading-curve.html": ("Grading Curve", "/grading-curve"),
+}
+
+_SITE_RECENT_FEATURES = [
+    ("2026-11-16", "Upward-only half-bell curve (never reduces Raw Rubric)", "/grading-curve"),
+    ("2026-11-16", "Doc version archives & code Diff View", "/how-it-works"),
+    ("2026-11-16", "In-memory Live Visitors & Bots counter (no tracking saved)", "/"),
+    ("2026-11-16", "On-demand local AI engine wake/sleep", None),
+]
+
+
+def _collect_whats_new(days: int = 7) -> Dict[str, Any]:
+    """Returns docs modified within `days` and the current live/default production engine info."""
+    cutoff = time.time() - (days * 86400)
+    tmpl_root = Path(os.environ.get("LETSVIBE_TEMPLATES_DIR") or (Path(__file__).resolve().parent / "templates"))
+    pages_dir = tmpl_root / "pages"
+    docs: List[Dict[str, Any]] = []
+    if pages_dir.is_dir():
+        for fname, (title, url) in _DOC_PAGE_META.items():
+            path = pages_dir / fname
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime >= cutoff:
+                docs.append({"title": title, "url": url, "updated_at": int(mtime)})
+
+    # /grading-curve is rendered dynamically from peer_grades.py
+    curve_src = Path(__file__).resolve().parent.parent / "storage" / "peer_grades.py"
+    try:
+        if curve_src.is_file() and curve_src.stat().st_mtime >= cutoff:
+            docs.append({"title": "Grading Curve", "url": "/grading-curve", "updated_at": int(curve_src.stat().st_mtime)})
+    except OSError:
+        pass
+
+    live_engine: Optional[Dict[str, Any]] = None
+    try:
+        from letsvibe_engine.api import REGISTRY_PATH, load_registry
+        from ..evaluator.rubric import RUBRIC_CHANGELOG
+
+        engines = load_registry()
+        default_prod = next(
+            (e for e in engines if str(e.get("status") or "").lower() == "production" and e.get("is_default")),
+            None,
+        ) or next(
+            (e for e in engines if str(e.get("status") or "").lower() == "production"),
+            None,
+        )
+        if default_prod:
+            ver = str(default_prod.get("rubric_version") or default_prod.get("engine_version") or "")
+            reg_mtime = int(REGISTRY_PATH.stat().st_mtime) if REGISTRY_PATH.is_file() else 0
+            cl_entry = next(
+                (c for c in RUBRIC_CHANGELOG if str(c.get("version") or "").lower().startswith(ver.lower())),
+                None,
+            ) or next(
+                (c for c in RUBRIC_CHANGELOG if "testing" not in str(c.get("version") or "").lower()),
+                None,
+            )
+            cl_title = str(cl_entry.get("title") or "") if cl_entry else str(default_prod.get("short_name") or ver)
+            cl_changes = [str(x) for x in (cl_entry.get("changes") or [])] if cl_entry else []
+            if reg_mtime >= cutoff:
+                live_engine = {
+                    "version": ver,
+                    "name": str(default_prod.get("short_name") or f"Engine {ver}"),
+                    "changelog_title": cl_title,
+                    "changelog_changes": cl_changes,
+                    "url": "/changelog",
+                    "updated_at": reg_mtime,
+                }
+    except Exception:
+        pass
+
+    features: List[Dict[str, Any]] = []
+    for f_date, f_title, f_url in _SITE_RECENT_FEATURES:
+        try:
+            ts = datetime.strptime(f_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            continue
+        if ts >= cutoff:
+            features.append({"title": f_title, "url": f_url})
+
+    return {"features": features, "docs": docs, "engine": live_engine}
+
+
+def _docs_recently_updated(days: int = 7) -> bool:
+    """Returns True if any documentation page or live default engine was updated within `days`."""
+    wn = _collect_whats_new(days)
+    return bool(wn["features"] or wn["docs"] or wn["engine"])
+
+
+@app.get("/api/live-stats")
+async def api_live_stats():
+    """Public in-memory live visitor & bot counts (nothing saved to disk) + 7-day doc/engine freshness."""
+    payload = _get_live_stats()
+    wn = _collect_whats_new(7)
+    payload["docs_updated"] = bool(wn["docs"] or wn["engine"])
+    payload["whats_new"] = wn
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/leaderboard")
 async def api_leaderboard(
     request: Request,
@@ -1783,7 +2028,7 @@ async def api_enqueue(req: EnqueueRequest, request: Request):
                 detail="Invalid repository address. Currently only public GitHub repositories (https://github.com/owner/repo) are supported.",
             )
         target = identity.canonical_url
-        is_test = bool(is_testing_engine and not testing_server)
+        is_test = False
         if not owns_repo(user, identity.owner):
             # TEST MODE (remove before launch): the admin may grade other accounts' repos, shown only to the admin
             if admin_test_submissions_enabled() and is_admin_request(request):
@@ -1843,6 +2088,22 @@ async def api_enqueue(req: EnqueueRequest, request: Request):
         "guest_access": (req.guest_access or "auto").strip(),
         "user_hook": (req.user_hook or "").strip()[:240],
     }
+
+    from ..core.ref_fetcher import validate_submission_references
+    from ..storage.identity import validate_branch_name
+
+    try:
+        clean_branch = validate_branch_name(req.branch) or (identity.branch or "")
+        clean_refs = validate_submission_references(req.references)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if clean_branch:
+        submission_meta["branch"] = clean_branch
+    if identity.subpath:
+        submission_meta["subpath"] = identity.subpath
+    if clean_refs:
+        submission_meta["references"] = clean_refs
 
     task_id = enqueue_task(
         target=target,
@@ -1914,7 +2175,9 @@ async def api_project_reanalyze(req: ReanalyzeRequest, request: Request):
             detail=f"Repository '{slug}' is already up to date at commit {short_sha}. Zero changes detected since last evaluation.",
         )
 
-    task_id = enqueue_task(target=target, mode="blend", requested_by=username)
+    from ..evaluator.pipeline import get_default_engine_id
+
+    task_id = enqueue_task(target=target, mode=get_default_engine_id(), requested_by=username)
     return {
         "status": "ok",
         "task_id": task_id,
@@ -1994,8 +2257,10 @@ async def api_admin_system(_admin: Dict[str, Any] = Depends(require_admin)):
     registered_users = count_registered_users(ADMIN_GITHUB_USER, ADMIN_GITHUB_ID)
 
     backups = list_backups()
+    engine_status = get_engine_status()
     return {
         "status": "ok",
+        "engine_status": engine_status,
         "ollama_live": is_live,
         "ollama_bin": ollama_bin,
         "models": models,
@@ -2028,20 +2293,35 @@ async def api_admin_test_backup(_admin: Dict[str, Any] = Depends(require_admin))
     }
 
 @app.post("/api/admin/rescan-all")
-async def api_admin_rescan_all(_admin: Dict[str, Any] = Depends(require_admin)):
-    """Admin endpoint: Re-queues all database repositories for a fresh prompt evaluation scan."""
+async def api_admin_rescan_all(request: Request, _admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin endpoint: Re-queues all database repositories for a fresh evaluation using the selected (or default) engine."""
+    from ..evaluator.pipeline import get_default_engine_id, get_engine_info
+
+    req_mode = ""
+    try:
+        raw_body = await request.body()
+        if raw_body and raw_body.strip():
+            payload = json.loads(raw_body)
+            if isinstance(payload, dict):
+                req_mode = str(payload.get("mode") or "").strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.")
+
+    selected_mode = req_mode or get_default_engine_id()
+    if req_mode and not get_engine_info(selected_mode):
+        raise HTTPException(status_code=400, detail=f"Unknown engine version: {selected_mode}")
+
     targets = get_all_project_targets()
-    
     requeued_count = 0
     for target in targets:
-        # Enqueue in 'blend' mode for full dual-model re-evaluation
-        enqueue_task(target=target, mode="blend", requested_by="admin_rescan")
+        enqueue_task(target=target, mode=selected_mode, requested_by="admin_rescan", force_override=True)
         requeued_count += 1
-        
+
     return {
         "status": "ok",
+        "engine": selected_mode,
         "requeued_count": requeued_count,
-        "message": f"Successfully re-queued {requeued_count} repositories for prompt re-evaluation."
+        "message": f"Successfully re-queued {requeued_count} repositories for evaluation ({selected_mode}).",
     }
 
 @app.post("/api/admin/queue/find-random")
@@ -2069,11 +2349,14 @@ async def api_admin_find_random(admin: Dict[str, Any] = Depends(require_admin)):
         raise HTTPException(status_code=429, detail=str(e))
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Couldn't reach GitHub search. Try again in a moment.")
+    from ..evaluator.pipeline import get_default_engine_id
+
+    default_mode = get_default_engine_id()
     queued = []
     for repo in found["repos"]:
         if repo["full_slug"].split("/", 1)[0].lower() == username.lower():
             continue  # your own repos go through the normal submit form
-        repo["task_id"] = enqueue_task(target=repo["url"], mode="blend", requested_by=username, is_test=True)
+        repo["task_id"] = enqueue_task(target=repo["url"], mode=default_mode, requested_by=username, is_test=True)
         queued.append(repo)
     return {"status": "ok", "queued": queued, "notes": found["notes"], "searches": found["queries"],
             "message": f"Queued {len(queued)} random vibe-coded repo{'' if len(queued) == 1 else 's'} as admin test gradings."}
@@ -2104,11 +2387,14 @@ async def api_admin_find_good(admin: Dict[str, Any] = Depends(require_admin)):
         raise HTTPException(status_code=429, detail=str(e))
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Couldn't reach GitHub search. Try again in a moment.")
+    from ..evaluator.pipeline import get_default_engine_id
+
+    default_mode = get_default_engine_id()
     queued = []
     for repo in found["repos"]:
         if repo["full_slug"].split("/", 1)[0].lower() == username.lower():
             continue  # your own repos go through the normal submit form
-        repo["task_id"] = enqueue_task(target=repo["url"], mode="blend", requested_by=username, is_test=True)
+        repo["task_id"] = enqueue_task(target=repo["url"], mode=default_mode, requested_by=username, is_test=True)
         queued.append(repo)
     message = ("Queued 1 well-starred vibe-coded repo as an admin test grading." if queued
                else "Nothing new to queue.")
@@ -2158,13 +2444,13 @@ async def api_admin_my_repos(admin: Dict[str, Any] = Depends(require_admin)):
 @app.post("/api/admin/queue/batch-own-repos")
 async def api_admin_batch_own_repos(req: BatchOwnReposRequest, admin: Dict[str, Any] = Depends(require_admin)):
     """Enqueues a batch of the admin's own repositories with the selected engine version."""
-    from ..evaluator.pipeline import get_engine_info
+    from ..evaluator.pipeline import get_default_engine_id, get_engine_info
 
-    mode = (req.mode or "blend").strip()
+    mode = (req.mode or "").strip() or get_default_engine_id()
     engine_info = get_engine_info(mode)
     if not engine_info and mode not in ("blend", "fast", "deep"):
         raise HTTPException(status_code=400, detail=f"Unknown audit mode '{mode}'.")
-    is_test = bool(engine_info and engine_info.get("status") == "testing")
+    is_test = False
 
     username = (admin.get("username") or "").strip()
     seen: set[str] = set()
@@ -2413,6 +2699,13 @@ async def api_admin_clear_pending(_admin: Dict[str, Any] = Depends(require_admin
     return {"status": "ok", "removed": removed, "message": f"Cleared {removed} pending task{'s' if removed != 1 else ''}."}
 
 
+@app.post("/api/admin/queue/purge-all")
+async def api_admin_purge_all(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin: purges ALL tasks from the queue list at once (graded reports are not affected)."""
+    removed = purge_all_queue_tasks()
+    return {"status": "ok", "removed": removed, "message": f"Purged {removed} task{'s' if removed != 1 else ''} from the queue."}
+
+
 @app.post("/api/admin/reclassify-all")
 async def api_admin_reclassify_all(_admin: Dict[str, Any] = Depends(require_admin)):
     """Admin: re-derive category, platforms and device profile for every project (no regrade)."""
@@ -2436,7 +2729,18 @@ async def api_admin_active_viewers(_admin: Dict[str, Any] = Depends(require_admi
         "window_seconds": _ACTIVE_VIEWER_WINDOW_SECONDS,
         "viewers": viewers,
         "page_views": get_page_views(limit=30),
-        "journeys": get_recent_visitor_journeys(limit_visitors=15, steps_per_visitor=12),
+        "journeys": [],
+    }
+
+
+@app.post("/api/admin/visitor-history/clear")
+async def api_admin_clear_visitor_history(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin: clears all recorded visitor journeys and page-view counts."""
+    result = clear_visitor_history()
+    return {
+        "status": "ok",
+        **result,
+        "message": f"Cleared {result['journeys_removed']} journey steps and {result['views_removed']} page view entries.",
     }
 
 
@@ -2472,19 +2776,52 @@ async def api_admin_clear_database(_admin: Dict[str, Any] = Depends(require_admi
 
 @app.post("/api/admin/system/free-vram")
 async def api_admin_free_vram(_admin: Dict[str, Any] = Depends(require_admin)):
-    """Admin endpoint: Unload all active models from GPU VRAM."""
+    """Admin endpoint: Unload llama-server and any active Ollama models from GPU VRAM."""
     client = OllamaClient()
     unloaded = client.unload_all_models()
+    llama_slept = False
+    try:
+        res = sleep_engine()
+        llama_slept = res.get("state") == "dormant"
+    except Exception:
+        pass
     return {
         "status": "ok",
         "unloaded_count": unloaded,
-        "message": f"Successfully freed GPU memory (unloaded {unloaded} active model(s)).",
+        "llama_slept": llama_slept,
+        "message": "Successfully freed GPU memory & put local AI engine to sleep.",
     }
+
+
+@app.post("/api/admin/engine/wake")
+async def api_admin_wake_engine(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin endpoint: Wake letsvibe-llama-server via host supervisor."""
+    try:
+        res = wake_engine()
+        return {"status": "ok", **res}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Could not wake engine: {exc}")
+
+
+@app.post("/api/admin/engine/sleep")
+async def api_admin_sleep_engine(_admin: Dict[str, Any] = Depends(require_admin)):
+    """Admin endpoint: Put letsvibe-llama-server to sleep immediately to reclaim RAM/VRAM."""
+    try:
+        res = sleep_engine()
+        return {"status": "ok", **res}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Could not sleep engine: {exc}")
 
 
 @app.post("/api/admin/ollama/start")
 async def api_admin_start_ollama(_admin: Dict[str, Any] = Depends(require_admin)):
-    """Admin endpoint: Trigger daemon startup."""
+    """Admin endpoint: Wake llama-server (or fallback Ollama daemon)."""
+    try:
+        res = wake_engine()
+        if res.get("state") in ("waking", "awake"):
+            return {"status": "ok", "running": True, **res}
+    except Exception:
+        pass
     client = OllamaClient()
     success = client.ensure_server_running(timeout_sec=15.0)
     return {"status": "ok" if success else "error", "running": success}
@@ -2522,7 +2859,7 @@ async def api_admin_projects_tree(search: Optional[str] = Query(None), admin: Di
 
 class ForceRescanRequest(BaseModel):
     full_slug: str
-    mode: str = "blend"
+    mode: str = ""
     project_profile: str = "auto"
     provenance: str = "vibe_coded"
     guest_access: str = "auto"
@@ -2536,7 +2873,7 @@ async def api_admin_force_rescan(req: ForceRescanRequest, _admin: Dict[str, Any]
     (the "already evaluated at this commit" check lives in the submit endpoints, not in the worker). Used after a
     rubric change or to benchmark historical/testing engines. The vibe-coded check still applies.
     """
-    from ..evaluator.pipeline import get_engine_info, is_testing_engine as check_testing_engine
+    from ..evaluator.pipeline import get_default_engine_id, get_engine_info, is_testing_engine as check_testing_engine
 
     slug = urllib.parse.unquote(req.full_slug).strip()
     conn = get_db_connection()
@@ -2546,7 +2883,7 @@ async def api_admin_force_rescan(req: ForceRescanRequest, _admin: Dict[str, Any]
         conn.close()
     if not row or not row["canonical_url"]:
         raise HTTPException(status_code=404, detail=f"Project '{slug}' not found")
-    mode = (req.mode or "blend").strip()
+    mode = (req.mode or "").strip() or get_default_engine_id()
     is_test_engine = check_testing_engine(mode)
     is_test = bool(row["is_test"]) or is_test_engine
     submission_meta = {
@@ -2777,6 +3114,110 @@ async def user_dashboard(request: Request):
     return HTMLResponse(render_dashboard_html(view="user"))
 
 
+class ImportV10aRequest(BaseModel):
+    report: Dict[str, Any]
+
+
+@app.post("/api/reports/import-v10a")
+async def api_import_v10a_report(req: ImportV10aRequest, request: Request):
+    """
+    Imports a v10a report generated by LetsVibe-Vibecode-Assistant-Anna after verifying:
+      1. The user is signed in with GitHub and owns the repository (unless admin test mode).
+      2. The repository is public on GitHub and the report's commit_sha belongs to it.
+      3. Sampled file paths from repo_fingerprint match that commit's tree on GitHub.
+    """
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Please sign in with GitHub to import a v10a report.",
+        )
+
+    rep = dict(req.report or {})
+    rv = str(rep.get("rubric_version", "")).strip().lower()
+    if rv not in ("v10a", "v10.3a"):
+        raise HTTPException(status_code=400, detail="Only v10a or v10.3a (Anna) reports can be imported here.")
+
+    raw_target = str(rep.get("repo_source") or rep.get("full_slug") or "").strip()
+    if not raw_target:
+        raise HTTPException(status_code=400, detail="Report is missing repo_source / full_slug.")
+
+    identity = parse_repo_identity(raw_target)
+    if identity.provider != "github" or not identity.owner or not identity.repo_name:
+        raise HTTPException(status_code=400, detail="Only public GitHub repositories can be imported.")
+
+    username = user.get("username", "")
+    is_admin = bool(user.get("is_admin", False))
+    allow_other = admin_test_submissions_enabled() and is_admin_request(request)
+    if not owns_repo(user, identity.owner) and not allow_other:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You can only import reports for repositories owned by @{username}.",
+        )
+
+    quota = check_user_submission_quota(username=username, is_admin=is_admin)
+    if not quota["allowed"]:
+        raise HTTPException(status_code=429, detail=quota["message"])
+
+    commit_sha = str(rep.get("commit_sha") or "").strip().lower()
+    if not commit_sha or len(commit_sha) < 7 or not all(c in "0123456789abcdef" for c in commit_sha):
+        raise HTTPException(status_code=400, detail="Report is missing a valid commit_sha for repo verification.")
+
+    # Verify against live GitHub API that the repo is public and commit_sha + files belong to it
+    gh_headers = {"Accept": "application/vnd.github+json", "User-Agent": "LetsVibe-Verifier"}
+    async with httpx.AsyncClient(timeout=12.0, headers=gh_headers) as client:
+        repo_res = await client.get(f"https://api.github.com/repos/{identity.owner}/{identity.repo_name}")
+        if repo_res.status_code != 200:
+            raise HTTPException(status_code=400, detail="Repository not found on GitHub or is private.")
+        repo_json = repo_res.json()
+        if repo_json.get("private"):
+            raise HTTPException(status_code=400, detail="Private repositories cannot be imported to the leaderboard.")
+
+        commit_res = await client.get(
+            f"https://api.github.com/repos/{identity.owner}/{identity.repo_name}/commits/{commit_sha}"
+        )
+        if commit_res.status_code != 200:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Commit '{commit_sha[:7]}' could not be verified on github.com/{identity.full_slug}.",
+            )
+        commit_json = commit_res.json()
+        verified_sha = str(commit_json.get("sha") or commit_sha)
+
+        # Spot-check tree paths from repo_fingerprint against GitHub's git tree at that commit
+        fp = rep.get("repo_fingerprint") or {}
+        sample_paths = [str(p) for p in (fp.get("sample_paths") or []) if p][:10]
+        if sample_paths:
+            tree_res = await client.get(
+                f"https://api.github.com/repos/{identity.owner}/{identity.repo_name}/git/trees/{verified_sha}",
+                params={"recursive": "1"},
+            )
+            if tree_res.status_code == 200:
+                gh_paths = {item.get("path") for item in (tree_res.json().get("tree") or []) if item.get("path")}
+                if gh_paths and not any(p in gh_paths for p in sample_paths):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Report file fingerprint does not match the verified GitHub repository.",
+                    )
+
+    rep["rubric_version"] = rv
+    rep["commit_sha"] = verified_sha
+    is_test = not owns_repo(user, identity.owner)
+    report_id = save_report_to_db(
+        report_dict=rep,
+        identity=identity,
+        commit_sha=verified_sha,
+        is_test=is_test,
+    )
+    return {
+        "status": "ok",
+        "report_id": report_id,
+        "full_slug": identity.full_slug,
+        "rubric_version": "v10a",
+        "message": f"Verified and imported v10a report for {identity.full_slug}.",
+    }
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Serves the Admin Control & Queue Console UI."""
@@ -2801,7 +3242,9 @@ async def content_page(page_slug: str, request: Request):
     if page_slug not in PAGES:
         raise HTTPException(status_code=404, detail="Page not found.")
     _record_non_admin_page_view(request, f"/{page_slug}")
-    return HTMLResponse(render_page(page_slug), headers={"Cache-Control": "no-cache"})
+    version = (request.query_params.get("version") or "").strip() or None
+    diff_mode = (request.query_params.get("diff") or "").strip().lower() in ("1", "true", "yes")
+    return HTMLResponse(render_page(page_slug, version=version, diff=diff_mode), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/project/{full_slug:path}", response_class=HTMLResponse)

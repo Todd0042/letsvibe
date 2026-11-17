@@ -85,18 +85,23 @@ def _svg(width: float, height: float, title: str, body: str) -> str:
             f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" aria-label="{t}"><title>{t}</title>{body}</svg>')
 
 
-def _summary(project: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _summary(project: Optional[Dict[str, Any]], scale: str = "raw") -> Dict[str, Any]:
     if not project:
         return {"graded": False, "letter": "", "score": None, "name": "", "family": ""}
-    letter = str(project.get("letter_grade") or "").strip()
-    score = project.get("curved_score", project.get("final_score"))
+    use_curve = scale == "curve" and project.get("curved_score") is not None
+    if use_curve:
+        score = project.get("curved_score")
+        letter = str(project.get("curved_letter_grade") or project.get("letter_grade") or "").strip()
+    else:
+        score = project.get("final_score")
+        letter = str(project.get("raw_letter_grade") or project.get("letter_grade") or "").strip()
     return {"graded": bool(letter) and score is not None, "letter": letter,
             "score": float(score) if score is not None else None,
             "name": str(project.get("repo_name") or ""), "family": _family(letter)}
 
 
-def classic(project: Optional[Dict[str, Any]]) -> str:
-    p = _summary(project)
+def classic(project: Optional[Dict[str, Any]], scale: str = "raw") -> str:
+    p = _summary(project, scale=scale)
     left = "LetsVibe"
     right = f"{p['letter']} · {p['score']:.1f}" if p["graded"] else "not graded"
     colour, edge = GRADE_COLOURS.get(p["family"], NOT_GRADED)
@@ -117,8 +122,8 @@ def classic(project: Optional[Dict[str, Any]]) -> str:
     return _svg(w, h, f"LetsVibe grade: {right}", body)
 
 
-def for_the_badge(project: Optional[Dict[str, Any]]) -> str:
-    p = _summary(project)
+def for_the_badge(project: Optional[Dict[str, Any]], scale: str = "raw") -> str:
+    p = _summary(project, scale=scale)
     left = "LETSVIBE GRADED"
     right = f"{p['letter']}  {p['score']:.1f}" if p["graded"] else "NOT GRADED"
     colour, edge = GRADE_COLOURS.get(p["family"], NOT_GRADED)
@@ -139,10 +144,10 @@ def for_the_badge(project: Optional[Dict[str, Any]]) -> str:
     return _svg(w, h, f"LetsVibe grade: {right}", body)
 
 
-def medal(project: Optional[Dict[str, Any]]) -> str:
-    p = _summary(project)
+def medal(project: Optional[Dict[str, Any]], scale: str = "raw") -> str:
+    p = _summary(project, scale=scale)
     if not p["graded"]:
-        return classic(project)
+        return classic(project, scale=scale)
     hi, light, mid, dark, deep = METALS.get(p["family"] if p["family"] in METALS else "D")
     if p["family"] == "F":
         hi, light, mid, dark, deep = METALS["D"]
@@ -181,10 +186,10 @@ def medal(project: Optional[Dict[str, Any]]) -> str:
     return _svg(140, 140, f"LetsVibe grade: {p['letter']} ({p['score']:.1f})", body)
 
 
-def card(project: Optional[Dict[str, Any]]) -> str:
-    p = _summary(project)
+def card(project: Optional[Dict[str, Any]], scale: str = "raw") -> str:
+    p = _summary(project, scale=scale)
     if not p["graded"]:
-        return classic(project)
+        return classic(project, scale=scale)
     colour, edge = GRADE_COLOURS[p["family"]]
     w, h = 400, 118
     name = p["name"]
@@ -222,6 +227,6 @@ def card(project: Optional[Dict[str, Any]]) -> str:
 RENDERERS = {"classic": classic, "for-the-badge": for_the_badge, "medal": medal, "card": card}
 
 
-def render(style: str, project: Optional[Dict[str, Any]]) -> str:
+def render(style: str, project: Optional[Dict[str, Any]], scale: str = "raw") -> str:
     """SVG for `style` (unknown styles fall back to classic); project None draws a 'not graded' badge."""
-    return RENDERERS.get(style, classic)(project)
+    return RENDERERS.get(style, classic)(project, scale=scale)

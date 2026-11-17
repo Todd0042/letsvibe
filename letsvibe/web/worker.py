@@ -15,12 +15,14 @@ from ..analyzers.complexity import ComplexityAnalyzer
 from ..analyzers.functionality import FunctionalityAnalyzer
 from ..analyzers.security import SecurityAnalyzer
 from ..core.ingest import RepositoryIngestor
+from ..core.ref_fetcher import extract_reference_context
 from ..analyzers.journey_signals import gather_journey_signals, full_readme as _full_readme
 from ..evaluator.pipeline import evaluate, gather_metrics
 from ..core.models import DeterministicMetrics
 from ..core.platforms import detect_platforms
 from ..core.vibe_detector import VibeDetector
 from ..evaluator.classifier import classify_project
+from ..evaluator.llama_supervisor_client import ensure_llama_awake, touch_engine
 from ..evaluator.ollama import CpuSpilloverError, OllamaClient
 from ..storage.db import (
     DEFAULT_DB_PATH,
@@ -146,10 +148,15 @@ class AuditQueueWorker:
         conn = get_db_connection(self.db_path)
         try:
             row = conn.execute("SELECT status FROM audit_queue WHERE id = ?", (task_id,)).fetchone()
+            if not row or row["status"] != "queued":
+                return False
+            with conn:
+                conn.execute(
+                    "UPDATE queue_settings SET front_task_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+                    (task_id,),
+                )
         finally:
             conn.close()
-        if not row or row["status"] != "queued":
-            return False
         self._next_task_id = task_id
         return True
 
@@ -227,9 +234,20 @@ class AuditQueueWorker:
 
         try:
             # 1. Ingestion (Fast: 5% -> 10%)
-            last_step_msg = f"Ingesting repository target: {target}"
+            branch = str(submission_meta.get("branch") or "").strip() or None
+            subpath = str(submission_meta.get("subpath") or "").strip() or None
+            last_step_msg = f"Ingesting repository target: {target}" + (f" (branch {branch})" if branch else "")
             self._update_task_progress(task_id, last_step_msg, pct=6)
-            packed_repo = RepositoryIngestor.ingest(target)
+            packed_repo = RepositoryIngestor.ingest(
+                target,
+                ignore_limits=force_override,
+                branch=branch,
+                subpath=subpath,
+            )
+            refs = submission_meta.get("references") or []
+            if isinstance(refs, list) and refs:
+                self._update_task_progress(task_id, "Fetching host/framework reference context...", pct=8)
+                submission_meta["reference_context_text"] = extract_reference_context(refs)
 
             vendor_note = (
                 f" (skipped {packed_repo.skipped_vendor_files} untouched vendor/SDK files)"
@@ -272,7 +290,16 @@ class AuditQueueWorker:
             client.check_cancelled = lambda: self._check_stop(task_id)
             mode_l = str(mode or "").strip().lower()
             is_v10 = mode_l == "v10" or mode_l.startswith("v10.")
-            if not is_v10 and not client.is_running():
+            if is_v10:
+                wake_res = ensure_llama_awake(
+                    on_progress=lambda msg: self._update_task_progress(task_id, msg, pct=12),
+                    is_cancelled=lambda: self._check_stop(task_id),
+                    max_wait_sec=60.0,
+                )
+                if not wake_res.get("ok"):
+                    self._fail_task(task_id, str(wake_res.get("error") or "Local AI engine could not be woken."))
+                    return
+            elif not client.is_running():
                 last_step_msg = "Starting local Ollama daemon..."
                 self._update_task_progress(task_id, last_step_msg, pct=12)
                 if not client.ensure_server_running(timeout_sec=15.0):
@@ -316,6 +343,8 @@ class AuditQueueWorker:
                 engine_id=mode,
                 submission_meta=submission_meta,
             )
+            if is_v10:
+                touch_engine()
 
             # 4.5 Privacy: if the owner deleted their data while this audit ran, the queue row is gone.
             # Discard the result instead of publishing it.
@@ -323,8 +352,8 @@ class AuditQueueWorker:
                 logger.info(f"Task #{task_id} was removed during evaluation; result discarded.")
                 return
 
-            # 4.6 Integrity hold: never publish; ask the owner to explain specific lines instead (skip for admin test runs).
-            if report.integrity_hold and not task.get("is_test"):
+            # 4.6 Integrity hold: never publish; ask the owner to explain specific lines instead (skip for admin test runs or force_override).
+            if report.integrity_hold and not task.get("is_test") and not force_override:
                 self._hold_for_explanation(task, target, report, packed_repo)
                 return
 

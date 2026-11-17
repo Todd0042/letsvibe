@@ -9,10 +9,10 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
-  <link rel="stylesheet" href="/static/site.css">
+  <link rel="stylesheet" href="/static/site.css?v=2">
 </head>
 <body class="page-body">
-  <div class="page-wrap">
+  <div class="page-wrap{{WIDE_CLASS}}">
     <header class="page-header">
       <a class="page-brand" href="/"><img src="/static/website-icon.webp?v=2" alt=""><span>LetsVibe</span></a>
       <nav class="page-nav" aria-label="Main">
@@ -24,7 +24,7 @@
         <a class="support-link" href="https://ko-fi.com/todd0042" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-mug-hot"></i> Support</a>
       </nav>
     </header>
-    <main class="prose" id="main">
+    <main class="prose{{WIDE_CLASS}}" id="main">
 {{CONTENT}}
     </main>
 {{FOOTER}}

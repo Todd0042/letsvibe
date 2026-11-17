@@ -9,7 +9,7 @@ import os
 import re
 import subprocess  # nosec B404 - git/nvidia-smi run with fixed list arguments, never a shell
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from pydantic import BaseModel
 
 
@@ -24,6 +24,8 @@ class RepoIdentity(BaseModel):
     repo_icon_url: Optional[str] = None  # e.g. raw GitHub launcher icon URL
     target_input: str           # The raw input passed by the user
     is_remote: bool             # True if target is a remote URL
+    branch: Optional[str] = None
+    subpath: Optional[str] = None
 
     @property
     def file_slug(self) -> str:
@@ -69,7 +71,7 @@ def _extract_git_remote_url(local_path: Path) -> Optional[str]:
 
 
 _GH_URL_RE = re.compile(
-    r"^(?:https?://(?:www\.)?github\.com/|git@github\.com:)([\w\-.]+)/([\w\-.]+?)(?:\.git)?/?$",
+    r"^(?:https?://(?:www\.)?github\.com/|git@github\.com:)([\w\-.]+)/([\w\-.]+?)(?:\.git)?(?:/tree/(.+?))?/?$",
     re.IGNORECASE,
 )
 _GL_URL_RE = re.compile(
@@ -77,6 +79,46 @@ _GL_URL_RE = re.compile(
     re.IGNORECASE,
 )
 _SLUG_PART_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
+
+
+def validate_branch_name(branch: str) -> str:
+    b = (branch or "").strip()
+    if not b:
+        return ""
+    if not _BRANCH_RE.fullmatch(b) or ".." in b or b.startswith("-"):
+        raise ValueError(f"Invalid branch name: {branch!r}")
+    return b
+
+
+def _resolve_branch_and_subpath(repo_url: str, tree_tail: str) -> Tuple[str, str]:
+    """Splits a GitHub /tree/<branch>[/<subpath>] tail using ls-remote heads when possible."""
+    tail = (tree_tail or "").strip().strip("/")
+    if not tail:
+        return "", ""
+    try:
+        res = subprocess.run(  # nosec B603 B607 - fixed command, list arguments, no shell
+            ["git", "ls-remote", "--heads", repo_url],
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        if res.returncode == 0:
+            branches = []
+            for line in res.stdout.splitlines():
+                parts = line.split("\t", 1)
+                if len(parts) == 2 and parts[1].startswith("refs/heads/"):
+                    branches.append(parts[1][len("refs/heads/"):])
+            for br in sorted(branches, key=len, reverse=True):
+                if tail == br:
+                    return br, ""
+                if tail.startswith(br + "/"):
+                    return br, tail[len(br) + 1:].strip("/")
+    except Exception:  # nosec B110 - fallback to first segment split
+        pass
+    first, _, rest = tail.partition("/")
+    return first, rest.strip("/")
 
 
 def _valid_slug_parts(owner: str, repo_name: str) -> bool:
@@ -95,20 +137,24 @@ def parse_repo_identity(target: str) -> RepoIdentity:
     """
     target = target.strip()
 
-    # Pattern for GitHub URLs: https://github.com/owner/repo or git@github.com:owner/repo.git
+    # Pattern for GitHub URLs: https://github.com/owner/repo[/tree/branch[/subpath]]
     gh_match = _GH_URL_RE.match(target)
     if gh_match and _valid_slug_parts(gh_match.group(1), gh_match.group(2)):
         owner = gh_match.group(1)
         repo_name = gh_match.group(2)
+        canon = f"https://github.com/{owner}/{repo_name}"
+        br, sub = _resolve_branch_and_subpath(canon, gh_match.group(3) or "")
         return RepoIdentity(
             provider="github",
             owner=owner,
             repo_name=repo_name,
             full_slug=f"{owner}/{repo_name}",
-            canonical_url=f"https://github.com/{owner}/{repo_name}",
+            canonical_url=canon,
             avatar_url=f"https://github.com/{owner}.png",
             target_input=target,
             is_remote=True,
+            branch=br or None,
+            subpath=sub or None,
         )
 
     # GitLab pattern

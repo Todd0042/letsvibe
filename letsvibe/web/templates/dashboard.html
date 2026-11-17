@@ -45,7 +45,7 @@
     .container {
       position: relative;
       z-index: 1;
-      max-width: 1280px;
+      max-width: 1380px;
       margin: 0 auto;
       padding: 1.5rem 1.25rem 4rem;
     }
@@ -629,7 +629,8 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
     }
     table {
@@ -639,8 +640,8 @@
     }
     th {
       background: rgba(15, 23, 42, 0.95);
-      padding: 1rem 1.25rem;
-      font-size: 0.78rem;
+      padding: 0.9rem 0.75rem;
+      font-size: 0.76rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -648,9 +649,9 @@
       border-bottom: 1px solid var(--card-border);
     }
     td {
-      padding: 1.1rem 1.25rem;
+      padding: 0.95rem 0.75rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       vertical-align: middle;
     }
     tr:hover td {
@@ -660,7 +661,7 @@
       font-size: 1.15rem;
       font-weight: 800;
       color: var(--text-muted);
-      width: 60px;
+      width: 48px;
     }
     .rank-cell.top-1 { color: var(--accent-gold); }
     .rank-cell.top-2 { color: var(--accent-silver); }
@@ -847,6 +848,7 @@
       background: rgba(255, 255, 255, 0.04);
       color: var(--text-muted);
       cursor: pointer;
+      white-space: nowrap;
       transition: all 0.15s ease;
     }
     .spark-upvote-btn:hover {
@@ -859,12 +861,31 @@
       background: rgba(0, 240, 255, 0.16);
       color: var(--accent-cyan);
     }
+    .podium-card { position: relative; }
+    .podium-spark-corner {
+      position: absolute;
+      top: 0.85rem;
+      right: 0.85rem;
+      z-index: 2;
+    }
+    .table-action-stack {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.35rem;
+    }
+    .table-action-stack .btn,
+    .table-action-stack .spark-upvote-btn {
+      white-space: nowrap;
+      font-size: 0.78rem;
+    }
 
     .mini-scores {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: repeat(5, minmax(32px, 1fr));
       gap: 0.4rem;
-      min-width: 280px;
+      min-width: 175px;
+      max-width: 215px;
     }
     .mini-score-bar {
       display: flex;
@@ -1739,37 +1760,20 @@
 <span class="kw">const</span> <span class="fn">resolveScore</span> = (item: <span class="fn">Entry</span>, mode: <span class="fn">ScaleMode</span>) =&gt;
   mode === <span class="st">"raw"</span> ? item.final_score : item.curved_score;</div>
   </div>
-  <!-- Admin-only right-hand Live Viewers sidebar -->
-  <aside id="admin-live-bar" style="display: none; position: fixed; right: 14px; top: 84px; width: 276px; max-height: calc(100vh - 104px); overflow-y: auto; z-index: 950; background: rgba(10, 15, 29, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--card-border); border-radius: 14px; padding: 0.75rem 0.85rem; font-size: 0.78rem; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);">
-    <div id="admin-live-drag-handle" style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; cursor: grab; user-select: none; touch-action: none;" title="Drag to move">
-      <span style="font-weight: 700; color: #e2e8f0; display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
-        <i class="fa-solid fa-eye" style="color: var(--accent-green);"></i> Live
-        <span id="pinned-viewers-count" class="grade-badge" style="background: rgba(52, 211, 153, 0.16); color: var(--accent-green); font-size: 0.72rem; padding: 0.1rem 0.42rem;">0</span>
-      </span>
-      <div style="display: flex; align-items: center; gap: 0.3rem;">
-        <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.45rem; font-size: 0.7rem;" onclick="togglePinnedPageViews()" title="Toggle page views">
-          <i class="fa-solid fa-chart-simple" style="color: var(--accent-cyan);"></i> Views
-        </button>
-        <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.42rem; font-size: 0.7rem;" onclick="fetchActiveViewers()" title="Refresh live viewers">
-          <i class="fa-solid fa-rotate"></i>
-        </button>
-        <button type="button" class="btn btn-secondary" style="padding: 0.2rem 0.42rem; font-size: 0.7rem;" onclick="toggleAdminLiveSidebar()" title="Collapse/expand sidebar">
-          <i id="admin-live-collapse-icon" class="fa-solid fa-chevron-right"></i>
-        </button>
+  <div id="whats-new-toast" hidden role="status" aria-live="polite" style="position: fixed; top: 14px; left: 14px; width: 300px; max-width: calc(100vw - 28px); z-index: 3000; background: rgba(13, 19, 36, 0.96); border: 1px solid rgba(34, 211, 238, 0.4); border-radius: 12px; box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55); backdrop-filter: blur(12px); overflow: hidden;">
+    <div style="padding: 0.75rem 0.9rem 0.7rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.45rem;">
+        <span id="corner-toast-title" style="font-size: 0.78rem; font-weight: 800; color: var(--accent-cyan); letter-spacing: 0.02em;">
+          <i class="fa-solid fa-sparkles"></i> Recent changes:
+        </span>
+        <button type="button" onclick="dismissWhatsNewToast()" aria-label="Close" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 2px;">&times;</button>
       </div>
+      <ul id="whats-new-list" style="margin: 0; padding-left: 1rem; font-size: 0.79rem; line-height: 1.5; color: #e2e8f0; display: grid; gap: 0.28rem;"></ul>
     </div>
-    <div id="admin-live-body" style="margin-top: 0.6rem;">
-      <div id="pinned-viewers-list" style="display: flex; flex-direction: column; gap: 0.38rem; color: var(--text-muted);">
-        Loading...
-      </div>
-      <div id="pinned-page-views-drawer" style="display: none; margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid rgba(148, 163, 184, 0.18);">
-        <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.35rem;">Page Views (Excl. Admin)</div>
-        <div id="pinned-page-views-list" style="display: flex; flex-direction: column; gap: 0.32rem; font-size: 0.73rem; color: var(--text-muted);"></div>
-        <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin: 0.6rem 0 0.35rem;">Recent Visitor Journeys</div>
-        <div id="pinned-journeys-list" style="display: flex; flex-direction: column; gap: 0.38rem; font-size: 0.72rem; color: var(--text-muted);"></div>
-      </div>
+    <div style="height: 3px; background: rgba(148, 163, 184, 0.18); width: 100%;">
+      <div id="whats-new-timer-bar" style="height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta)); transition: width 7s linear;"></div>
     </div>
-  </aside>
+  </div>
   <div class="container">
     <!-- Header -->
     <header>
@@ -1790,6 +1794,10 @@
         <button id="nav-btn-hof" class="nav-tab" onclick="navigateTo('hof')">
           <i class="fa-solid fa-landmark"></i> Hall of Fame
         </button>
+        <a href="/how-it-works" class="nav-tab" style="text-decoration: none;">
+          <i class="fa-solid fa-book-open"></i> How It Works
+          <span id="docs-updated-pill" class="count-badge" hidden style="background: rgba(34, 211, 238, 0.18); color: #22d3ee;">Updated</span>
+        </a>
         <button id="nav-btn-reviews" class="nav-tab" onclick="navigateTo('reviews')" style="display: none;">
           <i class="fa-solid fa-inbox"></i> Reviews <span class="count-badge" id="reviews-count" hidden></span>
         </button>
@@ -1802,7 +1810,7 @@
       <div class="header-actions">
         <div class="engine-badge" id="engine-status-pill">
           <span class="status-dot" id="engine-dot"></span>
-          <span id="engine-label">Checking Ollama...</span>
+          <span id="engine-label">Checking AI Engine...</span>
         </div>
         <div id="user-auth-capsule" style="display: flex; align-items: center; gap: 0.6rem;"></div>
         <a class="support-link" href="https://ko-fi.com/todd0042" target="_blank" rel="noopener noreferrer" title="Support LetsVibe on Ko-fi">
@@ -1895,6 +1903,16 @@
           </tbody>
         </table>
       </section>
+
+      <div id="live-traffic-strip" style="margin-top: 1.25rem; text-align: center; padding: 0.75rem 1rem; border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid var(--card-border);">
+        <div style="font-size: 0.85rem; color: #cbd5e1; display: flex; justify-content: center; gap: 1.25rem; flex-wrap: wrap;">
+          <span><i class="fa-solid fa-users" style="color: var(--accent-green);"></i> Live Visitors: <strong id="live-visitors-count">—</strong></span>
+          <span><i class="fa-solid fa-robot" style="color: var(--accent-cyan);"></i> Live Scraping Bots: <strong id="live-bots-count">—</strong></span>
+        </div>
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.25rem;">
+          No live tracking is saved, only displayed (ephemeral in-memory counts).
+        </div>
+      </div>
     </main>
 
     <!-- VIEW 2: DEDICATED PROJECT REPORT VIEW (Replaces cluttered modal) -->
@@ -2021,10 +2039,18 @@
           <div id="project-complexity-block" hidden style="margin-top: 1rem;">
             <h3 style="font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">
               <i class="fa-solid fa-diagram-project" style="color: var(--accent-cyan);"></i> Code complexity
-              <span class="stat-pill" title="Shown for information only; it never changes the score">Not graded</span>
+              <span id="project-complexity-not-graded" class="stat-pill" title="Shown for information only; it never changes the score">Not graded</span>
             </h3>
             <p id="project-complexity-summary" style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.4rem;"></p>
             <ul id="project-complexity-details" style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.6; padding-left: 1.2rem;"></ul>
+          </div>
+
+          <div id="project-simplicity-block" hidden style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--card-border);">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span><i class="fa-solid fa-feather-pointed" style="color: var(--accent-gold);"></i> Beauty in Simplicity</span>
+              <span id="project-simplicity-badge" class="stat-pill"></span>
+            </h3>
+            <p id="project-simplicity-summary" style="color: #cbd5e1; font-size: 0.9rem; line-height: 1.6; margin: 0;"></p>
           </div>
         </div>
       </div>
@@ -2112,10 +2138,11 @@
       </div>
 
       <div id="project-maintainer-card" class="report-card" style="border-left: 4px solid var(--accent-cyan);" hidden>
-        <h3 style="color: #67e8f9; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem;">
-          <i class="fa-solid fa-screwdriver-wrench"></i> Maintainer notes <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">(only you can see these)</span>
+        <h3 style="color: #67e8f9; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+          <span><i class="fa-solid fa-screwdriver-wrench"></i> Maintainer notes</span>
+          <span id="project-maintainer-privacy-badge" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">(only you can see these)</span>
         </h3>
-        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.6rem;">Code-health findings from an automatic scan, each with the file and line to check. They are notes for the developer and never count toward the score.</p>
+        <p id="project-maintainer-desc" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.6rem;">Code-health findings from an automatic scan, each with the file and line to check. They are notes for the developer and never count toward the score.</p>
         <div id="project-maintainer-notes" style="font-size: 0.85rem; line-height: 1.6; color: #e2e8f0;"></div>
       </div>
 
@@ -2128,8 +2155,9 @@
       </div>
 
       <div id="project-ai-prompts-card" class="report-card" style="border-left: 4px solid var(--accent-cyan);" hidden>
-        <h3 style="color: #67e8f9; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem;">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> Suggested AI Prompts
+        <h3 style="color: #67e8f9; font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+          <span><i class="fa-solid fa-wand-magic-sparkles"></i> Suggested AI Prompts</span>
+          <span id="project-ai-prompts-privacy-badge" class="meta-tag" style="font-size: 0.72rem; border-color: rgba(245, 158, 11, 0.45); color: #fbbf24; background: rgba(245, 158, 11, 0.12);" hidden>🔒 Owner-Only Preview (Hidden on other repos)</span>
         </h3>
         <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 0.75rem;">
           Pick an issue below and copy the prompt into your AI coding assistant to verify whether it is real and plan a fix in planning-only mode.
@@ -2283,9 +2311,14 @@
             <i class="fa-solid fa-eye" style="color: var(--accent-green);"></i> Live Viewers (Last 2 Min)
             <span id="active-viewers-count" class="grade-badge" style="background: rgba(52, 211, 153, 0.16); color: var(--accent-green);">0</span>
           </span>
-          <button type="button" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="fetchActiveViewers()">
-            <i class="fa-solid fa-rotate"></i> Refresh
-          </button>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button id="btn-clear-visitor-history" type="button" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.78rem; color: #f87171; border-color: rgba(248, 113, 113, 0.3);" onclick="clearVisitorHistory()" title="Clear all recorded page views and visitor journeys">
+              <i class="fa-solid fa-trash-can"></i> Clear History
+            </button>
+            <button type="button" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.78rem;" onclick="fetchActiveViewers()">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+          </div>
         </div>
         <div id="active-viewers-list" style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.82rem; color: var(--text-muted);">
           Loading active viewers...
@@ -2296,12 +2329,6 @@
           </div>
           <div id="page-views-list" style="display: flex; flex-wrap: wrap; gap: 0.45rem; font-size: 0.78rem; color: var(--text-muted);">
             Loading page views...
-          </div>
-          <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin: 0.75rem 0 0.45rem; display: flex; align-items: center; gap: 0.4rem;">
-            <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i> Recent Visitor Journeys
-          </div>
-          <div id="admin-journeys-list" style="display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.78rem; color: var(--text-muted);">
-            Loading visitor journeys...
           </div>
         </div>
       </div>
@@ -2392,6 +2419,11 @@
                         title="Removes completed and failed tasks from this list. Graded reports are not affected. Rejected tasks are kept so their owners can still appeal.">
                   <i class="fa-solid fa-broom"></i> Clear finished
                 </button>
+                <button id="btn-purge-all" type="button" class="btn btn-danger" onclick="purgeAllQueueTasks()"
+                        style="padding: 0.35rem 0.7rem; font-size: 0.8rem;"
+                        title="Purges ALL tasks from the queue list at once (queued, running, finished, and rejected). Graded reports are not affected.">
+                  <i class="fa-solid fa-dumpster-fire"></i> Purge all
+                </button>
               </span>
             </div>
             <p id="clear-finished-status" role="status" style="font-size: 0.82rem; color: var(--accent-green); margin: -0.4rem 0 0.75rem;" hidden></p>
@@ -2405,13 +2437,13 @@
         <div class="admin-col">
           <div class="report-card admin-ollama-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
-              <span style="font-weight: 700; font-size: 1.1rem;"><i class="fa-solid fa-brain" style="color: var(--accent-magenta);"></i> Ollama AI Daemon</span>
+              <span style="font-weight: 700; font-size: 1.1rem;"><i class="fa-solid fa-brain" style="color: var(--accent-magenta);"></i> Local AI Engine (Qwen3 30B-A3B)</span>
               <div style="display: flex; gap: 0.5rem; align-items: center;">
                 <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.75rem; border-color: var(--accent-cyan); color: var(--accent-cyan);" onclick="freeGpuMemory()">
-                  <i class="fa-solid fa-microchip"></i> Free GPU VRAM
+                  <i class="fa-solid fa-moon"></i> Sleep &amp; Free RAM/VRAM
                 </button>
                 <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="startOllamaDaemon()">
-                  <i class="fa-solid fa-play"></i> Ensure Running
+                  <i class="fa-solid fa-play"></i> Wake Engine
                 </button>
               </div>
             </div>
@@ -2429,11 +2461,16 @@
               <i class="fa-solid fa-rotate" style="color: var(--accent-cyan);"></i> Prompt Calibration Rescan
           </h3>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-              Re-queue every repository stored in the database to re-evaluate them with your updated prompts. They will process sequentially through the background worker queue.
+              Re-queue every repository stored in the database to re-evaluate them with your chosen engine version. They will process sequentially through the background worker queue.
           </p>
-          <button id="btn-rescan-all" class="btn btn-primary" onclick="triggerRescanAllRepos()">
-              <i class="fa-solid fa-arrows-rotate"></i> Re-Queue All Database Repositories
-          </button>
+          <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+            <button id="btn-rescan-all" class="btn btn-primary" onclick="triggerRescanAllRepos()">
+                <i class="fa-solid fa-arrows-rotate"></i> Re-Queue All Database Repositories
+            </button>
+            <select id="rescan-all-engine-select" class="select-dropdown" aria-label="Engine version for bulk re-queue" style="min-width: 240px;">
+                <option value="">Loading engines...</option>
+            </select>
+          </div>
       </div>
 
       <!-- Admin Tool: Reclassify (category / platforms / device) without regrading -->
@@ -2603,16 +2640,28 @@
 
         <div id="submit-quota-note" style="margin-bottom: 1rem;"></div>
 
-        <div style="background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; padding: 0.75rem 0.9rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.2rem;"><i class="fa-solid fa-shield-halved"></i> Community Audit Limits:</div>
-          Maximum <strong>50 MB</strong> or <strong>2,000 files</strong> uncompressed source code. Compiled binaries, release archives, and model weights (<code style="color: var(--accent-gold);">.zip, .exe, .tar, .bin, .pt</code>) are automatically excluded.
-        </div>
-
         <form id="submit-form" onsubmit="handleEnqueue(event)">
-          <div style="margin-bottom: 1rem;">
-            <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.35rem;">Target Repository URL</label>
-            <input type="text" id="target-input" class="search-input" style="width: 100%;" placeholder="https://github.com/your-username/your-repo" required>
+          <div style="margin-bottom: 0.85rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+              <label for="target-input" style="font-size: 0.85rem; font-weight: 700;">Target Repository URL</label>
+              <button type="button" class="btn btn-secondary" onclick="showSubmitRefHelpToast()" style="padding: 0.2rem 0.55rem; font-size: 0.73rem;">
+                <i class="fa-solid fa-circle-question" style="color: var(--accent-cyan);"></i> How References &amp; Branches Work
+              </button>
+            </div>
+            <div style="display: flex; gap: 0.45rem; align-items: center;">
+              <input type="text" id="target-input" class="search-input" style="flex: 1;" placeholder="https://github.com/your-username/your-repo (or .../tree/branch/folder)" required>
+              <button type="button" id="btn-add-ref" class="btn btn-secondary" onclick="addRefContextRow()" title="Add reference repo or header file (e.g. Nexus.h)" style="padding: 0.52rem 0.78rem; font-weight: 800; color: var(--accent-cyan); border-color: rgba(0, 240, 255, 0.35);">+</button>
+            </div>
           </div>
+
+          <div style="margin-bottom: 0.85rem;">
+            <label for="submit-branch-input" style="display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 0.3rem;">
+              Branch <span style="font-weight: 400; color: var(--text-muted);">(Optional — defaults to main/default branch)</span>
+            </label>
+            <input type="text" id="submit-branch-input" class="search-input" style="width: 100%; font-size: 0.84rem;" placeholder="e.g. main or feature/my-branch">
+          </div>
+
+          <div id="submit-refs-container" style="display: grid; gap: 0.55rem; margin-bottom: 0.9rem;"></div>
 
           <div id="submit-questionnaire-wrap" style="transition: opacity 0.2s ease, filter 0.2s ease;">
             <div style="margin-bottom: 1rem;">
@@ -3148,6 +3197,7 @@
         fetchSystemStats();
         fetchDevTree();
         fetchAppeals();
+        syncRescanAllEngineSelect();
       } else if (viewName === 'project') {
         document.getElementById('tab-project').style.display = 'block';
         loadProjectReport(param, reportId);
@@ -3366,6 +3416,7 @@
       const projTab = document.getElementById('tab-project');
       if (projTab && projTab.style.display !== 'none' && currentLoadedProject) {
         applyScaleToProjectHeader(currentLoadedProject);
+        setupBadgeGenerator(currentLoadedProject);
       } else {
         fetchLeaderboard();
       }
@@ -3805,22 +3856,50 @@
         return;
       }
       card.hidden = false;
+      const aiBadge = document.getElementById('project-ai-prompts-privacy-badge');
+      if (aiBadge) {
+        const mine = currentUser && currentUser.username && p && p.owner && currentUser.username.toLowerCase() === String(p.owner).toLowerCase();
+        const isAdmin = !!(currentUser && currentUser.is_admin);
+        const isShowcase = isCreatorBenchmarkOwner(p && p.owner) && !mine && !isAdmin;
+        aiBadge.hidden = !(isShowcase && notes.length > 0);
+      }
       sel.selectedIndex = 0;
       updateAiPromptPreview();
     }
 
     // The number shown with the letter is on the same bell curve as the letter (storage/peer_grades.py)
-    // Owner-only code-health notes (never graded). The server checks again that the viewer is the owner or the admin.
+    // Owner-only code-health notes (never graded). Publicly previewable on Creator Benchmark showcase repos.
     async function loadMaintainerNotes(p) {
       const card = document.getElementById('project-maintainer-card');
+      const badge = document.getElementById('project-maintainer-privacy-badge');
+      const desc = document.getElementById('project-maintainer-desc');
       card.hidden = true;
       const mine = currentUser && currentUser.username && p.owner && currentUser.username.toLowerCase() === String(p.owner).toLowerCase();
-      if (!currentUser || !(mine || currentUser.is_admin)) return;
+      const isAdmin = !!(currentUser && currentUser.is_admin);
+      const isShowcase = isCreatorBenchmarkOwner(p.owner);
+      if (!mine && !isAdmin && !isShowcase) return;
       try {
         const res = await fetch(`/api/projects/${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo_name)}/maintainer-notes`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data.available || !data.notes.length) return;
+        const previewOnly = isShowcase && !mine && !isAdmin;
+        if (badge) {
+          if (previewOnly) {
+            badge.className = 'meta-tag';
+            badge.style.cssText = 'font-size: 0.72rem; border-color: rgba(245, 158, 11, 0.45); color: #fbbf24; background: rgba(245, 158, 11, 0.12);';
+            badge.textContent = '🔒 Owner-Only Preview (Hidden on other repos)';
+          } else {
+            badge.className = '';
+            badge.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); font-weight: 600;';
+            badge.textContent = '(only you can see these)';
+          }
+        }
+        if (desc) {
+          desc.textContent = previewOnly
+            ? 'Normally hidden and visible only to the repository owner and site admin. Shown on Creator Benchmark projects so you can preview what a full owner report looks like.'
+            : 'Code-health findings from an automatic scan, each with the file and line to check. They are notes for the developer and never count toward the score.';
+        }
         const groups = {};
         data.notes.forEach(n => (groups[n.kind] = groups[n.kind] || []).push(n));
         document.getElementById('project-maintainer-notes').innerHTML = Object.entries(groups).map(([kind, items]) => `
@@ -3877,12 +3956,15 @@
       return String(name || '').replace(/(^|-)([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
     }
 
-    function sparkUpvoteBtn(item) {
+    function sparkUpvoteBtn(item, showLabel = false) {
       const slug = escapeHtml(item.full_slug || '');
       const count = Number(item.upvote_count || 0);
       const active = item.user_upvoted ? ' active' : '';
       const tip = item.user_upvoted ? 'Remove Good Vibe' : 'Give a Good Vibe';
-      return `<button type="button" class="spark-upvote-btn${active}" data-upvote-slug="${slug}" onclick="toggleProjectUpvote('${slug}', this)" title="${tip}" aria-pressed="${item.user_upvoted ? 'true' : 'false'}">✨ <span class="spark-count">${count}</span></button>`;
+      const lbl = showLabel
+        ? `<span class="spark-label">${item.user_upvoted ? 'Good Vibe' : 'Give a Good Vibe'}</span>`
+        : '';
+      return `<button type="button" class="spark-upvote-btn${active}" data-upvote-slug="${slug}" onclick="toggleProjectUpvote('${slug}', this)" title="${tip}" aria-pressed="${item.user_upvoted ? 'true' : 'false'}">✨ ${lbl}<span class="spark-count">${count}</span></button>`;
     }
 
     async function toggleProjectUpvote(slug, btn) {
@@ -3911,6 +3993,8 @@
             el.classList.toggle('active', !!data.upvoted);
             el.setAttribute('aria-pressed', data.upvoted ? 'true' : 'false');
             el.title = data.upvoted ? 'Remove Good Vibe' : 'Give a Good Vibe';
+            const lbl = el.querySelector('.spark-label');
+            if (lbl) lbl.textContent = data.upvoted ? 'Good Vibe' : 'Give a Good Vibe';
             const cnt = el.querySelector('.spark-count');
             if (cnt) cnt.textContent = String(data.upvote_count ?? 0);
           }
@@ -3935,8 +4019,12 @@
       }
     }
 
+    function isCreatorBenchmarkOwner(owner) {
+      return String(owner || '').toLowerCase() === 'todd0042';
+    }
+
     function ownerFlairPill(owner) {
-      if (String(owner || '').toLowerCase() !== 'todd0042') return '';
+      if (!isCreatorBenchmarkOwner(owner)) return '';
       return ' <span class="meta-tag" title="Reference benchmark run by the LetsVibe creator while founding community slots fill" style="font-size: 0.65rem; padding: 0.1rem 0.45rem; border-color: rgba(245, 158, 11, 0.38); color: #fbbf24; background: rgba(245, 158, 11, 0.1);">Creator Benchmark</span>';
     }
 
@@ -3964,13 +4052,14 @@
 
         return `
           <div class="podium-card rank-${rank}">
+            <div class="podium-spark-corner">${sparkUpvoteBtn(item, false)}</div>
             <div class="podium-trophy"><img src="/static/medals/trophy-${rank}.webp" alt="#${rank}" width="72" height="72"></div>
             <img src="${appIcon}" class="podium-avatar" alt="${escapeHtml(displayRepoName)}" onerror="this.onerror=null; this.src='/static/project-placeholder.svg'">
             <div class="podium-repo">${escapeHtml(displayRepoName)}${isTestRow ? ' <span class="test-tag" title="Admin test grading: only you can see this result"><i class="fa-solid fa-flask"></i> Test</span>' : ''}${item.rubric_version ? ` <span class="meta-tag" title="Graded with ${escapeHtml(item.rubric_version)}" style="font-size: 0.65rem;">${escapeHtml(item.rubric_version)}</span>` : ''}</div>
             <div class="podium-owner">
               <img src="${creatorAvatar}" class="creator-mini-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}${ownerFlairPill(item.owner)}
             </div>
-            <div class="score-spark-row">${scorePill(item, false)}${sparkUpvoteBtn(item)}</div>
+            <div class="score-spark-row">${scorePill(item, false)}</div>
             <div class="podium-archetype">${escapeHtml(item.archetype_name || 'Software Project')}</div>
             <div class="meta-tags podium-platforms">
               ${(item.platforms || []).map(p => `<span class="meta-tag" title="${escapeHtml(platformLabel(p))}"><i class="${PLATFORM_ICONS[p] || 'fa-solid fa-display'}"></i>${escapeHtml(platformLabel(p))}</span>`).join('')}
@@ -4017,15 +4106,15 @@
                 <div class="repo-info">
                   <div class="repo-header-line">
                     <span class="repo-title" title="${escapeHtml(item.full_slug)}" onclick="navigateTo('project', '${escapeHtml(item.full_slug)}'${targetRepArg})">${escapeHtml(displayRepoName)}${isTestRow ? ' <span class="test-tag" title="Admin test grading: only you can see this result"><i class="fa-solid fa-flask"></i> Test</span>' : ''}${item.rubric_version ? ` <span class="meta-tag" title="Graded with ${escapeHtml(item.rubric_version)}" style="font-size: 0.65rem;">${escapeHtml(item.rubric_version)}</span>` : ''}</span>
-                    <span class="repo-meta">
-                      <img src="${creatorAvatar}" class="creator-micro-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}${ownerFlairPill(item.owner)} • ${escapeHtml(item.primary_language || 'Code')} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC
+                    <span class="repo-meta" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.2rem 0.4rem;line-height:1.4;">
+                      <span style="white-space:nowrap;"><img src="${creatorAvatar}" class="creator-micro-avatar" alt="${escapeHtml(item.owner)}" onerror="this.src='/static/avatar-placeholder.svg'">@${escapeHtml(item.owner)}</span>${ownerFlairPill(item.owner)}<span style="white-space:nowrap;">• ${escapeHtml(item.primary_language || 'Code')} • ${item.total_loc ? item.total_loc.toLocaleString() : 0} LOC</span>
                     </span>
                   </div>
                 </div>
               </div>
             </td>
             <td>
-              <div class="score-spark-row">${scorePill(item, true)}${sparkUpvoteBtn(item)}</div>
+              <div class="score-spark-row">${scorePill(item, true)}</div>
               ${standingText(item)}
             </td>
             <td>
@@ -4054,9 +4143,12 @@
               </div>
             </td>
             <td style="text-align: right;">
-              <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem;" onclick="navigateTo('project', '${escapeHtml(item.full_slug)}'${targetRepArg})">
-                <i class="fa-solid fa-eye"></i> View Report
-              </button>
+              <div class="table-action-stack">
+                ${sparkUpvoteBtn(item, true)}
+                <button class="btn btn-secondary" style="padding: 0.35rem 0.75rem;" onclick="navigateTo('project', '${escapeHtml(item.full_slug)}'${targetRepArg})">
+                  <i class="fa-solid fa-eye"></i> View Report
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -4124,14 +4216,18 @@
       const p = badgeProject;
       const style = document.getElementById('badge-style').value;
       const path = `${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo_name)}`;
-      const img = `${location.origin}/badge/${path}.svg` + (style === 'classic' ? '' : `?style=${style}`);
+      const params = new URLSearchParams();
+      if (style !== 'classic') params.set('style', style);
+      if (scoreScale === 'curve') params.set('scale', 'curve');
+      const qs = params.toString();
+      const img = `${location.origin}/badge/${path}.svg` + (qs ? `?${qs}` : '');
       return { img, link: `${location.origin}/project/${path}`, style };
     }
     function renderBadgeGenerator() {
       if (!badgeProject) return;
       const { img, link } = badgeUrls();
       const alt = `LetsVibe grade: ${badgeProject.letter_grade} (${badgeProject.score.toFixed(1)})`;
-      document.getElementById('badge-preview').src = img + (img.includes('?') ? '&' : '?') + `v=${badgeProject.report_id}`;
+      document.getElementById('badge-preview').src = img + (img.includes('?') ? '&' : '?') + `v=${badgeProject.report_id}_${scoreScale}_3`;
       document.getElementById('badge-preview').alt = alt;
       const code = {
         markdown: `[![${alt}](${img})](${link})`,
@@ -4622,12 +4718,24 @@
           <span class="stat-pill" title="Shown for information only; none of these facts is graded">Not graded</span>
         `;
 
-        // Code complexity (rubric v9): described for information, never scored
+        // Code complexity (rubric v9-v10.1: info-only; v10.2+: part of Code Health)
         const cx = rep.complexity || {};
         const cxBlock = document.getElementById('project-complexity-block');
         cxBlock.hidden = !cx.summary;
+        const cxNotGraded = document.getElementById('project-complexity-not-graded');
+        if (cxNotGraded) cxNotGraded.hidden = Boolean(factors.code_health && Number(factors.code_health.weight) > 0);
         document.getElementById('project-complexity-summary').textContent = cx.summary || '';
         document.getElementById('project-complexity-details').innerHTML = (cx.details || []).map(d => `<li>${escapeHtml(d)}</li>`).join('');
+
+        // Beauty in Simplicity callout (v10.2+)
+        const simp = (rep.experience && rep.experience.simplicity) || {};
+        const simpBlock = document.getElementById('project-simplicity-block');
+        if (simpBlock) {
+          simpBlock.hidden = !simp.summary;
+          const simpBadge = document.getElementById('project-simplicity-badge');
+          if (simpBadge) simpBadge.textContent = simp.label || 'Focus';
+          document.getElementById('project-simplicity-summary').textContent = simp.summary || '';
+        }
 
         // Scorecard: the graded factors for this report's rubric era (v1-v5, v6-v7, or v8-v9)
         const tbody = document.getElementById('project-factors-tbody');
@@ -4959,8 +5067,6 @@
 
           if (u.is_admin) {
             if (adminNav) adminNav.style.display = 'inline-flex';
-            const liveBar = document.getElementById('admin-live-bar');
-            if (liveBar) liveBar.style.display = 'block';
             fetchActiveViewers();
             const reviewsNav = document.getElementById('nav-btn-reviews');
             if (reviewsNav) reviewsNav.style.display = 'inline-flex';
@@ -4996,8 +5102,6 @@
         } else {
           currentUser = null;
           if (adminNav) adminNav.style.display = 'none';
-          const liveBar = document.getElementById('admin-live-bar');
-          if (liveBar) liveBar.style.display = 'none';
           const submitBtn = document.getElementById('header-submit-btn');
           if (submitBtn) submitBtn.hidden = true;
           syncSignedOutAuthCapsule();
@@ -5135,9 +5239,33 @@
           }
           onEngineModeChange();
         }
+        syncRescanAllEngineSelect();
         syncAdminEngineFilterDropdown();
       } catch (err) {
         console.warn('Could not load engine registry:', err);
+      }
+    }
+
+    function syncRescanAllEngineSelect() {
+      const rescanSel = document.getElementById('rescan-all-engine-select');
+      if (!rescanSel) return;
+      if (!availableEnginesCache.length) {
+        if (!window.__loadingEnginesForRescan) {
+          window.__loadingEnginesForRescan = true;
+          loadAvailableEngines().finally(() => { window.__loadingEnginesForRescan = false; });
+        }
+        return;
+      }
+      const prevRescan = rescanSel.value;
+      const defaultEng = availableEnginesCache.find(e => e.is_default) || availableEnginesCache[0];
+      rescanSel.innerHTML = availableEnginesCache.map(eng => {
+        const label = eng.label || eng.name || eng.id;
+        return `<option value="${escapeHtml(eng.id)}">${escapeHtml(label)}</option>`;
+      }).join('');
+      if (prevRescan && [...rescanSel.options].some(o => o.value === prevRescan)) {
+        rescanSel.value = prevRescan;
+      } else if (defaultEng) {
+        rescanSel.value = defaultEng.id;
       }
     }
 
@@ -5459,6 +5587,7 @@
       const provenance = (document.getElementById('submit-provenance-input') || {}).value || 'vibe_coded';
       const guest_access = (document.getElementById('submit-access-input') || {}).value || 'auto';
       const user_hook = ((document.getElementById('submit-hook-input') || {}).value || '').trim();
+      const branch = ((document.getElementById('submit-branch-input') || {}).value || '').trim();
       const consentBox = document.getElementById('submit-consent-accept');
       const contentBox = document.getElementById('submit-content-accept');
       const consentErr = document.getElementById('submit-consent-error');
@@ -5475,6 +5604,24 @@
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
 
       try {
+        const references = [];
+        for (const row of document.querySelectorAll('#submit-refs-container .ref-context-row')) {
+          const role = (row.querySelector('.ref-role-input')?.value || '').trim();
+          const url = (row.querySelector('.ref-url-input')?.value || '').trim();
+          const fileInput = row.querySelector('.ref-file-input');
+          const file = fileInput && fileInput.files && fileInput.files[0];
+          if (file) {
+            if (file.size > 65536) {
+              alert(`Reference file "${file.name}" exceeds the 64 KB limit.`);
+              return;
+            }
+            const content = await file.text();
+            references.push({ type: 'file', name: file.name, content, role });
+          } else if (url) {
+            references.push({ type: 'url', url, role });
+          }
+        }
+
         const endpoint = isForceRescan
           ? '/api/admin/project/force-rescan'
           : (isConsistency ? '/api/admin/queue/consistency-test' : '/api/queue/enqueue');
@@ -5482,7 +5629,7 @@
           ? { full_slug: rescanSlug, mode, project_profile, provenance, guest_access, user_hook }
           : (isConsistency
               ? { target, mode, project_profile, provenance, guest_access, user_hook, count: consistencyCount }
-              : { target, mode, project_profile, provenance, guest_access, user_hook, accepted_terms_and_ownership: true, confirmed_no_explicit_content: true });
+              : { target, mode, project_profile, provenance, guest_access, user_hook, branch, references, accepted_terms_and_ownership: true, confirmed_no_explicit_content: true });
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -6054,45 +6201,38 @@
       }
     }
 
-    async function clearPendingTasks() {
-      if (!confirm('Clear all pending tasks from the queue? Running tasks will not be affected.')) return;
-      const btn = document.getElementById('btn-clear-pending');
+    async function _runQueueClearAction(btnId, endpoint, fallbackErr) {
+      const btn = document.getElementById(btnId);
       const status = document.getElementById('clear-finished-status');
       btn.disabled = true;
       try {
-        const res = await fetch('/api/admin/queue/clear-pending', { method: 'POST' });
+        const res = await fetch(endpoint, { method: 'POST' });
         const data = await res.json();
         status.style.color = res.ok ? 'var(--accent-green)' : 'var(--danger)';
-        status.textContent = res.ok ? data.message : (data.detail || 'Could not clear pending queue.');
+        status.textContent = res.ok ? data.message : (data.detail || fallbackErr);
         status.hidden = false;
         fetchQueue();
       } catch (err) {
         status.style.color = 'var(--danger)';
-        status.textContent = 'Could not clear pending queue: ' + err.message;
+        status.textContent = fallbackErr + ': ' + err.message;
         status.hidden = false;
       } finally {
         btn.disabled = false;
       }
     }
 
+    async function clearPendingTasks() {
+      if (!confirm('Clear all pending tasks from the queue? Running tasks will not be affected.')) return;
+      return _runQueueClearAction('btn-clear-pending', '/api/admin/queue/clear-pending', 'Could not clear pending queue');
+    }
+
     async function clearFinishedTasks() {
-      const btn = document.getElementById('btn-clear-finished');
-      const status = document.getElementById('clear-finished-status');
-      btn.disabled = true;
-      try {
-        const res = await fetch('/api/admin/queue/clear-finished', { method: 'POST' });
-        const data = await res.json();
-        status.style.color = res.ok ? 'var(--accent-green)' : 'var(--danger)';
-        status.textContent = res.ok ? data.message : (data.detail || 'Could not clear tasks.');
-        status.hidden = false;
-        fetchQueue();
-      } catch (err) {
-        status.style.color = 'var(--danger)';
-        status.textContent = 'Could not clear tasks: ' + err.message;
-        status.hidden = false;
-      } finally {
-        btn.disabled = false;
-      }
+      return _runQueueClearAction('btn-clear-finished', '/api/admin/queue/clear-finished', 'Could not clear tasks');
+    }
+
+    async function purgeAllQueueTasks() {
+      if (!confirm('Purge ALL tasks from the queue (queued, running, finished, and rejected)? Graded reports will not be affected.')) return;
+      return _runQueueClearAction('btn-purge-all', '/api/admin/queue/purge-all', 'Could not purge queue');
     }
 
     async function fetchQueue() {
@@ -6282,22 +6422,56 @@ ${t.status === 'running' ? `
       }
     }
 
+    function applyEnginePill(st) {
+      const pillDot = document.getElementById('engine-dot');
+      const pillLabel = document.getElementById('engine-label');
+      if (!pillDot || !pillLabel) return;
+      const state = String((st && st.state) || 'unavailable').toLowerCase();
+      if (state === 'awake') {
+        pillDot.className = 'status-dot';
+        pillDot.style.background = '#34d399';
+        pillLabel.textContent = 'Engine Ready (Qwen3 30B-A3B)';
+      } else if (state === 'waking') {
+        pillDot.className = 'status-dot';
+        pillDot.style.background = '#22d3ee';
+        pillLabel.textContent = 'Waking AI Engine…';
+      } else if (state === 'dormant') {
+        pillDot.className = 'status-dot';
+        pillDot.style.background = '#94a3b8';
+        pillLabel.textContent = 'Dormant • Queue to Awaken';
+      } else {
+        pillDot.className = 'status-dot offline';
+        pillDot.style.background = '';
+        pillLabel.textContent = 'Engine Offline';
+      }
+    }
+
+    async function fetchEngineStatus() {
+      try {
+        const res = await fetch('/api/engine/status');
+        if (!res.ok) return;
+        const st = await res.json();
+        applyEnginePill(st);
+      } catch (err) {
+        console.debug('engine status check failed', err);
+      }
+    }
+
     async function fetchSystemStats() {
       fetchActiveViewers();
       const box = document.getElementById('admin-system-diagnostics');
       try {
         const res = await fetch('/api/admin/system');
         const data = await res.json();
-        const pillDot = document.getElementById('engine-dot');
-        const pillLabel = document.getElementById('engine-label');
+        const eng = data.engine_status || { state: data.ollama_live ? 'awake' : 'unavailable' };
+        applyEnginePill(eng);
 
-        if (data.ollama_live) {
-          pillDot.className = 'status-dot';
-          pillLabel.textContent = `Ollama Online (${data.free_vram_mb ? Math.round(data.free_vram_mb/1024) + 'GB VRAM' : 'GPU Ready'})`;
-        } else {
-          pillDot.className = 'status-dot offline';
-          pillLabel.textContent = 'Ollama Offline';
-        }
+        const engState = String(eng.state || 'unavailable');
+        const engColor = engState === 'awake' ? '#34d399' : (engState === 'waking' ? '#22d3ee' : (engState === 'dormant' ? '#94a3b8' : '#f87171'));
+        const idleRem = eng.idle_seconds_remaining;
+        const idleNote = (idleRem !== null && idleRem !== undefined)
+          ? ` (auto-sleep in ${Math.floor(idleRem / 60)}m ${idleRem % 60}s)`
+          : (eng.idle_minutes ? ` (idle timeout: ${eng.idle_minutes}m)` : '');
 
         const loadedModels = data.loaded_models || [];
         const loadedText = loadedModels.length > 0 
@@ -6306,10 +6480,10 @@ ${t.status === 'running' ? `
         const loadedColor = loadedModels.length > 0 ? '#f59e0b' : '#34d399';
 
         box.innerHTML = `
-          <div><strong>Ollama Server:</strong> <span style="color: ${data.ollama_live ? '#34d399' : '#f87171'}">${data.ollama_live ? 'Online' : 'Offline'}</span></div>
-          <div><strong>Binary Path:</strong> <span style="color: var(--text-muted);">${escapeHtml(data.ollama_bin || 'Not found in PATH')}</span></div>
+          <div><strong>AI Engine (v10):</strong> <span style="color: ${engColor}; font-weight: 700;">${escapeHtml(engState.toUpperCase())}</span><span style="color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(idleNote)}</span></div>
+          <div><strong>Host Supervisor:</strong> <span style="color: ${eng.supervisor_online ? '#34d399' : '#f59e0b'}">${eng.supervisor_online ? 'Connected (127.0.0.1:11436)' : 'Not running'}</span></div>
           <div><strong>Free GPU VRAM:</strong> <span style="color: var(--accent-cyan);">${data.free_vram_mb ? Number(data.free_vram_mb) + ' MiB' : 'CPU / Non-NVIDIA'}</span></div>
-          <div><strong>Active VRAM Models:</strong> <span style="color: ${loadedColor}; font-weight: 600;">${escapeHtml(loadedText)}</span></div>
+          <div><strong>Legacy Ollama:</strong> <span style="color: ${data.ollama_live ? '#34d399' : 'var(--text-muted)'}">${data.ollama_live ? 'Online' : 'Stopped'}</span> · <span style="color: ${loadedColor}; font-weight: 600;">${escapeHtml(loadedText)}</span></div>
           <div><strong>Signed-Up Users:</strong> ${Number(data.registered_users || 0)} <span style="color: var(--text-muted);">(cap: ${Number(data.max_registered_users ?? 0)})</span></div>
           <div><strong>Total Graded Projects:</strong> ${Number(data.total_projects || 0)}</div>
           <div><strong>Total Reports Vault:</strong> ${Number(data.total_reports || 0)}</div>
@@ -6349,85 +6523,25 @@ ${t.status === 'running' ? `
       fetchSystemStats();
     }
 
-    function togglePinnedPageViews() {
-      const drawer = document.getElementById('pinned-page-views-drawer');
-      if (!drawer) return;
-      drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
-    }
-
-    function toggleAdminLiveSidebar() {
-      const bar = document.getElementById('admin-live-bar');
-      const body = document.getElementById('admin-live-body');
-      const icon = document.getElementById('admin-live-collapse-icon');
-      if (!bar || !body) return;
-      const collapsing = body.style.display !== 'none';
-      body.style.display = collapsing ? 'none' : 'block';
-      bar.style.width = collapsing ? 'auto' : '276px';
-      if (icon) icon.className = collapsing ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right';
-    }
-
-    (function initAdminLiveDrag() {
-      const bar = document.getElementById('admin-live-bar');
-      const handle = document.getElementById('admin-live-drag-handle');
-      if (!bar || !handle) return;
-      const STORAGE_KEY = 'letsvibe_admin_live_pos';
-      function applyPos(left, top) {
-        const maxLeft = Math.max(8, window.innerWidth - (bar.offsetWidth || 276) - 8);
-        const maxTop = Math.max(8, window.innerHeight - 52);
-        const x = Math.min(Math.max(8, left), maxLeft);
-        const y = Math.min(Math.max(8, top), maxTop);
-        bar.style.right = 'auto';
-        bar.style.left = `${x}px`;
-        bar.style.top = `${y}px`;
-        return { left: x, top: y };
-      }
+    async function clearVisitorHistory() {
+      if (!confirm('Clear all recorded page views and visitor journeys?')) return;
+      const btn = document.getElementById('btn-clear-visitor-history');
+      if (btn) btn.disabled = true;
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
-          applyPos(saved.left, saved.top);
-        }
-      } catch (_) {}
-      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
-      handle.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button')) return;
-        const rect = bar.getBoundingClientRect();
-        dragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        origLeft = rect.left;
-        origTop = rect.top;
-        handle.style.cursor = 'grabbing';
-        handle.setPointerCapture(e.pointerId);
-      });
-      handle.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        applyPos(origLeft + (e.clientX - startX), origTop + (e.clientY - startY));
-      });
-      const finishDrag = () => {
-        if (!dragging) return;
-        dragging = false;
-        handle.style.cursor = 'grab';
-        const rect = bar.getBoundingClientRect();
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (_) {}
-      };
-      handle.addEventListener('pointerup', finishDrag);
-      handle.addEventListener('pointercancel', finishDrag);
-      window.addEventListener('resize', () => {
-        if (bar.style.left) {
-          applyPos(parseFloat(bar.style.left) || 8, parseFloat(bar.style.top) || 84);
-        }
-      });
-    })();
+        const res = await fetch('/api/admin/visitor-history/clear', { method: 'POST' });
+        if (res.ok) fetchActiveViewers();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
 
     async function fetchActiveViewers() {
       if (!currentUser || !currentUser.is_admin) return;
       const countEl = document.getElementById('active-viewers-count');
       const listEl = document.getElementById('active-viewers-list');
       const pvEl = document.getElementById('page-views-list');
-      const pinnedCountEl = document.getElementById('pinned-viewers-count');
-      const pinnedListEl = document.getElementById('pinned-viewers-list');
-      const pinnedPvEl = document.getElementById('pinned-page-views-list');
-      const pinnedJourneysEl = document.getElementById('pinned-journeys-list');
       const adminJourneysEl = document.getElementById('admin-journeys-list');
       try {
         const res = await fetch('/api/admin/active-viewers');
@@ -6438,7 +6552,6 @@ ${t.status === 'running' ? `
         const journeys = data.journeys || [];
         const countStr = String(data.count ?? viewers.length);
         if (countEl) countEl.textContent = countStr;
-        if (pinnedCountEl) pinnedCountEl.textContent = countStr;
 
         const fmtDur = (sec) => {
           const s = Math.max(0, Number(sec || 0));
@@ -6471,7 +6584,6 @@ ${t.status === 'running' ? `
           : '<span style="color: var(--text-muted);">No active visitors in the last 2 minutes.</span>';
 
         if (listEl) listEl.innerHTML = viewerPills;
-        if (pinnedListEl) pinnedListEl.innerHTML = viewerPills;
 
         const pvPills = pageViews.length
           ? pageViews.map(pv => `<span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.22rem 0.55rem; border-radius: 999px; background: rgba(15, 23, 42, 0.75); border: 1px solid var(--card-border); color: #cbd5e1;">
@@ -6481,34 +6593,139 @@ ${t.status === 'running' ? `
           : '<span style="color: var(--text-muted);">No non-admin page views recorded yet.</span>';
 
         if (pvEl) pvEl.innerHTML = pvPills;
-        if (pinnedPvEl) pinnedPvEl.innerHTML = pvPills;
+      } catch (_) {}
+    }
 
-        const journeyCards = journeys.length
-          ? journeys.map(j => {
-              const country = j.country ? ` <span style="color: var(--accent-cyan);">[${escapeHtml(j.country)}]</span>` : '';
-              const borderCol = j.has_error ? 'rgba(248, 113, 113, 0.55)' : 'var(--card-border)';
-              const steps = j.steps || [];
-              const stepWord = steps.length === 1 ? '1 step' : `${steps.length} steps`;
-              const jDur = Number(j.duration_seconds || 0) > 0 ? ` · ${fmtDur(j.duration_seconds)}` : '';
-              const trail = steps.map(s => {
-                const sc = Number(s.status_code || 200);
-                const isErr = sc >= 400;
-                const badge = isErr ? ` <span style="color: #f87171; font-weight: 700;">(${sc})</span>` : '';
-                const dwell = Number(s.dwell_seconds || 0) > 0 ? ` <span style="color: var(--text-muted);">(${fmtDur(s.dwell_seconds)})</span>` : '';
-                return `<code style="font-size: 0.7rem; color: ${isErr ? '#fca5a5' : '#cbd5e1'}; background: rgba(30, 41, 59, 0.85); padding: 0.08rem 0.32rem; border-radius: 5px; border: 1px solid ${isErr ? 'rgba(248, 113, 113, 0.45)' : 'rgba(148, 163, 184, 0.18)'};">${escapeHtml(s.path)}${badge}${dwell}</code>`;
-              }).join('<span style="color: var(--text-muted); font-size: 0.68rem;">→</span>');
-              return `<div style="padding: 0.38rem 0.52rem; border-radius: 9px; background: rgba(15, 23, 42, 0.8); border: 1px solid ${borderCol};">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.3rem;">
-                  <span><strong style="color: ${j.has_error ? '#f87171' : 'var(--accent-green)'};">${escapeHtml(j.label)}</strong>${country}</span>
-                  <span style="font-size: 0.68rem; color: var(--text-muted);">${j.has_error ? 'hit error' : `${stepWord}${jDur}`}</span>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.22rem; margin-top: 0.28rem;">${trail}</div>
-              </div>`;
-            }).join('')
-          : '<span style="color: var(--text-muted);">No visitor journeys recorded yet.</span>';
+    let _whatsNewTimer = null;
+    let _whatsNewShown = false;
 
-        if (pinnedJourneysEl) pinnedJourneysEl.innerHTML = journeyCards;
-        if (adminJourneysEl) adminJourneysEl.innerHTML = journeyCards;
+    function dismissWhatsNewToast() {
+      const toast = document.getElementById('whats-new-toast');
+      if (toast) toast.hidden = true;
+      if (_whatsNewTimer) { clearTimeout(_whatsNewTimer); _whatsNewTimer = null; }
+    }
+
+    function addRefContextRow() {
+      const container = document.getElementById('submit-refs-container');
+      if (!container) return;
+      if (container.querySelectorAll('.ref-context-row').length >= 5) {
+        alert('Maximum 5 reference contexts allowed per submission.');
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'ref-context-row';
+      row.style.cssText = 'padding:0.65rem;border:1px solid var(--card-border);border-radius:10px;background:rgba(15,23,42,0.55);display:grid;gap:0.45rem;';
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+          <span style="font-size:0.76rem;font-weight:700;color:var(--accent-cyan);">Reference Repo / Header Context</span>
+          <button type="button" onclick="this.closest('.ref-context-row').remove()" aria-label="Remove reference" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;">&times;</button>
+        </div>
+        <input type="text" class="search-input ref-url-input" style="width:100%;font-size:0.8rem;" placeholder="Public https:// URL (repo, /blob/.../Nexus.h, or raw header)">
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:0.74rem;color:var(--text-muted);display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer;">
+            <span>Or upload local header/doc (&le;64 KB):</span>
+            <input type="file" class="ref-file-input" accept=".h,.hpp,.hh,.hxx,.d.ts,.pyi,.idl,.md,.txt" style="font-size:0.74rem;color:#cbd5e1;">
+          </label>
+        </div>
+        <input type="text" class="search-input ref-role-input" style="width:100%;font-size:0.8rem;" maxlength="200" placeholder="What is this? e.g. GW2 Nexus host API (handles windowing & options UI)">
+      `;
+      container.appendChild(row);
+    }
+
+    function showCornerToast(titleHtml, itemsHtml, durationMs = 7000) {
+      const toast = document.getElementById('whats-new-toast');
+      const titleEl = document.getElementById('corner-toast-title');
+      const list = document.getElementById('whats-new-list');
+      if (!toast || !list) return;
+      if (titleEl) titleEl.innerHTML = titleHtml;
+      list.innerHTML = itemsHtml.join('');
+      toast.hidden = false;
+      toast.onmouseenter = pauseWhatsNewCountdown;
+      toast.onmouseleave = () => startWhatsNewCountdown(durationMs);
+      startWhatsNewCountdown(durationMs);
+    }
+
+    function showSubmitRefHelpToast() {
+      showCornerToast(
+        '<i class="fa-solid fa-circle-question"></i> References, Branches &amp; Subpaths',
+        [
+          '<li><strong>Main Repo only is graded:</strong> Metrics, Code Health &amp; ownership apply only to Repo 1.</li>',
+          '<li><strong>[+] Reference Context:</strong> Link any public <code>https://</code> repo/header or upload a local <code>.h/.hpp/.d.ts/.pyi</code> file (&le;64 KB) so plugins aren&apos;t dinged for host-managed UI (e.g. <code>Nexus.h</code>).</li>',
+          '<li><strong>Branches &amp; Folders:</strong> Use the Branch field or paste <code>/tree/&lt;branch&gt;/&lt;folder&gt;</code> (like <code>MS-DOS/tree/main/v4.0</code>).</li>',
+          '<li><strong>Multi-version roots:</strong> Versioned archives prompt you to pick a specific version folder URL.</li>',
+        ],
+        7000
+      );
+    }
+
+    function startWhatsNewCountdown(durationMs = 7000) {
+      const bar = document.getElementById('whats-new-timer-bar');
+      if (!bar) return;
+      if (_whatsNewTimer) { clearTimeout(_whatsNewTimer); _whatsNewTimer = null; }
+      bar.style.transition = 'none';
+      bar.style.width = '100%';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bar.style.transition = `width ${Math.round(durationMs / 1000)}s linear`;
+          bar.style.width = '0%';
+        });
+      });
+      _whatsNewTimer = setTimeout(dismissWhatsNewToast, durationMs);
+    }
+
+    function pauseWhatsNewCountdown() {
+      const bar = document.getElementById('whats-new-timer-bar');
+      if (_whatsNewTimer) { clearTimeout(_whatsNewTimer); _whatsNewTimer = null; }
+      if (bar) {
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+      }
+    }
+
+    function maybeShowWhatsNewToast(wn) {
+      if (_whatsNewShown || !wn) return;
+
+      const items = [];
+      for (const feat of (wn.features || [])) {
+        const link = feat.url
+          ? ` — <a href="${escapeHtml(feat.url)}" style="color: var(--accent-cyan); text-decoration: underline;">View</a>`
+          : '';
+        items.push(`<li><strong style="color: var(--accent-green);">New:</strong> ${escapeHtml(feat.title)}${link}</li>`);
+      }
+      for (const doc of (wn.docs || [])) {
+        items.push(`<li><strong>${escapeHtml(doc.title)}</strong> — <a href="${escapeHtml(doc.url)}" style="color: var(--accent-cyan); text-decoration: underline;">View</a></li>`);
+      }
+      if (wn.engine) {
+        const eng = wn.engine;
+        const ch = Array.isArray(eng.changelog_changes) ? eng.changelog_changes : [];
+        const bullets = ch.length
+          ? `<ul style="margin: 0.25rem 0 0; padding-left: 0.95rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; display: grid; gap: 0.2rem;">${ch.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>`
+          : '';
+        items.push(`<li><strong>${escapeHtml(eng.name || eng.version)}</strong> live — <a href="${escapeHtml(eng.url || '/changelog')}" style="color: var(--accent-cyan); text-decoration: underline;">Changelog</a>${bullets}</li>`);
+      }
+
+      if (!items.length) return;
+      _whatsNewShown = true;
+      showCornerToast('<i class="fa-solid fa-sparkles"></i> Recent changes:', items, 7000);
+    }
+
+    async function fetchLiveStats() {
+      try {
+        const res = await fetch('/api/live-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        const vEl = document.getElementById('live-visitors-count');
+        const bEl = document.getElementById('live-bots-count');
+        const dEl = document.getElementById('docs-updated-pill');
+        if (vEl) vEl.textContent = String(Number(data.live_visitors || 0));
+        if (bEl) bEl.textContent = String(Number(data.live_bots || 0));
+        if (dEl) dEl.hidden = !data.docs_updated;
+        const updatedUrls = new Set((data.whats_new?.docs || []).map(d => d.url));
+        if (data.whats_new?.engine?.url) updatedUrls.add(data.whats_new.engine.url);
+        document.querySelectorAll('.doc-updated-pill').forEach(el => {
+          el.hidden = !updatedUrls.has(el.dataset.docUrl);
+        });
+        maybeShowWhatsNewToast(data.whats_new);
       } catch (_) {}
     }
 
@@ -6794,7 +7011,13 @@ ${t.status === 'running' ? `
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ report: parsed }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { detail: `Server returned HTTP ${res.status} (${text.slice(0, 120) || 'non-JSON response'})` };
+        }
         if (!res.ok) {
           statusEl.style.color = '#f87171';
           statusEl.textContent = data.detail || 'Import failed.';
@@ -6813,6 +7036,10 @@ ${t.status === 'running' ? `
 
     window.addEventListener('DOMContentLoaded', async () => {
       syncScaleToggleButtons();
+      fetchEngineStatus();
+      fetchLiveStats();
+      setInterval(fetchEngineStatus, 20000);
+      setInterval(() => { if (!document.hidden) fetchLiveStats(); }, 30000);
       await Promise.all([checkAuthStatus(), loadTaxonomy()]);
 
       if (new URLSearchParams(window.location.search).get('registration') === 'closed') {
@@ -6863,7 +7090,12 @@ ${t.status === 'running' ? `
     });
 
     async function triggerRescanAllRepos() {
-      if (!confirm("Are you sure you want to re-queue every repository in the database?\n\nThis will process through the queue sequentially in the background.")) {
+      const rescanSel = document.getElementById('rescan-all-engine-select');
+      const selectedMode = (rescanSel && rescanSel.value) ? rescanSel.value.trim() : '';
+      const selectedLabel = (rescanSel && rescanSel.selectedOptions && rescanSel.selectedOptions[0])
+        ? rescanSel.selectedOptions[0].textContent
+        : (selectedMode || 'default');
+      if (!confirm(`Are you sure you want to re-queue every repository in the database using:\n${selectedLabel}\n\nThis will process through the queue sequentially in the background.`)) {
           return;
       }
 
@@ -6873,11 +7105,15 @@ ${t.status === 'running' ? `
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Re-queuing repositories...';
 
       try {
-          const res = await fetch('/api/admin/rescan-all', { method: 'POST' });
+          const res = await fetch('/api/admin/rescan-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: selectedMode || null })
+          });
           const data = await res.json();
           
           if (res.ok && data.status === 'ok') {
-              alert(`Success! Re-queued ${data.requeued_count} repositories for evaluation.`);
+              alert(`Success! Re-queued ${data.requeued_count} repositories for evaluation (${data.engine || selectedMode}).`);
               fetchQueue(); // Refresh the admin queue view
           } else {
               alert("Error: " + (data.detail || "Could not trigger bulk rescan."));

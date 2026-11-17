@@ -141,7 +141,7 @@ def curved_letter_for_score(score: float) -> str:
 
 
 def global_curve_details(score: float, all_scores: List[float]) -> Dict[str, float]:
-    """Single site-wide bell curve inside [low, high], strictly monotonic and anchored at 0/75/100."""
+    """Half-bell upward-only curve inside [mean, high], anchored at raw_score floor and 100 ceiling (never reduces scores)."""
     import statistics
 
     low, high = global_scale_ends(all_scores)
@@ -150,29 +150,24 @@ def global_curve_details(score: float, all_scores: List[float]) -> Dict[str, flo
     if w:
         mean = (1 - w) * mean + w * statistics.mean(all_scores)
         sd = (1 - w) * sd + w * max(statistics.stdev(all_scores), 1.0)
-    # Keep mean safely inside (low, high) so upper and lower halves never invert
+    # Keep mean safely inside (low, high)
     mean = min(high - 1.0, max(low + 1.0, mean))
     z = (score - mean) / sd
-    z_low = (low - mean) / sd
     z_high = (high - mean) / sd
     a_pos = anchor_position(score, (low, high))
 
-    if score <= low:
-        curved = 0.0
-    elif score >= high:
+    if score >= high:
         curved = 100.0
-    else:
+    elif z > 0.0:
         raw_y = _curved_scale_raw(z)
         y_mid = _curved_scale_raw(0.0)
-        if z >= 0.0:
-            y_high = _curved_scale_raw(z_high)
-            denom = max(1e-6, y_high - y_mid)
-            curved = 75.0 + 25.0 * ((raw_y - y_mid) / denom)
-        else:
-            y_low = _curved_scale_raw(z_low)
-            denom = max(1e-6, y_mid - y_low)
-            curved = 75.0 * ((raw_y - y_low) / denom)
-        curved = max(0.0, min(100.0, curved))
+        y_high = _curved_scale_raw(z_high)
+        denom = max(1e-6, y_high - y_mid)
+        bell_up = mean + (100.0 - mean) * ((raw_y - y_mid) / denom)
+        curved = max(score, min(100.0, bell_up))
+    else:
+        # Negative half of the bell is removed: scores at or below the midpoint keep their Raw Rubric score.
+        curved = max(0.0, min(100.0, score))
 
     return {
         "z": round(z, 3),
@@ -291,13 +286,11 @@ def grade_with_details(score: float, cohort: List[float], all_scores: List[float
 def describe_method(calibration: Dict[str, Any]) -> str:
     """Plain-language description of the curve, used by the public page and stored with each calibration."""
     return (
-        f"LetsVibe grades on a single site-wide bell curve computed dynamically from raw rubric scores "
-        f"(never stored in the database). By default, a raw score of {DEFAULT_CURVE_LOW:g} anchors 0 and "
-        f"{DEFAULT_CURVE_HIGH:g} anchors 100, with the curve centered at {GLOBAL_PRIOR_MEAN:g} (C) and blending "
-        f"toward the real site-wide average and spread as more projects are graded (fully at {PEER_MIN_PROJECTS} "
-        f"projects). If {OUTLIER_THRESHOLD} or more projects score above {DEFAULT_CURVE_HIGH:g} (or below "
-        f"{DEFAULT_CURVE_LOW:g}), the top or bottom anchor automatically shifts to the {OUTLIER_THRESHOLD}th-highest "
-        f"or {OUTLIER_THRESHOLD}th-lowest score so the scale adapts as coding tools improve."
+        f"LetsVibe's optional Bell Curve uses only the upper half of the bell (never reducing a Raw Rubric score). "
+        f"Scores at or below the site midpoint keep their Raw Rubric score, while scores above the midpoint curve "
+        f"upward toward 100 at {DEFAULT_CURVE_HIGH:g} (blending from {GLOBAL_PRIOR_MEAN:g} toward the real site-wide "
+        f"average and spread as more projects are graded, fully at {PEER_MIN_PROJECTS} projects). If {OUTLIER_THRESHOLD} "
+        f"or more projects exceed {DEFAULT_CURVE_HIGH:g}, the top anchor shifts automatically."
     )
 
 
@@ -385,18 +378,13 @@ def compute_peer_overlays(conn: sqlite3.Connection) -> Dict[int, Dict[str, Any]]
         sc = float(r["final_score"])
         jobs.append((r, public + [sc], all_scores + [sc]))
 
-    use_global = load_calibration() is not None
     for r, cohort, scores in jobs:
         raw_score = float(r["final_score"])
         raw_letter = calculate_letter_grade(raw_score)
-        if use_global:
-            details = global_curve_details(raw_score, scores)
-            curved_val = details["curved_score"]
-            curved_letter = curved_letter_for_score(curved_val)
-            basis = "peers" if details["peer_weight"] >= 1 else "curve"
-        else:
-            curved_letter, basis, details = grade_with_details(raw_score, cohort, scores)
-            curved_val = details["curved_score"] if details else round(raw_score, 1)
+        details = global_curve_details(raw_score, scores)
+        curved_val = details["curved_score"]
+        curved_letter = calculate_letter_grade(curved_val)
+        basis = "peers" if details["peer_weight"] >= 1 else "curve"
         overlays[int(r["id"])] = {
             "raw_score": round(raw_score, 1),
             "raw_letter_grade": raw_letter,

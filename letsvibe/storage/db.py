@@ -24,18 +24,49 @@ logger = logging.getLogger("letsvibe.storage")
 DEFAULT_DB_PATH = Path("data/letsvibe.db")
 # Rubrics that grade the five experience factors only (code health and safety stored empty, never 0 or 100)
 EXPERIENCE_RUBRICS = ("v8", "v9")   # and their point releases (v9.1, ...)
+
+
+def _testing_rubric_versions() -> List[str]:
+    """
+    Returns rubric_version strings for pre-release testing engines (status='testing'
+    with rubric_rank > default production engine), so legacy retired engines like v9.4/v10
+    keep their published reports visible while unreleased engines like v10.2 stay admin-only
+    until promoted to production.
+    """
+    try:
+        from letsvibe_engine.api import load_registry
+        engines = load_registry()
+        prod_ranks = [
+            int(e.get("rubric_rank") or 0)
+            for e in engines
+            if str(e.get("status") or "").lower() == "production"
+        ]
+        max_prod_rank = max(prod_ranks) if prod_ranks else 0
+        return sorted({
+            str(e.get("rubric_version") or "").strip().lower()
+            for e in engines
+            if str(e.get("status") or "").lower() == "testing"
+            and e.get("rubric_version")
+            and int(e.get("rubric_rank") or 0) > max_prod_rank
+        })
+    except Exception:
+        return []
 LEGACY_V5_RUBRICS = ("v1", "v2", "v3", "v4", "v5")
 
 
 def rubric_version_rank(version: Optional[str]) -> int:
-    """Converts a rubric version string ('v9.3', 'v9', 'v8', 'v1') into an integer rank (903, 900, 800, 100)."""
+    """Converts a rubric version string ('v10', 'v10a', 'v9.3', 'v1') into an integer rank."""
     if not version:
         return 0
     import re
-    m = re.match(r"^v?(\d+)(?:\.(\d+))?", str(version).strip().lower())
+    s = str(version).strip().lower()
+    if s == "v10a":
+        return 1000
+    m = re.match(r"^v?(\d+)(?:\.(\d+))?", s)
     if not m:
         return 0
-    return int(m.group(1)) * 100 + int(m.group(2) or 0)
+    major, minor = int(m.group(1)), int(m.group(2) or 0)
+    return major * 100 + minor
 
 # Factors shown on the site (rubric v8 grades value, creativity and the user journey). Older badges for other
 # factors stay in ranking_history but are not displayed.
@@ -271,17 +302,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
             views INTEGER NOT NULL DEFAULT 0,
             last_viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE TABLE IF NOT EXISTS visitor_journeys (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_key TEXT NOT NULL,
-            label TEXT NOT NULL,
-            country TEXT NOT NULL DEFAULT '',
-            path TEXT NOT NULL,
-            status_code INTEGER NOT NULL DEFAULT 200,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_visitor_journeys_id ON visitor_journeys(id DESC);
-        CREATE INDEX IF NOT EXISTS idx_visitor_journeys_visitor ON visitor_journeys(visitor_key, id DESC);
+        DROP TABLE IF EXISTS visitor_journeys;
         """)
         # Safe migrations for existing databases
         try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
@@ -556,7 +577,8 @@ def save_report_to_db(
                 canonical_url=excluded.canonical_url,
                 owner_avatar_url=excluded.owner_avatar_url,
                 repo_icon_url=COALESCE(excluded.repo_icon_url, projects.repo_icon_url),
-                updated_at=excluded.updated_at
+                updated_at=excluded.updated_at,
+                is_test=CASE WHEN excluded.is_test = 0 THEN 0 ELSE projects.is_test END
             """,
             (
                 identity.owner,
@@ -810,6 +832,12 @@ def get_leaderboard(
     # Admin-only engine filter: when set (and include_test=True), rank projects by their latest scan from that engine
     eng_rank = rubric_version_rank(engine_filter) if (include_test and engine_filter and engine_filter not in ("all", "default")) else 0
 
+    testing_vers = [] if include_test else _testing_rubric_versions()
+    testing_clause = (
+        f" AND LOWER(COALESCE(r.rubric_version, '')) NOT IN ({','.join('?' for _ in testing_vers)})"
+        if testing_vers else ""
+    )
+
     if eng_rank > 0:
         query = f"""
         WITH latest_reports AS (
@@ -870,7 +898,7 @@ def get_leaderboard(
                 ORDER BY (COALESCE(r.is_test, 0) = 0) DESC, COALESCE(r.rubric_rank, 0) DESC, r.id DESC
             ) as rn
             FROM reports r
-            WHERE (COALESCE(r.is_test, 0) = 0 OR ?)
+            WHERE (COALESCE(r.is_test, 0) = 0 OR ?){testing_clause}
         )
         SELECT
             p.id as project_id,
@@ -913,7 +941,7 @@ def get_leaderboard(
           AND (COALESCE(p.moderation_hidden, 0) = 0 OR ?)
         ORDER BY {order_col} DESC, r.final_score DESC
         """  # nosec B608 - only fixed column names or the fixed badge list are formatted in; values use ? placeholders
-        cur = conn.execute(query, (1 if include_test else 0, 1 if include_test else 0, 1 if include_test else 0))
+        cur = conn.execute(query, (1 if include_test else 0, *testing_vers, 1 if include_test else 0, 1 if include_test else 0))
     rows = [dict(row) for row in cur.fetchall()]
 
     # Compute presentation-layer bell curve overlays without mutating SQLite
@@ -1171,9 +1199,18 @@ def get_project_detail(
     """
     init_db(db_path)
     conn = get_db_connection(db_path)
+    testing_vers = [] if include_test else _testing_rubric_versions()
+    testing_clause = (
+        f" AND LOWER(COALESCE(r.rubric_version, '')) NOT IN ({','.join('?' for _ in testing_vers)})"
+        if testing_vers else ""
+    )
+    testing_hist_clause = (
+        f" AND LOWER(COALESCE(NULLIF(rubric_version, ''), json_extract(report_data_json, '$.rubric_version'), '')) NOT IN ({','.join('?' for _ in testing_vers)})"
+        if testing_vers else ""
+    )
 
     cur = conn.execute(
-        """
+        f"""
         SELECT p.*, r.id as report_id, r.commit_sha, r.final_score, COALESCE(r.curved_score, r.final_score) AS curved_score,
                COALESCE(r.general_category, 'other') AS general_category, r.letter_grade, r.archetype_name,
                r.archetype_category, r.primary_language, r.verdict_title, r.verdict_summary,
@@ -1189,11 +1226,12 @@ def get_project_detail(
           AND (p.is_test = 0 OR p.shared = 1 OR ?)
           AND (COALESCE(p.moderation_hidden, 0) = 0 OR ?)
           AND (COALESCE(r.is_test, 0) = 0 OR p.shared = 1 OR ?)
+          {testing_clause}
           AND (? IS NULL OR r.id = ?)
         ORDER BY (COALESCE(r.is_test, 0) = 0) DESC, COALESCE(r.rubric_rank, 0) DESC, r.id DESC
         LIMIT 1
-        """,
-        (full_slug, 1 if include_test else 0, 1 if include_test else 0, 1 if include_test else 0, report_id, report_id),
+        """,  # nosec B608 - testing_clause uses parameterized ? placeholders only
+        (full_slug, 1 if include_test else 0, 1 if include_test else 0, 1 if include_test else 0, *testing_vers, report_id, report_id),
     )
     row = cur.fetchone()
     if not row:
@@ -1210,16 +1248,17 @@ def get_project_detail(
     # Every visible scan of this project: production/newest-engine first, then older/test scans (admin only for test scans)
     show_test_reports = 1 if (include_test or data.get("shared")) else 0
     data["history"] = [dict(h) for h in conn.execute(
-        """
+        f"""
         SELECT id AS report_id, created_at AS graded_at, final_score,
                COALESCE(curved_score, final_score) AS curved_score, letter_grade, commit_sha,
                COALESCE(NULLIF(rubric_version, ''), json_extract(report_data_json, '$.rubric_version')) AS rubric_version,
                COALESCE(is_test, 0) AS is_test
         FROM reports
         WHERE project_id = ? AND (COALESCE(is_test, 0) = 0 OR ?)
+        {testing_hist_clause}
         ORDER BY (COALESCE(is_test, 0) = 0) DESC, COALESCE(rubric_rank, 0) DESC, id DESC
-        """,
-        (data["id"], show_test_reports),
+        """,  # nosec B608 - testing_hist_clause uses parameterized ? placeholders only
+        (data["id"], show_test_reports, *testing_vers),
     ).fetchall()]
     data["is_latest"] = bool(data["history"]) and data["history"][0]["report_id"] == data["report_id"]
     from ..evaluator.rubric import calculate_letter_grade
@@ -1356,6 +1395,22 @@ def clear_pending_tasks(db_path: Path = DEFAULT_DB_PATH) -> int:
     try:
         with conn:
             return conn.execute("DELETE FROM audit_queue WHERE status = 'queued'").rowcount
+    finally:
+        conn.close()
+
+
+def purge_all_queue_tasks(db_path: Path = DEFAULT_DB_PATH) -> int:
+    """
+    Removes ALL tasks from the queue list (queued, running, completed, failed, cancelled, rejected)
+    and clears any front_task_id pin. Graded reports are separate and untouched.
+    """
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            removed = conn.execute("DELETE FROM audit_queue").rowcount
+            conn.execute("UPDATE queue_settings SET front_task_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = 1")
+            return removed
     finally:
         conn.close()
 
@@ -2141,10 +2196,12 @@ def review_appeal(
     conn.close()
 
     if approved:
+        from ..evaluator.pipeline import get_default_engine_id
+
         # Re-enqueue repository with force_override=True
         enqueue_task(
             target=appeal["target"],
-            mode="blend",
+            mode=get_default_engine_id(),
             requested_by=f"appeal_override:{appeal['submitter_email']}",
             force_override=True,
             db_path=db_path,
@@ -2712,11 +2769,11 @@ def resolve_content_report(report_id: int, action: str, db_path: Path = DEFAULT_
 
 
 def upvote_score_bonus(upvote_count: int) -> float:
-    """Diminishing-returns community Spark bonus, capped at +3.0 points."""
+    """Uncapped diminishing-returns community Spark bonus: 0.5 * log2(1 + n)."""
     n = max(0, int(upvote_count or 0))
     if n <= 0:
         return 0.0
-    return round(min(3.0, 0.5 * math.log2(1 + n)), 2)
+    return round(0.5 * math.log2(1 + n), 2)
 
 
 def toggle_project_upvote(
@@ -3296,5 +3353,17 @@ def get_recent_visitor_journeys(
                 except Exception:  # nosec B110 - best-effort timestamp parsing
                     pass
         return list(grouped.values())
+    finally:
+        conn.close()
+
+
+def clear_visitor_history(db_path: Path = DEFAULT_DB_PATH) -> Dict[str, int]:
+    """Deletes all recorded aggregate page-view counters."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            views_removed = conn.execute("DELETE FROM page_views").rowcount
+            return {"journeys_removed": 0, "views_removed": views_removed}
     finally:
         conn.close()

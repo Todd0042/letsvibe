@@ -8,7 +8,7 @@ scores (prompts, weights, aggregation, grade curve, checklist).
 
 from typing import Dict, List
 
-RUBRIC_VERSION = "v9.3"
+RUBRIC_VERSION = "v10.3"
 
 GRADE_CUTOFFS = (
     (94.0, "A+"),
@@ -33,6 +33,47 @@ def calculate_letter_grade(score: float) -> str:
 
 # Newest first. Plain language: this is shown publicly on /changelog.
 RUBRIC_CHANGELOG: List[Dict[str, object]] = [
+    {
+        "version": "v10.3",
+        "date": "2026-11-16",
+        "title": "Runtime Envelopes for Native GUIs, Addons, Widgets, Libraries & Trainers",
+        "changes": [
+            "Added universal Runtime Envelope detection (host plugins/mods, desktop widgets/tray tools, native GUIs, single-player trainers/save tools, and libraries/SDKs) with guardrails preventing native/overlay apps from being misrouted to CLI rubrics.",
+            "Added filename and banner fingerprinting in ingestion to exclude bundled single-header/amalgamated third-party libraries (Dear ImGui, stb_*, sqlite3, nlohmann/json, etc.) from author LOC, complexity, and audit batches even in single-commit repos.",
+            "Fixed over-capping of domain-integrated plugins, overlays, widgets, and trainers as generic prompt clones, and tightened batch audit rules against false-positive null-check and wrong-platform complaints.",
+        ],
+    },
+    {
+        "version": "v10.2",
+        "date": "2026-11-16",
+        "title": "Code Health (15%) in Raw Rubric, Host/SDK Awareness & Stricter Standards",
+        "changes": [
+            "Promoted Engine v10.2 to the default production rubric: adds Code Health (15% weight—cyclomatic complexity, oversized files/functions, 10-line duplicated logic blocks, dead code, and swallowed errors) directly into the Raw Rubric score.",
+            "Added deterministic option/function documentation parity checks (comparing GUI, CLI, or dual-mode options against inline help and documentation) so complex tools aren't credited for easy onboarding when options lack explanations.",
+            "Added automatic in-repo host/SDK header capability discovery (e.g. Nexus.h) plus optional [+] external repo/header reference context and branch/subpath targeting (/tree/<branch>/<subpath>), so plugins aren't penalized for host-managed windows or options.",
+            "Removed artificial repo file-count and size caps during ingestion, added multi-version archive root detection, and added a 'Beauty in Simplicity' callout (Laser-Focused / Balanced / Kitchen-Sink).",
+        ],
+    },
+    {
+        "version": "v10",
+        "date": "2026-11-15",
+        "title": "Unified 30B-A3B MoE engine via CUDA llama.cpp (--cpu-moe)",
+        "changes": [
+            "Replaced the dual 7B + 14B Ollama pipeline with a single unified Qwen3 30B-A3B (30.5B Mixture-of-Experts, 3B active parameters) model running locally through CUDA-accelerated llama.cpp (--cpu-moe).",
+            "Hybrid GPU+CPU execution keeps attention layers and the 32K-token KV cache resident in GPU VRAM while running MoE expert weights from system RAM on CPU—eliminating model swaps and enabling larger 12K-token code audit batches.",
+            "Streamlined evaluation into four stages: deterministic dossier & static scan, context/dossier synthesis, large-batch code audit with exact file/line citations, and calibrated 5-factor scoring with actionable next steps.",
+            "Projects such as code libraries, compilers, and developer tools are evaluated on what they actually are rather than penalized for lacking web GUI themes or save buttons.",
+        ],
+    },
+    {
+        "version": "v9.4",
+        "date": "2026-11-14",
+        "title": "Submitter context, grounding checks, and 7 domain archetype lenses",
+        "changes": [
+            "Added developer intake context (project profile, provenance, guest access, and custom hook) to weight and interpret evaluations more accurately.",
+            "Added stricter grounding checks between dossier claims and verified source-code quotes.",
+        ],
+    },
     {
         "version": "v9.3",
         "date": "2026-11-13",

@@ -384,3 +384,97 @@ details.faq > *:not(summary) { margin-top: 0.5rem; }
 
 /* Firefox (and others) give form controls their own font; use the page's everywhere */
 button, input, select, textarea, optgroup { font-family: inherit; }
+
+/* Full-width responsive side-by-side documentation diff view */
+.page-wrap.diff-wide {
+  max-width: none;
+  width: 100%;
+  padding: 1.25rem clamp(0.75rem, 2vw, 2.25rem) 3rem;
+  box-sizing: border-box;
+}
+.prose.diff-wide { max-width: none; width: 100%; }
+.doc-diff-shell {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: #070d1a;
+  overflow: hidden;
+  margin: 0.75rem 0 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.doc-diff-topbar {
+  padding: 0.6rem 0.9rem;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.doc-diff-stats { display: inline-flex; gap: 0.65rem; font-weight: 700; font-size: 0.78rem; }
+.doc-diff-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: rgba(15, 23, 42, 0.78);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.doc-diff-col-hdr {
+  padding: 0.4rem 0.85rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.doc-diff-col-hdr:first-child { border-right: 1px solid rgba(148, 163, 184, 0.18); }
+.doc-diff-hunk {
+  padding: 3px 12px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  font-size: 0.76rem;
+}
+.doc-diff-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.06);
+}
+.doc-diff-side {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  min-width: 0;
+  align-items: stretch;
+}
+.doc-diff-side:first-child { border-right: 1px solid rgba(148, 163, 184, 0.16); }
+.doc-diff-ln {
+  padding: 2px 8px 2px 4px;
+  text-align: right;
+  color: #64748b;
+  user-select: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
+  font-size: 0.74rem;
+}
+.doc-diff-code {
+  padding: 2px 10px;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: #cbd5e1;
+}
+.doc-diff-del { background: rgba(248, 113, 113, 0.15); }
+.doc-diff-del .doc-diff-code { color: #fca5a5; }
+.doc-diff-add { background: rgba(52, 211, 153, 0.14); }
+.doc-diff-add .doc-diff-code { color: #6ee7b7; }
+.doc-diff-empty { background: rgba(15, 23, 42, 0.45); }
+@media (max-width: 767px) {
+  .doc-diff-cols, .doc-diff-row { grid-template-columns: minmax(0, 1fr); }
+  .doc-diff-col-hdr:first-child, .doc-diff-side:first-child {
+    border-right: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  }
+}

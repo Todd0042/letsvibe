@@ -84,6 +84,17 @@ def get_available_engines(include_testing: bool = False) -> List[Dict[str, Any]]
         ]
 
 
+def get_default_engine_id() -> str:
+    """Returns the id of the current default production engine from letsvibe-engine."""
+    engines = get_available_engines(include_testing=False)
+    for eng in engines:
+        if eng.get("is_default"):
+            return str(eng["id"])
+    if engines:
+        return str(engines[0]["id"])
+    return "blend"
+
+
 def get_engine_info(engine_id: str) -> Optional[Dict[str, Any]]:
     """Looks up engine metadata by id or version."""
     try:

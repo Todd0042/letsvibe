@@ -25,7 +25,7 @@ def test_content_pages_render_and_fit(browser, live_server, slug, vp):
     page.locator("main h1").first.wait_for()
     assert_no_horizontal_scroll(page)
     footer = page.locator("footer.site-footer")
-    assert footer.count() == 1 and "todd.0042.git@gmail.com" in footer.inner_text()
+    assert footer.count() == 1 and "Chat / Support" in footer.inner_text()
     if vp != "desktop-1440x900" or slug in ("how-it-works", "my-data", "privacy"):
         page.screenshot(path=str(SCREENS / f"page-{slug}-{vp}.png"), full_page=True)
     assert not errors, errors

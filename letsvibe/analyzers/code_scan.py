@@ -11,7 +11,7 @@ import re
 import subprocess  # nosec B404 - git/nvidia-smi run with fixed list arguments, never a shell
 import tomllib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import lizard
@@ -260,21 +260,24 @@ def scan(root: Path) -> Dict[str, List[Dict[str, object]]]:
     for p, line, path in _unused_routes(code, everything):
         add("unused route", p, line, f"the endpoint {path} exists, but no screen or script in the project calls it")
     seen, dups = {}, []
+    _DUP_SKIP_EXT = (".html", ".htm", ".css", ".scss", ".sass", ".svg")
     for p, c in code.items():
+        if p.lower().endswith(_DUP_SKIP_EXT):
+            continue
         ls = c.splitlines()
-        for i in range(len(ls) - 5):
-            win = [re.sub(r"\s+", " ", l).strip() for l in ls[i:i + 6]]
-            if sum(1 for w in win if len(w) > 12 and not w.startswith(("import ", "from ", "//", "#"))) < 5:
+        for i in range(len(ls) - 9):
+            win = [re.sub(r"\s+", " ", l).strip() for l in ls[i:i + 10]]
+            if sum(1 for w in win if len(w) > 12 and not w.startswith(("import ", "from ", "//", "#"))) < 8:
                 continue
             h = hashlib.md5("\n".join(win).encode(), usedforsecurity=False).hexdigest()   # a fingerprint, not security
-            if h in seen and seen[h][0] != p or (h in seen and abs(seen[h][1] - i) > 6):
+            if h in seen and seen[h][0] != p or (h in seen and abs(seen[h][1] - i) > 10):
                 p0, i0 = seen[h]
-                if not dups or not (dups[-1][0] == p0 and dups[-1][2] == p and abs(dups[-1][3] - (i + 1)) <= 12):
+                if not dups or not (dups[-1][0] == p0 and dups[-1][2] == p and abs(dups[-1][3] - (i + 1)) <= 16):
                     dups.append([p0, i0 + 1, p, i + 1])
             else:
                 seen.setdefault(h, (p, i))
     for p0, l0, p1, l1 in [d for d in dups if d[0] not in unused and d[2] not in unused][:12]:
-        add("duplicated code", p1, l1, f"the same block of code also appears in {p0} at line {l0}")
+        add("duplicated code", p1, l1, f"the same 10-line block of code also appears in {p0} at line {l0}")
     live = [f for f in findings if not f["in_unused_file"] or f["kind"] == "unused file"]
     handlers = _user_facing_functions(code)
 
@@ -290,4 +293,81 @@ def scan(root: Path) -> Dict[str, List[Dict[str, object]]]:
         return f["file"].endswith(WEB_EXT) or (f["file"], f["function"]) in handlers
     return {"functionality": [f for f in live if counts_for_functionality(f)],
             "maintainer": [f for f in live if not counts_for_functionality(f)],
-            "lines_of_code": sum(sum(1 for l in c.splitlines() if l.strip()) for c in code.values())}
+            "lines_of_code": sum(sum(1 for l in c.splitlines() if l.strip()) for c in code.values()),
+            "option_docs": _analyze_surface_option_docs(code, everything)}
+
+
+def _analyze_surface_option_docs(code: Dict[str, str], everything: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Detects whether the repo exposes CLI, GUI, or both surfaces and counts how many
+    user-facing options/flags/controls have inline explanations or docs.
+    """
+    cli_total = 0
+    cli_doc = 0
+    gui_total = 0
+    gui_doc = 0
+    has_cli = False
+    has_gui = False
+
+    cli_arg_re = re.compile(r"(?:add_argument|click\.option|typer\.Option|Option\()\s*\(([^)]{0,320})\)")
+    gui_html_re = re.compile(r"<(?:input|select|textarea)\b([^>]{0,280})>", re.I)
+    qt_widget_re = re.compile(r"<widget\b[^>]*class=\"Q(?:CheckBox|ComboBox|SpinBox|DoubleSpinBox|Slider|LineEdit|PushButton)\"[^>]*>(.*?)</widget>", re.S)
+
+    for p, content in everything.items():
+        pl = p.lower()
+        if pl.endswith((".py", ".js", ".ts", ".rs", ".go", ".c", ".cpp", ".h", ".hpp")):
+            if any(k in content for k in ("argparse", "click.option", "typer.Option", "getopt(", "QCommandLineOption")):
+                has_cli = True
+            for m in cli_arg_re.finditer(content):
+                cli_total += 1
+                if "help=" in m.group(1) or "description" in m.group(1).lower():
+                    cli_doc += 1
+            if any(k in content for k in ("QMainWindow", "QDialog", "tkinter", "ttk.", "pygame.", "setCentralWidget")):
+                has_gui = True
+            for m in re.finditer(r"set(?:ToolTip|WhatsThis|AccessibleDescription)\s*\(", content):
+                gui_doc += 1
+
+        if pl.endswith((".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte")):
+            has_gui = True
+            for m in gui_html_re.finditer(content):
+                attrs = m.group(1).lower()
+                if 'type="hidden"' in attrs or "type='hidden'" in attrs:
+                    continue
+                gui_total += 1
+                if any(k in attrs for k in ("title=", "aria-label=", "placeholder=")):
+                    gui_doc += 1
+            gui_doc += len(re.findall(r"<label\b", content, re.I))
+
+        if pl.endswith(".ui"):
+            has_gui = True
+            for m in qt_widget_re.finditer(content):
+                gui_total += 1
+                if "tooltip" in m.group(1).lower() or "whatsthis" in m.group(1).lower():
+                    gui_doc += 1
+
+    gui_doc = min(gui_doc, gui_total) if gui_total else gui_doc
+    has_docs_dir = any(
+        p.lower().startswith("docs/") and p.lower().endswith((".md", ".rst", ".txt"))
+        for p in everything
+    )
+    readme_len = max((len(v) for k, v in everything.items() if Path(k).name.lower().startswith("readme")), default=0)
+
+    surfaces = "BOTH (GUI + CLI)" if (has_cli and has_gui) else ("GUI" if has_gui else ("CLI" if has_cli else "LIBRARY_OR_OTHER"))
+    parts = [f"Surfaces: {surfaces}"]
+    if has_cli:
+        parts.append(f"CLI options with inline help: {cli_doc}/{cli_total}")
+    if has_gui:
+        parts.append(f"GUI controls with inline tooltip/label: {gui_doc}/{gui_total}")
+    parts.append(f"docs/ folder: {'yes' if has_docs_dir else 'no'}, README chars: {readme_len}")
+
+    return {
+        "surfaces": surfaces,
+        "has_cli": has_cli,
+        "has_gui": has_gui,
+        "cli_options_total": cli_total,
+        "cli_options_documented": cli_doc,
+        "gui_options_total": gui_total,
+        "gui_options_documented": gui_doc,
+        "has_docs_dir": has_docs_dir,
+        "summary": " | ".join(parts),
+    }

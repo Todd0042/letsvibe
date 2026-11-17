@@ -212,17 +212,17 @@
     const fab = document.createElement('button');
     fab.type = 'button';
     fab.className = 'lv-chat-fab';
-    fab.setAttribute('aria-label', 'Message Todd');
-    fab.innerHTML = `<i class="fa-solid fa-comments"></i><span>Message Todd</span><span class="lv-chat-badge" id="lv-chat-badge">0</span>`;
+    fab.setAttribute('aria-label', 'Chat / Support');
+    fab.innerHTML = `<i class="fa-solid fa-comments"></i><span>Chat / Support</span><span class="lv-chat-badge" id="lv-chat-badge">0</span>`;
     document.body.appendChild(fab);
 
     const backdrop = document.createElement('div');
     backdrop.className = 'lv-chat-backdrop';
     backdrop.innerHTML = `
-      <div class="lv-chat-modal" role="dialog" aria-modal="true" aria-label="Direct Chat with Todd">
+      <div class="lv-chat-modal" role="dialog" aria-modal="true" aria-label="Chat / Support">
         <div class="lv-chat-head">
           <div>
-            <div class="lv-chat-title">Message Todd</div>
+            <div class="lv-chat-title">Chat / Support</div>
             <div class="lv-chat-sub">Direct in-site chat &mdash; no external email needed</div>
           </div>
           <button type="button" class="lv-chat-close" id="lv-chat-close">Close</button>

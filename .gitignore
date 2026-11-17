@@ -58,6 +58,7 @@ id_ed25519*
 *credentials*.json
 .netrc
 .cloudflared/
+how-to.md
 secrets/
 
 # Virtual environments

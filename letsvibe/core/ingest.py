@@ -681,6 +681,34 @@ def is_safe_repo_file(repo_root: Path, candidate: Path) -> bool:
         return False
 
 
+_KNOWN_VENDOR_BASENAMES = {
+    "imgui.cpp", "imgui.h", "imgui_draw.cpp", "imgui_tables.cpp", "imgui_widgets.cpp",
+    "imgui_demo.cpp", "imgui_internal.h", "imconfig.h", "imstb_rectpack.h",
+    "imstb_textedit.h", "imstb_truetype.h", "imgui_impl_dx9.cpp", "imgui_impl_dx9.h",
+    "imgui_impl_dx11.cpp", "imgui_impl_dx11.h", "imgui_impl_dx12.cpp", "imgui_impl_dx12.h",
+    "imgui_impl_opengl3.cpp", "imgui_impl_opengl3.h", "imgui_impl_win32.cpp", "imgui_impl_win32.h",
+    "imgui_impl_glfw.cpp", "imgui_impl_glfw.h", "imgui_impl_sdl2.cpp", "imgui_impl_sdl2.h",
+    "sqlite3.c", "sqlite3.h", "cjson.c", "cjson.h", "miniaudio.h", "miniz.c", "miniz.h",
+    "glad.c", "glew.c",
+}
+
+
+def _is_known_vendored_lib_file(rel_path: str, content: str) -> bool:
+    """Identifies bundled third-party single-header/amalgamated libraries even in single-commit repos."""
+    low = rel_path.replace("\\", "/").lower()
+    base = os.path.basename(low)
+    if base in _KNOWN_VENDOR_BASENAMES or base.startswith("stb_"):
+        return True
+    if "nlohmann/json.hpp" in low:
+        return True
+    head = content[:600].lower()
+    if "// dear imgui, v" in head or "/* dear imgui" in head:
+        return True
+    if "json for modern c++" in head and "nlohmann" in head:
+        return True
+    return False
+
+
 class RepositoryIngestor:
     """Manages cloning, traversal, and whole-codebase packing."""
 
@@ -694,8 +722,14 @@ class RepositoryIngestor:
         )
 
     @classmethod
-    def ingest(cls, target: str) -> PackedRepository:
-        """Ingests a local directory or clones a remote repository."""
+    def ingest(
+        cls,
+        target: str,
+        ignore_limits: bool = False,
+        branch: Optional[str] = None,
+        subpath: Optional[str] = None,
+    ) -> PackedRepository:
+        """Ingests a local directory or clones a remote repository (optionally scoped to branch/subpath)."""
         is_temp = False
         temp_dir = None
 
@@ -718,9 +752,14 @@ class RepositoryIngestor:
                 "core.hooksPath=/dev/null",
                 "-c",
                 "core.symlinks=false",
-                target,
-                str(clone_path),
             ]
+            if branch:
+                b_clean = branch.strip()
+                if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,119}", b_clean) or ".." in b_clean or b_clean.startswith("-"):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    raise ValueError(f"Invalid branch name: {branch!r}")
+                cmd.extend(["--branch", b_clean])
+            cmd.extend([target, str(clone_path)])
             try:
                 result = subprocess.run(  # nosec B603 - fixed command, list arguments, no shell
                     cmd,
@@ -743,6 +782,41 @@ class RepositoryIngestor:
                 raise FileNotFoundError(f"Target directory does not exist: {target}")
             repo_name = source_path.name
 
+        clean_subpath = (subpath or "").strip().strip("/")
+        if clean_subpath:
+            if ".." in Path(clean_subpath).parts:
+                if is_temp and temp_dir:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                raise ValueError(f"Invalid subpath: {subpath!r}")
+            scoped = (source_path / clean_subpath).resolve()
+            if not str(scoped).startswith(str(source_path.resolve())) or not scoped.is_dir():
+                if is_temp and temp_dir:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                raise RuntimeError(f"Subpath '{clean_subpath}' not found in repository.")
+            source_path = scoped
+            repo_name = f"{repo_name}/{clean_subpath}"
+        else:
+            version_dirs = sorted(
+                d.name for d in source_path.iterdir()
+                if d.is_dir() and not d.name.startswith(".") and re.fullmatch(r"v?\d+(?:\.\d+)+|v\d+", d.name, re.I)
+            )
+            root_code_files = [
+                f for f in source_path.iterdir()
+                if f.is_file()
+                and f.suffix
+                and f.suffix.lower() not in BINARY_EXTENSIONS
+                and f.suffix.lower() not in DATA_AND_DOC_EXTENSIONS
+            ]
+            if len(version_dirs) >= 2 and len(root_code_files) <= 2:
+                base_url = target.rstrip("/").removesuffix(".git")
+                br_hint = branch or "main"
+                if is_temp and temp_dir:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                raise RuntimeError(
+                    f"Multi-version repository detected ({', '.join(version_dirs[:8])}). "
+                    f"Please submit the specific version folder URL, e.g. {base_url}/tree/{br_hint}/{version_dirs[-1]}"
+                )
+
         files: Dict[str, str] = {}
         tree_lines: List[str] = []
         lang_stats: Dict[str, int] = {}
@@ -752,7 +826,7 @@ class RepositoryIngestor:
         skipped_vendor_count = 0
         assets: List[Tuple[str, str, int]] = []
 
-        is_git_repo = (source_path / ".git").exists()
+        is_git_repo = (source_path / ".git").exists() and not clean_subpath
         tracked_rel_files: Optional[List[str]] = None
 
         if is_git_repo:
@@ -806,6 +880,10 @@ class RepositoryIngestor:
                     with open(abs_file, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
 
+                    if _is_known_vendored_lib_file(rel_file, content):
+                        skipped_vendor_count += 1
+                        continue
+
                     # Strip heavy hex/bitmap arrays immediately on ingest
                     content = strip_heavy_arrays(content)
 
@@ -826,15 +904,6 @@ class RepositoryIngestor:
                         total_loc += loc
                         lang = ext.lstrip(".") or "other"
                         lang_stats[lang] = lang_stats.get(lang, 0) + loc
-
-                    if len(files) > MAX_REPO_FILES or total_bytes > MAX_REPO_BYTES:
-                        if is_temp and temp_dir:
-                            shutil.rmtree(temp_dir, ignore_errors=True)
-                        raise RuntimeError(
-                            f"Repository exceeds community limit (Maximum {MAX_REPO_FILES} files or 50MB uncompressed source code)."
-                        )
-                except RuntimeError:
-                    raise
                 except Exception:  # nosec B112 - deliberate best-effort fallback
                     continue
 
@@ -880,7 +949,11 @@ class RepositoryIngestor:
                         if b"\x00" in sample or sample.startswith(b"\x7fELF") or sample.startswith(b"MZ"):
                             continue
                         with open(abs_file, "r", encoding="utf-8", errors="replace") as f:
-                            content = strip_heavy_arrays(f.read())
+                            raw_content = f.read()
+                        if _is_known_vendored_lib_file(rel_file, raw_content):
+                            skipped_vendor_count += 1
+                            continue
+                        content = strip_heavy_arrays(raw_content)
                         files[rel_file] = content
                         loc = content.count("\n") + (1 if content else 0)
                         total_bytes += len(content)
@@ -890,15 +963,6 @@ class RepositoryIngestor:
                             total_loc += loc
                             lang = ext.lstrip(".") or "other"
                             lang_stats[lang] = lang_stats.get(lang, 0) + loc
-
-                        if len(files) > MAX_REPO_FILES or total_bytes > MAX_REPO_BYTES:
-                            if is_temp and temp_dir:
-                                shutil.rmtree(temp_dir, ignore_errors=True)
-                            raise RuntimeError(
-                                f"Repository exceeds community limit (Maximum {MAX_REPO_FILES} files or 50MB uncompressed source code)."
-                            )
-                    except RuntimeError:
-                        raise
                     except Exception:  # nosec B112 - deliberate best-effort fallback
                         continue
 
