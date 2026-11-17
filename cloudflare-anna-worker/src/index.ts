@@ -557,9 +557,9 @@ export default {
           .bind(winner.id, projectId)
           .run();
         await env.DB.prepare(
-          "UPDATE projects SET latest_report_id = ?, final_score = ?, letter_grade = ?, rubric_version = ?, graded_at = ?, updated_at = ? WHERE id = ?",
+          "UPDATE projects SET latest_report_id = ?, final_score = ?, letter_grade = ?, rubric_version = ?, model_name = ?, graded_at = ?, updated_at = ? WHERE id = ?",
         )
-          .bind(winner.id, winner.final_score, winner.letter_grade, winner.rubric_version, winner.created_at, new Date().toISOString(), projectId)
+          .bind(winner.id, winner.final_score, winner.letter_grade, winner.rubric_version, winner.model_name || null, winner.created_at, new Date().toISOString(), projectId)
           .run();
       }
 
