@@ -1,5 +1,6 @@
 """
-Client for the host-side LetsVibe llama-server supervisor and health endpoint.
+Client for the host GPU scheduler (gpu-scheduler, 127.0.0.1:11436; formerly the LetsVibe
+llama supervisor) and the llama-server health endpoint.
 
 Shared by the background worker, web API, and tests so wake/sleep/status logic
 lives in one place.
@@ -114,7 +115,8 @@ def ensure_llama_awake(
     /health until ready or max_wait_sec expires.
     """
     if max_wait_sec is None:
-        max_wait_sec = float(os.environ.get("LETSVIBE_LLAMA_WAKE_TIMEOUT_SEC", "180.0"))
+        # Within a GPU turn llama-server may be reloading after another app's turn (18 GB model).
+        max_wait_sec = float(os.environ.get("LETSVIBE_LLAMA_WAKE_TIMEOUT_SEC", "600.0"))
     if check_llama_health():
         touch_engine()
         return {"ok": True, "state": "awake"}
@@ -155,43 +157,81 @@ def get_llm_lock_status(timeout: float = 1.5) -> Dict[str, Any]:
         return {"busy": False, "holder_app": None, "queue_depths": {"letsvibe": 0, "letsvibe_rc": 0}}
 
 
+_APP_NAMES = {
+    "letsvibe": "LetsVibe Audit",
+    "letsvibe_rc": "LetsVibe Reality Check",
+    "noir": "Noir Studios",
+    "graphical_studio": "Graphical Studio",
+    "tiki": "Tiki Rehearsal",
+}
+
+
 @contextmanager
 def llm_lease(
     app_id: str,
     job_id: str = "",
     ttl_sec: float = 300.0,
-    wait_timeout_sec: float = 240.0,
+    wait_timeout_sec: float = 24 * 3600.0,
     on_wait: Optional[Callable[[str], None]] = None,
+    is_cancelled: Optional[Callable[[], None]] = None,
 ) -> Iterator[Dict[str, Any]]:
     """
-    Acquires an exclusive round-robin lease on the shared llama-server via
-    letsvibe-llama-supervisor, keeps it alive with a background heartbeat, and
-    releases it cleanly on exit. Falls back to no-op if supervisor is offline.
+    Waits for this app's round-robin turn from the host GPU scheduler (gpu-scheduler on
+    127.0.0.1:11436, shared with Noir Studios and Graphical Studio), keeps it alive with a
+    background heartbeat, and releases it on exit. A turn lasts as long as the work takes.
+
+    Waiting polls with a kept ticket (place in line survives between polls) so `is_cancelled`
+    (which should raise) is checked regularly. If the scheduler is unreachable, proceeds
+    without a lease (unit tests / direct llama-server).
     """
     lease_id = ""
+    ticket_id = ""
     stop_hb = threading.Event()
     hb_thread: Optional[threading.Thread] = None
+    deadline = time.monotonic() + max(1.0, wait_timeout_sec)
+    last_note = ""
+    res: Dict[str, Any] = {"acquired": True, "lease_id": "", "fallback": True}
 
     try:
-        st = get_llm_lock_status(timeout=1.5)
-        if st.get("busy") and on_wait:
-            holder = "LetsVibe Audit" if st.get("holder_app") == "letsvibe" else "LetsVibe Reality Check"
-            on_wait(f"Waiting for shared AI engine turn (currently serving {holder})...")
-        res = _http_json(
-            f"{supervisor_url()}/lock/acquire",
-            method="POST",
-            token=supervisor_token(),
-            timeout=wait_timeout_sec + 5.0,
-            payload={
-                "app_id": app_id,
-                "job_id": job_id,
-                "ttl_sec": ttl_sec,
-                "wait_timeout_sec": wait_timeout_sec,
-            },
-        )
-        if not res.get("acquired"):
-            raise TimeoutError(res.get("detail") or "Timed out waiting for shared LLM lease.")
-        lease_id = str(res.get("lease_id") or "")
+        try:
+            while True:
+                if is_cancelled:
+                    is_cancelled()
+                chunk = max(1.0, min(15.0, deadline - time.monotonic()))
+                try:
+                    res = _http_json(
+                        f"{supervisor_url()}/lock/acquire",
+                        method="POST",
+                        token=supervisor_token(),
+                        timeout=chunk + 10.0,
+                        payload={
+                            "app_id": app_id, "job_id": job_id, "ttl_sec": ttl_sec,
+                            "wait_timeout_sec": chunk, "ticket_id": ticket_id, "keep_ticket": True,
+                        },
+                    )
+                except urllib.error.HTTPError as exc:
+                    if exc.code != 409:
+                        raise RuntimeError(f"GPU scheduler refused the turn (HTTP {exc.code}).") from exc
+                    res = json.loads(exc.read().decode("utf-8", errors="replace") or "{}")
+                if res.get("acquired"):
+                    lease_id = str(res.get("lease_id") or "")
+                    ticket_id = ""
+                    break
+                ticket_id = str(res.get("ticket_id") or ticket_id)
+                if on_wait:
+                    holder = get_llm_lock_status(timeout=1.5).get("holder_app")
+                    note = (f"Waiting for the shared AI engine (#{res.get('position', '?')} in line; "
+                            f"now serving {_APP_NAMES.get(holder, holder or 'nobody')})...")
+                    if note != last_note:
+                        on_wait(note)
+                        last_note = note
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Timed out waiting for a GPU turn.")
+        except urllib.error.URLError as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                raise
+            # Scheduler unreachable (e.g. unit test / direct llama-server): proceed without a lease
+            res = {"acquired": True, "lease_id": "", "fallback": True}
 
         def _hb_loop() -> None:
             interval = max(15.0, ttl_sec / 3.0)
@@ -205,19 +245,22 @@ def llm_lease(
                         payload={"lease_id": lease_id, "ttl_sec": ttl_sec},
                     )
                 except Exception:
-                    break
+                    pass
 
         if lease_id:
             hb_thread = threading.Thread(target=_hb_loop, daemon=True)
             hb_thread.start()
         yield res
-    except urllib.error.URLError:
-        # Supervisor unreachable (e.g. unit test / direct llama-server): proceed without blocking
-        yield {"acquired": True, "lease_id": "", "fallback": True}
     finally:
         stop_hb.set()
         if hb_thread is not None:
             hb_thread.join(timeout=0.5)
+        if ticket_id:
+            try:
+                _http_json(f"{supervisor_url()}/lock/cancel", method="POST", token=supervisor_token(),
+                           timeout=3.0, payload={"ticket_id": ticket_id})
+            except Exception:
+                pass
         if lease_id:
             try:
                 _http_json(

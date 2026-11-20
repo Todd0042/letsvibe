@@ -1,8 +1,10 @@
-"""E2E tests for LetsVibe: Reality Check (LetsVibeRC) and shared round-robin LLM locking."""
+"""E2E tests for LetsVibe: Reality Check (LetsVibeRC).
+
+Round-robin GPU turns are covered by gpu-scheduler/tests/e2e_rotation.py.
+"""
 
 from __future__ import annotations
 
-import threading
 import time
 from typing import List
 
@@ -10,58 +12,7 @@ from fastapi.testclient import TestClient
 
 from letsvibe.reality_check import evaluator as rc_eval
 from letsvibe.reality_check import routes as rc_routes
-from letsvibe.web.llama_supervisor import LlamaSupervisor
 from letsvibe.web.server import app
-
-
-def test_supervisor_round_robin_and_mutual_exclusion(tmp_path) -> None:
-    sup = LlamaSupervisor(llama_bin=str(tmp_path / "missing"), idle_minutes=0.0)
-    try:
-        # Hold initial lock on letsvibe so both queues build up while busy
-        first = sup.acquire_lock("letsvibe", job_id="lv-0", ttl_sec=30.0, wait_timeout_sec=5.0)
-        assert first["acquired"] is True
-
-        order: List[str] = []
-        active_count = 0
-        overlap_detected = False
-        mu = threading.Lock()
-
-        def worker(app_id: str, job_id: str) -> None:
-            nonlocal active_count, overlap_detected
-            lease = sup.acquire_lock(app_id, job_id=job_id, ttl_sec=30.0, wait_timeout_sec=10.0)
-            assert lease["acquired"] is True
-            try:
-                with mu:
-                    active_count += 1
-                    if active_count > 1:
-                        overlap_detected = True
-                    order.append(f"{app_id}:{job_id}")
-                time.sleep(0.03)
-            finally:
-                with mu:
-                    active_count -= 1
-                sup.release_lock(lease["lease_id"])
-
-        threads = [
-            threading.Thread(target=worker, args=("letsvibe", "lv-1")),
-            threading.Thread(target=worker, args=("letsvibe", "lv-2")),
-            threading.Thread(target=worker, args=("letsvibe_rc", "rc-1")),
-            threading.Thread(target=worker, args=("letsvibe_rc", "rc-2")),
-        ]
-        for t in threads:
-            t.start()
-        time.sleep(0.08)
-        sup.release_lock(first["lease_id"])
-        for t in threads:
-            t.join(timeout=5.0)
-
-        assert not overlap_detected
-        assert len(order) == 4
-        # Strictly alternates letsvibe_rc -> letsvibe -> letsvibe_rc -> letsvibe after lv-0
-        apps = [x.split(":")[0] for x in order]
-        assert apps == ["letsvibe_rc", "letsvibe", "letsvibe_rc", "letsvibe"]
-    finally:
-        sup.shutdown()
 
 
 def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> None:

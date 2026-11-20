@@ -377,7 +377,7 @@ This public repository starts at v1.0.0 as a single commit. The earlier developm
 
 ### 🔍 LetsVibe: Reality Check (`LetsVibeRC.todd0042.dev`)
 * **Pre-Build Idea Filter:** Evaluates an app idea pitch, target platform, and supposed unique twist *before* writing code, querying GitHub Search & npm for real competitors and returning a candid 6-dimension viability & market saturation report (`DO NOT BUILD` / `NICHE ONLY` / `ACTUALLY VIABLE`) with shareable links (`/r/<id>`) and standalone HTML export.
-* **Shared Round-Robin LLM Arbitration:** `letsvibe-llama-supervisor` (`127.0.0.1:11436`) arbitrates exclusive leases (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` repository audits and `letsvibe_rc` reality checks so both share the same `llama-server` instance without interference.
+* **Shared Round-Robin GPU Turns:** the host `gpu-scheduler` service (`127.0.0.1:11436`, repo `gpu-scheduler`) gives exclusive turns (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` audits, `letsvibe_rc` reality checks, Noir Studios and Graphical Studio. It keeps `llama-server` loaded whenever the GPU is idle, so LetsVibe starts instantly.
 
 ### ⚖️ 4. License
 * **[PolyForm Shield License 1.0.0](LICENSE)**: you may read, use, modify and share LetsVibe — for personal, educational, nonprofit or commercial purposes — as long as you don't use it to provide a product or service that competes with LetsVibe (for example, running a rival leaderboard for vibe-coded software). See the [LICENSE](LICENSE) for the exact terms.

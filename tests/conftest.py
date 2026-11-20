@@ -19,6 +19,9 @@ os.environ.update({
     "MAX_REGISTERED_USERS": "5",
     "LETSVIBE_ADMIN_TEST_SUBMISSIONS": "",  # test mode off unless a test turns it on
     "LETSVIBE_ENGINE_LOG": "",              # never write the developer's real engine-test.log
+    # Never take real turns on the host GPU scheduler: an unreachable URL means "no scheduler"
+    # (llm_lease proceeds without a lease), so tests can't block or be blocked by live sites.
+    "LETSVIBE_SUPERVISOR_URL": "http://127.0.0.1:9",
 })
 
 import pytest  # noqa: E402

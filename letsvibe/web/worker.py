@@ -290,16 +290,8 @@ class AuditQueueWorker:
             client.check_cancelled = lambda: self._check_stop(task_id)
             mode_l = str(mode or "").strip().lower()
             is_v10 = mode_l == "v10" or mode_l.startswith("v10.")
-            if is_v10:
-                wake_res = ensure_llama_awake(
-                    on_progress=lambda msg: self._update_task_progress(task_id, msg, pct=12),
-                    is_cancelled=lambda: self._check_stop(task_id),
-                    max_wait_sec=60.0,
-                )
-                if not wake_res.get("ok"):
-                    self._fail_task(task_id, str(wake_res.get("error") or "Local AI engine could not be woken."))
-                    return
-            elif not client.is_running():
+            # v10 wakes llama-server inside its GPU turn (below); other modes use Ollama.
+            if not is_v10 and not client.is_running():
                 last_step_msg = "Starting local Ollama daemon..."
                 self._update_task_progress(task_id, last_step_msg, pct=12)
                 if not client.ensure_server_running(timeout_sec=15.0):
@@ -333,7 +325,18 @@ class AuditQueueWorker:
                 last_step_msg = step_text
                 self._update_task_progress(task_id, step_text, pct=pct)
 
-            with llm_lease("letsvibe", str(task_id), on_wait=lambda msg: on_llm_progress(msg, 35)):
+            # The GPU is shared round-robin (Reality Check, Noir Studios, Graphical Studio): take this
+            # audit's turn first, then make sure llama-server is loaded for it.
+            with llm_lease("letsvibe", str(task_id), on_wait=lambda msg: on_llm_progress(msg, 35),
+                           is_cancelled=lambda: self._check_stop(task_id)):
+                if is_v10:
+                    wake_res = ensure_llama_awake(
+                        on_progress=lambda msg: on_llm_progress(msg, 36),
+                        is_cancelled=lambda: self._check_stop(task_id),
+                    )
+                    if not wake_res.get("ok"):
+                        self._fail_task(task_id, str(wake_res.get("error") or "Local AI engine could not be woken."))
+                        return
                 report = evaluate(
                     client,
                     packed_repo,
