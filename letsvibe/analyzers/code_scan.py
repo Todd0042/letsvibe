@@ -103,12 +103,67 @@ def _braced(text: str, i: int) -> str:
     return text[i + 1:i + 400]
 
 
-def _swallow_js(body: str) -> Optional[str]:
+# Intent-aware rules (scan(..., intent_aware=True), used by engine v10.4+; older engines keep the original rules):
+# exceptions that are an expected, normal outcome rather than a failure to report.
+EXPECTED_PY = {"BlockingIOError", "ProcessLookupError", "FileNotFoundError", "FileExistsError", "CancelledError",
+               "WebSocketDisconnect", "StopIteration", "StopAsyncIteration", "KeyboardInterrupt", "BrokenPipeError",
+               "ConnectionResetError", "InterruptedError", "ChildProcessError", "GeneratorExit"}
+# Logging that reaches whoever runs the software (debug-level logging doesn't).
+_VISIBLE_LOG_PY = re.compile(r"^(print|(logging|logger|log|self\.log(ger)?)\.(error|warning|warn|exception|critical|info))$")
+_VISIBLE_LOG_JS = re.compile(r"^(console\.(error|warn|info)|Log\.[ewi]|Timber\.[ewi])\s*\(")
+# Best-effort cleanup whose failure is fine to ignore in Rust/Go (closing, killing, removing, a send to a closed channel).
+_CLEANUP = re.compile(r"\b(kill|start_kill|shutdown|close|Close|remove_file|remove_dir(_all)?|Remove(All)?|flush|abort|send|unlink|set_nonblocking)\s*\(")
+
+
+def _py_types(node) -> set:
+    t = node.type
+    if t is None:
+        return set()
+    elts = t.elts if isinstance(t, ast.Tuple) else [t]
+    return {getattr(e, "attr", None) or getattr(e, "id", None) for e in elts}
+
+
+def _swallow_rust(c: str) -> List[Tuple[int, str]]:
+    """(line, how) for Rust errors thrown away: `let _ = fallible();`, a bare `.ok();`, an empty `Err(_) => {}`.
+    Cleanup calls and lines explained by a comment (on the line or the one above) are deliberate."""
+    lines, out = c.splitlines(), []
+    for i, line in enumerate(lines):
+        code = line.split("//", 1)[0]
+        explained = "//" in line or (i and lines[i - 1].strip().startswith("//"))
+        if explained or _CLEANUP.search(code):
+            continue
+        if re.search(r"\blet\s+_\s*=\s*[^;]*\)\s*;", code) and "?" not in code:
+            out.append((i + 1, "ignored"))
+        elif re.match(r"\s*(?!let\b|return\b)[^=;]+\.ok\(\)\s*;\s*$", code):  # a statement that only discards
+            out.append((i + 1, "ignored"))
+        elif re.search(r"\bErr\(\s*_?\w*\s*\)\s*=>\s*(\{\s*\}|\(\))\s*,?", code):
+            out.append((i + 1, "ignored"))
+    return out
+
+
+def _swallow_go(c: str) -> List[Tuple[int, str]]:
+    """(line, how) for Go errors thrown away: `_ = err`, `_ = f()`, an empty `if err != nil {}`."""
+    lines, out = c.splitlines(), []
+    for i, line in enumerate(lines):
+        code = line.split("//", 1)[0]
+        explained = "//" in line or (i and lines[i - 1].strip().startswith("//"))
+        if explained or _CLEANUP.search(code):
+            continue
+        if re.search(r"^\s*_\s*=\s*(err\b|[\w.]+\()", code) or re.search(r"\bif\s+err\s*!=\s*nil\s*\{\s*\}", code):
+            out.append((i + 1, "ignored"))
+    return out
+
+
+def _swallow_js(body: str, intent: bool = False) -> Optional[str]:
+    if intent and re.search(r"//|/\*", body):
+        return None  # explained: the comment says why the error is dropped
     if not body.strip("; \n\t") or re.fullmatch(r"\s*(//[^\n]*\s*|/\*.*?\*/\s*)+", body, flags=re.S):
         return None if re.search(r"//|/\*", body) else "ignored"     # an explained empty catch is deliberate
     stmts = [s.strip() for s in re.split(r";|\n", re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)) if s.strip()]
     kinds = set()
     for s in stmts:
+        if intent and _VISIBLE_LOG_JS.match(s):
+            return None  # reported where whoever runs it sees it
         if re.match(r"(console\.(log|error|warn|info|debug)|Log\.[dewiv]|Timber\.\w|println|print|\w+\.printStackTrace)\s*\(", s) or s in (")", "})"):
             kinds.add("only logged")
         elif re.match(r"return\s*(\[\s*\]|null|undefined|\{\s*\}|false|''|\"\"|NextResponse\.json\(\s*\[\s*\]\s*\)|Response\.json\(\s*\[\s*\]\s*\))?\s*$", s):
@@ -120,13 +175,15 @@ def _swallow_js(body: str) -> Optional[str]:
     return " and ".join(sorted(kinds)) if kinds else None
 
 
-def _swallow_py(body) -> Optional[str]:
+def _swallow_py(body, intent: bool = False) -> Optional[str]:
     kinds = set()
     for st in body:
         if isinstance(st, (ast.Pass, ast.Continue, ast.Break)):
             kinds.add("ignored")
         elif isinstance(st, ast.Expr) and isinstance(st.value, ast.Call):
             name = ast.unparse(st.value.func)
+            if intent and _VISIBLE_LOG_PY.match(name):
+                return None  # reported where whoever runs it sees it
             if name == "print" or name.startswith(("logging.", "logger.", "log.")):
                 kinds.add("only logged")
             else:
@@ -176,7 +233,7 @@ def _user_facing_functions(code: Dict[str, str]) -> set:
     return out
 
 
-def scan(root: Path) -> Dict[str, List[Dict[str, object]]]:
+def scan(root: Path, intent_aware: bool = False) -> Dict[str, List[Dict[str, object]]]:
     everything = tracked_files(Path(root))
     code = {p: c for p, c in everything.items() if p.endswith(CODE_EXT) and not TEST.search(p)}
     funcs = {p: _functions(p, c) for p, c in code.items()}
@@ -208,12 +265,22 @@ def scan(root: Path) -> Dict[str, List[Dict[str, object]]]:
                         names = {getattr(node.type, "id", None)} | {getattr(e, "id", None) for e in getattr(node.type, "elts", [])}
                         if names & {"ImportError", "ModuleNotFoundError", "KeyboardInterrupt"}:
                             continue
-                        how = _swallow_py(node.body)
+                        if intent_aware:
+                            types = _py_types(node)
+                            if types and types <= EXPECTED_PY:
+                                continue  # an expected outcome, not a failure
+                            end = getattr(node, "end_lineno", node.lineno)
+                            if any("#" in ln for ln in lines[node.lineno - 1:end]):
+                                continue  # explained: the comment says why
+                        how = _swallow_py(node.body, intent_aware)
                         if how:
                             add("swallowed error", p, node.lineno, f"an error is caught and {how}; the user is never told", lines[node.lineno - 1])
+        elif intent_aware and p.endswith((".rs", ".go")):
+            for ln, how in (_swallow_rust(c) if p.endswith(".rs") else _swallow_go(c)):
+                add("swallowed error", p, ln, f"an error is caught and {how}; the user is never told", lines[ln - 1])
         elif p.endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".kt", ".java")):
             for m in re.finditer(r"catch\s*(\([^)]*\))?\s*\{", c):
-                how = _swallow_js(_braced(c, m.end() - 1))
+                how = _swallow_js(_braced(c, m.end() - 1), intent_aware)
                 if how:
                     ln = c.count("\n", 0, m.start()) + 1
                     add("swallowed error", p, ln, f"an error is caught and {how}; the user is never told", lines[ln - 1])
