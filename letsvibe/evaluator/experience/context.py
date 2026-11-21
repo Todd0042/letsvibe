@@ -150,12 +150,31 @@ def readme_note(f: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------------------------------------------
 def github_meta(owner: str, repo: str, get: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
     """Public GitHub description, topics, website and the last 3 release notes. Empty when unreachable or private."""
-    get = get or (lambda url: httpx.get(url, timeout=6.0, headers={"Accept": "application/vnd.github+json",
-                                                                   "User-Agent": "LetsVibe-grader"}))
     out: Dict[str, Any] = {"description": "", "topics": [], "homepage": "", "releases": []}
     if not owner or not repo or owner == "local":
         return out
     try:
+        if get is None:
+            from ...core.github_client import github_get_json
+
+            r_repo = github_get_json(f"{GITHUB_API}/{owner}/{repo}", timeout=6.0)
+            if r_repo.ok and isinstance(r_repo.data, dict):
+                d = r_repo.data
+                out.update(
+                    description=(d.get("description") or "").strip(),
+                    topics=list(d.get("topics") or [])[:15],
+                    homepage=(d.get("homepage") or "").strip(),
+                )
+            if r_repo.rate_limited:
+                return out
+            r_rel = github_get_json(f"{GITHUB_API}/{owner}/{repo}/releases?per_page=3", timeout=6.0)
+            if r_rel.ok and isinstance(r_rel.data, list):
+                for rel in r_rel.data[:3]:
+                    body = _inline(re.sub(r"(?m)^#+\s*", "", rel.get("body") or ""))
+                    if len(body) > 40:
+                        out["releases"].append(f"{rel.get('name') or rel.get('tag_name') or 'Release'}: {body[:400]}")
+            return out
+
         r = get(f"{GITHUB_API}/{owner}/{repo}")
         if r.status_code == 200:
             d = r.json()

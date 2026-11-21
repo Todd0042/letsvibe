@@ -16,8 +16,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from ..evaluator.llama_supervisor_client import get_engine_status, get_llm_lock_status
-from .evaluator import evaluate_idea
+from .evaluator import evaluate_idea, generate_idea_batch_llama, normalize_tone
 from .html_export import render_rc_standalone_html
+from .idea_finder import run_idea_finder
 from .storage import RealityCheckStore
 
 router = APIRouter()
@@ -37,6 +38,11 @@ class RealityCheckRequest(BaseModel):
     platform: str = Field("Web", max_length=32)
     twist: str = Field("", max_length=600)
     tone: str = Field("realistic", max_length=16)
+
+
+class IdeaFinderRequest(BaseModel):
+    interests: str = Field("", max_length=600)
+    platform: str = Field("Web", max_length=32)
 
 
 def _client_ip(request: Request) -> str:
@@ -100,7 +106,7 @@ async def rc_evaluate(req: RealityCheckRequest, request: Request) -> JSONRespons
         raise HTTPException(status_code=400, detail="Please describe your app idea in at least 15 characters.")
     platform = req.platform.strip() if req.platform.strip() in _ALLOWED_PLATFORMS else "Web"
     twist = req.twist.strip()
-    tone = "brutal" if req.tone.strip().lower() == "brutal" else "realistic"
+    tone = normalize_tone(req.tone)
 
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
@@ -138,6 +144,68 @@ async def rc_evaluate(req: RealityCheckRequest, request: Request) -> JSONRespons
                 _jobs[job_id]["message"] = "Reality Check complete."
                 _jobs[job_id]["report_id"] = report_id
                 _jobs[job_id]["report"] = report
+        except Exception as exc:  # noqa: BLE001
+            with _jobs_lock:
+                _jobs[job_id]["status"] = "failed"
+                _jobs[job_id]["error"] = str(exc)
+                _jobs[job_id]["message"] = f"Failed: {exc}"
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JSONResponse({"job_id": job_id, "status": "queued"})
+
+
+@router.post("/api/rc/find-idea")
+async def rc_find_idea(req: IdeaFinderRequest, request: Request) -> JSONResponse:
+    _check_rate_limit(_client_ip(request))
+    interests = req.interests.strip()
+    platform = req.platform.strip() if req.platform.strip() in _ALLOWED_PLATFORMS else "Web"
+
+    job_id = uuid.uuid4().hex[:12]
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "progress_pct": 5,
+            "message": "Queued for Idea Finder...",
+            "report_id": None,
+            "report": None,
+            "finder_result": None,
+            "error": None,
+        }
+
+    def _run() -> None:
+        def on_prog(msg: str, pct: int) -> None:
+            with _jobs_lock:
+                if job_id in _jobs:
+                    _jobs[job_id]["status"] = "running"
+                    _jobs[job_id]["progress_pct"] = pct
+                    _jobs[job_id]["message"] = msg
+
+        try:
+            res = run_idea_finder(
+                generate_json_fn=lambda sp, up: generate_idea_batch_llama(sp, up, job_id=job_id),
+                evaluate_brutal_fn=lambda p, plat, tw: evaluate_idea(
+                    pitch=p,
+                    platform=plat,
+                    twist=tw,
+                    tone="realistic",
+                    job_id=job_id,
+                ),
+                interests=interests,
+                platform=platform,
+                max_cycles=3,
+                on_progress=on_prog,
+            )
+            winning_report = res["winning_report"]
+            report_id = _store.save_report(winning_report)
+            winning_report["id"] = report_id
+            with _jobs_lock:
+                _jobs[job_id]["status"] = "completed"
+                _jobs[job_id]["progress_pct"] = 100
+                _jobs[job_id]["message"] = "Idea Finder complete."
+                _jobs[job_id]["report_id"] = report_id
+                _jobs[job_id]["report"] = winning_report
+                _jobs[job_id]["finder_result"] = res
         except Exception as exc:  # noqa: BLE001
             with _jobs_lock:
                 _jobs[job_id]["status"] = "failed"

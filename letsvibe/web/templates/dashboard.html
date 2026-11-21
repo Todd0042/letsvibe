@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LetsVibe — Local AI Repository Health & Vibe Leaderboard</title>
-  <meta name="description" content="LetsVibe is an independent leaderboard for vibe-coded software (programs written by AI from someone's prompts), graded by AI models running on LetsVibe's own hardware. Letter grades are given on a curve (a bell curve); how the curve was built is published in full at /grading-curve.">
+  <meta name="description" content="LetsVibe is an independent leaderboard for vibe-coded software (programs written by AI from someone's prompts), graded on a structured rubric by AI models running on LetsVibe's own hardware with community Sparkle upvote bonuses.">
   <link rel="icon" type="image/webp" href="/static/website-icon.webp?v=2">
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
   <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
@@ -81,27 +81,59 @@
       .code-bg-col:nth-child(n+2) { display: none; }
     }
 
+    /* Instant styled tooltip for compact icon buttons */
+    .has-tooltip { position: relative; }
+    .has-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      right: 0;
+      width: 260px;
+      padding: 0.55rem 0.7rem;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.97);
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      color: #e2e8f0;
+      font-size: 0.76rem;
+      font-weight: 500;
+      line-height: 1.4;
+      text-align: left;
+      white-space: normal;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(4px);
+      transition: opacity 0.14s ease, transform 0.14s ease;
+      z-index: 60;
+    }
+    .has-tooltip:hover::after,
+    .has-tooltip:focus-visible::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     /* Header Nav */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem 0 2rem;
+      padding: 1rem 0 1.65rem;
       border-bottom: 1px solid var(--card-border);
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 0.7rem 0.9rem;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.55rem;
       text-decoration: none;
       color: inherit;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .brand-logo-img {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       object-fit: contain;
       border-radius: 8px;
       filter: drop-shadow(0 2px 10px rgba(0, 240, 255, 0.3));
@@ -111,7 +143,7 @@
       transform: scale(1.06) rotate(-2deg);
     }
     .brand-logo {
-      font-size: 1.85rem;
+      font-size: 1.65rem;
       font-weight: 800;
       background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
       -webkit-background-clip: text;
@@ -132,24 +164,27 @@
 
     .nav-tabs {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.22rem;
       background: rgba(15, 23, 42, 0.8);
-      padding: 0.3rem;
+      padding: 0.25rem;
       border-radius: 12px;
       border: 1px solid var(--card-border);
+      flex: 0 1 auto;
+      max-width: 100%;
     }
     .nav-tab {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      padding: 0.5rem 1.1rem;
+      padding: 0.44rem 0.7rem;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.83rem;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.35rem;
+      white-space: nowrap;
       transition: all 0.2s ease;
     }
     .nav-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
@@ -468,6 +503,11 @@
       color: #fff;
       font-size: 0.88rem;
       cursor: pointer;
+    }
+    #admin-engine-select {
+      max-width: 165px;
+      padding: 0.5rem 0.65rem;
+      text-overflow: ellipsis;
     }
     .filter-label {
       font-size: 0.85rem;
@@ -1675,6 +1715,8 @@
       .filter-dd-panel.align-right { left: 0.85rem; right: 0.85rem; top: auto; margin-top: 6px; min-width: 0; max-width: none; }
       .filter-opt { padding: 0.65rem 0.6rem; }  /* larger touch targets */
       #sort-select { flex: 1; min-width: 0; }
+      #admin-engine-filter-wrap { flex: 1 1 100%; margin-left: 0 !important; min-width: 0; }
+      #admin-engine-select { flex: 1 1 0; min-width: 0; max-width: none; width: 100%; }
 
       .rankings-table-card tr { grid-template-columns: auto minmax(0, 1fr) auto; }
       .rankings-table-card td:nth-child(5) { grid-column: 1 / -1; grid-row: 3; width: auto; }
@@ -1862,12 +1904,7 @@
           <div class="filter-dd" data-filter="platform"></div>
         </div>
         <div class="filter-group">
-          <span class="filter-label">Grading:</span>
-          <span class="seg" role="group" aria-label="Grading scale">
-            <button type="button" class="scale-toggle-btn active" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
-            <button type="button" class="scale-toggle-btn" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
-          </span>
-          <label for="sort-select" class="filter-label" style="margin-left: 0.35rem;">Sort By:</label>
+          <label for="sort-select" class="filter-label">Sort By:</label>
           <select id="sort-select" class="select-dropdown" onchange="fetchLeaderboard()">
             <option value="overall">⭐ Overall Vibe Score</option>
             <option value="resonance">🚀 Real-World Value</option>
@@ -1880,7 +1917,7 @@
           <span id="admin-engine-filter-wrap" hidden style="display: none; align-items: center; gap: 0.35rem; margin-left: 0.35rem;">
             <label for="admin-engine-select" class="filter-label" title="Admin-only filter by grading engine / rubric version"><i class="fa-solid fa-flask" style="color: #fbbf24;"></i> Engine:</label>
             <select id="admin-engine-select" class="select-dropdown" onchange="fetchLeaderboard()">
-              <option value="">All (Latest Production)</option>
+              <option value="">Latest</option>
             </select>
           </span>
         </div>
@@ -1925,10 +1962,6 @@
           <button class="btn btn-secondary" onclick="goBackFromProject()">
             <i class="fa-solid fa-arrow-left"></i> Back
           </button>
-          <span class="seg" role="group" aria-label="Grading scale">
-            <button type="button" class="scale-toggle-btn active" data-scale="raw" onclick="setScoreScale('raw')" title="Direct uncurved score and grade from the rubric">Raw Rubric</button>
-            <button type="button" class="scale-toggle-btn" data-scale="curve" onclick="setScoreScale('curve')" title="Peer-relative bell curve score and grade">Bell Curve</button>
-          </span>
         </div>
         <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
           <button id="btn-delete-project-admin" class="btn btn-danger" onclick="confirmDeleteProject(currentProjectSlug)" style="display: none; padding: 0.5rem 0.9rem; font-size: 0.85rem;">
@@ -2653,7 +2686,7 @@
             </div>
             <div style="display: flex; gap: 0.45rem; align-items: center;">
               <input type="text" id="target-input" class="search-input" style="flex: 1;" placeholder="https://github.com/your-username/your-repo (or .../tree/branch/folder)" required>
-              <button type="button" id="btn-add-ref" class="btn btn-secondary" onclick="addRefContextRow()" title="Add reference repo or header file (e.g. Nexus.h)" style="padding: 0.52rem 0.78rem; font-weight: 800; color: var(--accent-cyan); border-color: rgba(0, 240, 255, 0.35);">+</button>
+              <button type="button" id="btn-add-ref" class="btn btn-secondary has-tooltip" onclick="addRefContextRow()" data-tooltip="Add a companion or dependency GitHub repo (or header file) — reads only its README summary, API endpoints, and public headers for context." aria-label="Add companion or dependency repo" style="padding: 0.52rem 0.78rem; font-weight: 800; color: var(--accent-cyan); border-color: rgba(0, 240, 255, 0.35);">+</button>
             </div>
           </div>
 
@@ -2713,7 +2746,7 @@
           <div style="margin-bottom: 1.35rem;">
             <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.35rem;">Audit Engine</label>
             <select id="mode-input" class="select-dropdown" style="width: 100%;" onchange="onEngineModeChange()">
-              <option value="v10">✨ Engine v10 — Qwen3 30B-A3B (Production)</option>
+              <option value="">Loading engines...</option>
             </select>
             <div id="testing-engine-note" style="display: none; margin-top: 0.45rem; font-size: 0.78rem; color: #f0abfc;">
               <i class="fa-solid fa-flask"></i> Testing engine selected (Admin only) — this evaluation will run as a private Admin Test Grading.
@@ -3397,55 +3430,14 @@
       return list.length ? list : RADAR_FACTORS;
     }
     const MINI_BARS = [['resonance', 'VAL'], ['creativity', 'CRT'], ['user_journey', 'JRN'], ['functionality', 'FNC'], ['ui_ux', 'UI']];
-    // Presentation-layer grading scale toggle ('curve' = bell curve score/grade; 'raw' = uncurved rubric score/grade)
-    let scoreScale = 'raw';
-    try {
-      const savedScale = localStorage.getItem('letsvibe_score_scale');
-      if (savedScale === 'raw' || savedScale === 'curve') scoreScale = savedScale;
-    } catch (e) {}
     let currentLoadedProject = null;
 
-    function syncScaleToggleButtons() {
-      document.querySelectorAll('.scale-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.scale === scoreScale);
-      });
-    }
-
-    function setScoreScale(scale) {
-      if (scale !== 'raw' && scale !== 'curve') return;
-      scoreScale = scale;
-      try { localStorage.setItem('letsvibe_score_scale', scale); } catch (e) {}
-      syncScaleToggleButtons();
-      const projTab = document.getElementById('tab-project');
-      if (projTab && projTab.style.display !== 'none' && currentLoadedProject) {
-        applyScaleToProjectHeader(currentLoadedProject);
-        setupBadgeGenerator(currentLoadedProject);
-      } else {
-        fetchLeaderboard();
-      }
-    }
-
-    // Leaderboard rows: shows the active scale and a reference to the alternate scale
     function standingText(item) {
-      if (scoreScale === 'raw') {
-        const cScore = Number(item.curved_score ?? item.final_score ?? 0).toFixed(1);
-        const cGrade = item.curved_letter_grade || item.letter_grade || '';
-        return `<div class="standing-note" title="Curved: ${cScore} (${cGrade})">raw rubric</div>`;
+      const bonus = Number(item.upvote_bonus ?? 0);
+      if (bonus > 0) {
+        return `<div class="standing-note" title="Includes +${bonus.toFixed(1)} Spark upvote bonus">+${bonus.toFixed(1)} ✨ bonus</div>`;
       }
-      if (item.grade_basis === 'rubric') return '';
-      const rScore = Number(item.final_score ?? 0).toFixed(1);
-      const rGrade = item.raw_letter_grade || item.letter_grade || '';
-      return `<div class="standing-note" title="Raw rubric: ${rScore} (${rGrade})"><a href="/grading-curve" onclick="event.stopPropagation()">on a curve</a> (raw ${rScore})</div>`;
-    }
-
-    function curveNote(basis, curve) {
-      if (basis === 'rubric') return 'Letter from the rubric table while the grading curve is being rebuilt.';
-      if (!curve) return 'Graded on a bell curve.';
-      const z = `${curve.z >= 0 ? '+' : ''}${curve.z.toFixed(1)}`;
-      const where = `${z} standard deviations from the average (${curve.average.toFixed(1)})`;
-      if (basis === 'peers') return `Graded on a bell curve: ${where} of similar projects.`;
-      const share = Math.round(curve.peer_weight * 100);
-      return `Graded on a bell curve: ${where}, set by the two reference projects` + (share ? ` and ${share}% by similar projects.` : '.');
+      return '';
     }
 
     // Sign-in needs essential cookies accepted AND the terms & 18+ box ticked first
@@ -3672,13 +3664,13 @@
       }
       const prev = sel.value || '';
       const counts = (filterFacets && filterFacets.engine) || {};
-      const opts = ['<option value="">All (Latest Production)</option>'];
+      const opts = ['<option value="">Latest</option>'];
       const seenVers = new Set();
       availableEnginesCache.forEach(eng => {
         const rv = eng.rubric_version || eng.id;
         seenVers.add(rv);
         const cnt = counts[rv] || 0;
-        const shortLabel = (eng.label || rv).replace(/\s*\((?:Historical\s+)?Testing\)\s*$/i, '');
+        const shortLabel = (eng.id || rv).replace(/\s*\((?:Historical\s+)?Testing\)\s*$/i, '');
         opts.push(`<option value="${escapeHtml(rv)}">${escapeHtml(shortLabel)} (${cnt})</option>`);
       });
       sel.innerHTML = opts.join('');
@@ -3689,12 +3681,11 @@
 
     // Fetch Leaderboard
     async function fetchLeaderboard() {
-      syncScaleToggleButtons();
       syncAdminEngineFilterDropdown();
       const sort = document.getElementById('sort-select').value;
       const search = document.getElementById('search-input').value;
       const engFilter = activeEngineFilter();
-      const params = new URLSearchParams({ sort_by: sort, curve: scoreScale === 'curve' ? 'true' : 'false' });
+      const params = new URLSearchParams({ sort_by: sort });
       for (const group of ['tier', 'category', 'platform']) {
         if (filterState[group].size) params.set(group, [...filterState[group]].join(','));
       }
@@ -3709,7 +3700,7 @@
         renderFilterDropdowns();
         document.getElementById('score-col-header').textContent = sortedFactor()
           ? `${FACTOR_LABELS[sortedFactor()]} Score`
-          : (scoreScale === 'raw' ? 'Raw Score & Grade' : 'Curved Score & Grade');
+          : 'Score & Grade';
         const isFiltered = Boolean(
           (search || '').trim() ||
           engFilter ||
@@ -3920,17 +3911,11 @@
     }
 
     function shownScore(item) {
-      if (scoreScale === 'raw') {
-        return Number(item.final_score ?? 0);
-      }
-      return Number(item.curved_score ?? item.final_score ?? 0);
+      return Number(item.final_score ?? 0);
     }
 
     function shownGrade(item) {
-      if (scoreScale === 'raw') {
-        return item.raw_letter_grade || item.letter_grade || 'C';
-      }
-      return item.curved_letter_grade || item.letter_grade || 'C';
+      return item.letter_grade || 'C';
     }
 
     function gradeCssClass(grade) {
@@ -3944,9 +3929,11 @@
       const activeGrade = shownGrade(item);
       const gradeClass = gradeCssClass(activeGrade);
       const factor = sortedFactor();
-      const tooltip = scoreScale === 'raw'
-        ? `Raw rubric score ${Number(item.final_score ?? 0).toFixed(1)} (${activeGrade}) • Bell curve: ${Number(item.curved_score ?? item.final_score ?? 0).toFixed(1)} (${item.curved_letter_grade || item.letter_grade})`
-        : `On the grading curve (raw model score ${Number(item.final_score ?? 0).toFixed(1)} / ${item.raw_letter_grade || item.letter_grade})`;
+      const bonus = Number(item.upvote_bonus ?? 0);
+      const rubric = Number(item.rubric_score ?? item.final_score ?? 0);
+      const tooltip = bonus > 0
+        ? `Score ${Number(item.final_score ?? 0).toFixed(1)} (${activeGrade}) = Rubric ${rubric.toFixed(1)} + ${bonus.toFixed(1)} ✨`
+        : `Score ${Number(item.final_score ?? 0).toFixed(1)} (${activeGrade})`;
       if (!factor) {
         return `<span class="podium-score-pill"${style} title="${escapeHtml(tooltip)}">${shownScore(item).toFixed(1)} <span class="grade-badge ${gradeClass}">${activeGrade}</span></span>`;
       }
@@ -4221,7 +4208,6 @@
       const path = `${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo_name)}`;
       const params = new URLSearchParams();
       if (style !== 'classic') params.set('style', style);
-      if (scoreScale === 'curve') params.set('scale', 'curve');
       const qs = params.toString();
       const img = `${location.origin}/badge/${path}.svg` + (qs ? `?${qs}` : '');
       return { img, link: `${location.origin}/project/${path}`, style };
@@ -4230,7 +4216,7 @@
       if (!badgeProject) return;
       const { img, link } = badgeUrls();
       const alt = `LetsVibe grade: ${badgeProject.letter_grade} (${badgeProject.score.toFixed(1)})`;
-      document.getElementById('badge-preview').src = img + (img.includes('?') ? '&' : '?') + `v=${badgeProject.report_id}_${scoreScale}_3`;
+      document.getElementById('badge-preview').src = img + (img.includes('?') ? '&' : '?') + `v=${badgeProject.report_id}_3`;
       document.getElementById('badge-preview').alt = alt;
       const code = {
         markdown: `[![${alt}](${img})](${link})`,
@@ -4448,14 +4434,14 @@
           : '';
         sparkWrap.innerHTML = `${sparkUpvoteBtn(p)}${bonusNote}`;
       }
-      document.getElementById('project-final-score').title = scoreScale === 'raw'
-        ? `Raw rubric score (${p.final_score.toFixed(1)} / ${p.raw_letter_grade || activeGrade}) • Curved: ${Number(p.curved_score ?? p.final_score).toFixed(1)} (${p.curved_letter_grade || p.letter_grade})`
-        : `On the grading curve. Raw model score: ${p.final_score.toFixed(1)} (${p.raw_letter_grade || activeGrade})`;
+      const bonus = Number(p.upvote_bonus ?? 0);
+      const rubric = Number(p.rubric_score ?? p.final_score ?? 0);
+      document.getElementById('project-final-score').title = bonus > 0
+        ? `Score ${p.final_score.toFixed(1)} (${activeGrade}) = Rubric ${rubric.toFixed(1)} + ${bonus.toFixed(1)} ✨`
+        : `Rubric score ${p.final_score.toFixed(1)} (${activeGrade})`;
       const st = p.is_latest === false ? null : p.standing;
       const standingHtml = st
-        ? (scoreScale === 'raw'
-          ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>Showing direct Raw Rubric grade (${p.final_score.toFixed(1)} / ${p.raw_letter_grade || activeGrade}). Bell curve equivalent: ${Number(p.curved_score ?? p.final_score).toFixed(1)} (${p.curved_letter_grade || p.letter_grade}). <a href="/grading-curve">How the curve works</a></span>`
-          : `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}<br><span>${curveNote(st.basis, rep.curve || p.curve)} Raw score: ${p.final_score.toFixed(1)} (${p.raw_letter_grade || activeGrade}). <a href="/grading-curve">How the curve works</a></span>`)
+        ? `#${st.rank} of ${st.count} in ${escapeHtml(categoryLabel(st.category))}` + (bonus > 0 ? `<br><span>Rubric ${rubric.toFixed(1)} + ${bonus.toFixed(1)} ✨ Spark bonus</span>` : '')
         : '';
 
       let changeNoteHtml = '';
@@ -4528,7 +4514,6 @@
     async function loadProjectReport(fullSlug, reportId = null) {
       if (!reportId) window.scrollTo({ top: 0, behavior: 'smooth' });
       try {
-        syncScaleToggleButtons();
         const res = await fetch(`/api/project/${encodeURIComponent(fullSlug)}` + (reportId ? `?report=${encodeURIComponent(reportId)}` : ''));
         const json = await res.json();
         const p = json.project;
@@ -5231,14 +5216,17 @@
         availableEnginesCache = engines;
         const sel = document.getElementById('mode-input');
         if (sel && engines.length > 0) {
-          const currentVal = sel.value || 'blend';
+          const currentVal = sel.value;
+          const defaultEng = engines.find(e => e.is_default) || engines[0];
           sel.innerHTML = engines.map(eng => {
             const label = eng.label || eng.name || eng.id;
             const supportsQ = eng.supports_questionnaire === false || (eng.rubric_rank && Number(eng.rubric_rank) < 903) ? 'false' : 'true';
             return `<option value="${escapeHtml(eng.id)}" data-status="${escapeHtml(eng.status || 'production')}" data-supports-questionnaire="${supportsQ}" data-rubric-version="${escapeHtml(eng.rubric_version || '')}">${escapeHtml(label)}</option>`;
           }).join('');
-          if ([...sel.options].some(o => o.value === currentVal)) {
+          if (currentVal && [...sel.options].some(o => o.value === currentVal)) {
             sel.value = currentVal;
+          } else if (defaultEng) {
+            sel.value = defaultEng.id;
           }
           onEngineModeChange();
         }
@@ -7038,7 +7026,6 @@ ${t.status === 'running' ? `
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      syncScaleToggleButtons();
       fetchEngineStatus();
       fetchLiveStats();
       setInterval(fetchEngineStatus, 20000);

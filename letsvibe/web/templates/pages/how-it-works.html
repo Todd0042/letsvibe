@@ -5,7 +5,7 @@
 <div class="callout">
   <p><strong>In short:</strong> a program builds an app dossier and runs a static code scan (screens, setup, launch, saving, and proven problems), a unified 30.5B Mixture-of-Experts model (Qwen3 30B-A3B running locally via CUDA <code>llama.cpp --cpu-moe</code>) synthesizes the project's purpose, audits the source code in large 12K-token batches with exact file and line citations, and produces calibrated 5-factor scores, actionable developer next steps, and a plain-English verdict.</p>
   <p><strong>Archetype-aware grading:</strong> Projects are judged through the lens of what they actually are (Developer Tools/MCP Servers, Games, Media Lounges, Mobile/IoT, Automation Pipelines, or General Software) rather than holding everything to generic consumer web SaaS expectations. Developer utilities are rewarded for CLI clarity and schema precision without being dinged for lacking web screen-reader tags; games are judged on gameplay feel and arcade feedback rather than business forms.</p>
-  <p><strong>Raw Rubric is the default; Bell Curve is optional.</strong> Every report defaults to its uncurved <strong>Raw Rubric</strong> score and grade, which stays fixed for that commit. An optional <strong>Bell Curve</strong> toggle is also available for anyone who finds a peer-relative curve more relevant when comparing vibe-coded software against other vibe-coded software. <a href="/grading-curve">Everything behind the curve, every number included</a>.</p>
+  <p><strong>Direct rubric scoring + community Spark upvotes.</strong> Every project receives a direct 0–100 rubric score for that commit, plus a bounded diminishing-returns bonus from community Sparkle (&#10024;) upvotes (capped at +3.0 points, clamped at 100.0).</p>
   <p><strong>Vibe-coded software is graded as vibe-coded software.</strong> Every project is compared with other vibe-coded projects, never with software written by professional developers. "Good enough" is the standard: a project is graded on what it gives the people who use it, not on how its code is written or how long it took to make.</p>
 </div>
 
@@ -41,19 +41,11 @@
 {{POINTS_TABLE}}
 
 <h2 id="grades">What the grades mean</h2>
-<p>A factor's score is the share of its checklist points the project earned, and the overall score weights the five factors (above).</p>
-<p><strong>Raw Rubric is the default; Bell Curve is an optional upward-only peer view.</strong> By default, your score and letter grade come directly from the rubric (0–100, unchanged unless re-graded). If you switch to <strong>Bell Curve</strong> mode, only the upper half of the bell is used: scores at or below the site midpoint keep their Raw Rubric score (nothing is ever reduced), while scores above the midpoint curve upward toward 100 based on standard deviations above the average — which some users find more relevant when comparing AI-prompted vibe-coded projects against each other rather than professionally engineered software.</p>
-<ul>
-  <li><strong>Upward-only anchors:</strong> Raw Rubric scores are never lowered by the curve. Above the midpoint (prior 75), scores scale smoothly upward toward 100 at raw 90 (or the 5th-highest score if 5+ projects exceed 90).</li>
-  <li><strong>Adaptive site-wide spread:</strong> As more public projects are graded, the single global bell curve blends smoothly from the prior toward the real site-wide average and standard deviation.</li>
-  <li><strong>Raw Rubric always preserved:</strong> You can switch between <strong>Bell Curve</strong> and <strong>Raw Rubric</strong> on any leaderboard or project page; your uncurved rubric score is never modified.</li>
-</ul>
-<p>The <a href="/grading-curve">Grading curve</a> page shows every live constant and formula used. Every report also shows its rank in its category (for example "#3 of 41 in Games"), and your raw score is always shown unchanged.</p>
-<p>If the curve is ever unavailable (for example while it is being rebuilt after a rubric change), letters temporarily come from this table, which matches the score bands:</p>
+<p>A factor's score is the share of its checklist points the project earned, and the overall score weights the five factors (above). Community Sparkle (&#10024;) upvotes add up to +3.0 points directly on top of the rubric score (clamped at 100.0). Every report also shows its rank in its category (for example "#3 of 41 in Games"). Letter grades map directly from the final score:</p>
 {{GRADE_TABLE}}
 
 <h2 id="sparks">Community Sparks (upvotes)</h2>
-<p>Signed-in visitors can click the <strong>Spark (&#10024;)</strong> button on any public project card or report page (unlimited across other people's projects, and at most <strong>one</strong> of your own repositories). Sparks add a bounded diminishing-returns bonus of <code>min(3.0, 0.5 &times; log<sub>2</sub>(1 + sparks))</code> (+0.50 for the first Spark, capped at +3.00 total) to the <strong>Bell Curve</strong> score only. The <strong>Raw Rubric</strong> score is never modified by Sparks, and deleting your account removes all Sparks you cast.</p>
+<p>Signed-in visitors can click the <strong>Spark (&#10024;)</strong> button on any public project card or report page (unlimited across other people's projects, and at most <strong>one</strong> of your own repositories). Sparks add a bounded diminishing-returns bonus of <code>min(3.0, 0.5 &times; log<sub>2</sub>(1 + sparks))</code> (+0.50 for the first Spark, +1.00 at 3 Sparks, capped at +3.00 total) directly to the project's score (clamped at 100.0), and deleting your account removes all Sparks you cast.</p>
 
 <h2 id="limits">What a LetsVibe grade is not</h2>
 <ul>
@@ -70,5 +62,5 @@
 <p>Engine v10 runs locally on LetsVibe's own machine using CUDA-accelerated <a href="https://github.com/ggml-org/llama.cpp" rel="noopener noreferrer">llama.cpp</a> (<code>--cpu-moe</code>) with Qwen3 30B-A3B: attention layers and the 32K context cache stay in GPU VRAM on an RTX 5060 Ti while Mixture-of-Experts weights run from system RAM on CPU. Nothing you submit is sent to OpenAI, Anthropic, Google or any other AI provider, and nothing is used to train models. An evaluation typically takes 2–6 minutes and runs one at a time.</p>
 
 <h2 id="open-source">100% open source (site &amp; grading engine)</h2>
-<p>Both the LetsVibe website (<a href="https://github.com/Todd0042/letsvibe" rel="noopener noreferrer">Todd0042/letsvibe</a>) and the evaluation engine (<a href="https://github.com/Todd0042/letsvibe-engine" rel="noopener noreferrer">Todd0042/letsvibe-engine</a>) are open source on GitHub, and every rubric step, factor weight, checklist point table, and live bell-curve constant is published here and on the <a href="/grading-curve">Grading curve</a> page.</p>
+<p>Both the LetsVibe website (<a href="https://github.com/Todd0042/letsvibe" rel="noopener noreferrer">Todd0042/letsvibe</a>) and the evaluation engine (<a href="https://github.com/Todd0042/letsvibe-engine" rel="noopener noreferrer">Todd0042/letsvibe-engine</a>) are open source on GitHub, and every rubric step, factor weight, and checklist point table is published here.</p>
 <p>Questions? See the <a href="/faq">FAQ</a> or <a href="/support">contact us</a>.</p>

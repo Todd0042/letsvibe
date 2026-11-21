@@ -319,13 +319,11 @@ def get_anna_leaderboard(
             clauses.append("(lower(full_slug) LIKE lower(?) OR lower(archetype_category) LIKE lower(?))")
             params.extend([f"%{search}%", f"%{search}%"])
         where_sql = " AND ".join(clauses)
-        order_col = "final_score" if scale == "raw" else "curved_score"
-
         rows = conn.execute(
             f"""
             SELECT * FROM projects
             WHERE {where_sql}
-            ORDER BY {order_col} DESC, upvote_count DESC, id DESC
+            ORDER BY final_score DESC, upvote_count DESC, id DESC
             LIMIT ? OFFSET ?
             """,
             (*params, limit, offset),
@@ -344,12 +342,27 @@ def get_anna_leaderboard(
             upvoted_ids = {int(u["project_id"]) for u in u_rows}
 
         items: List[Dict[str, Any]] = []
-        for idx, r in enumerate(rows, start=offset + 1):
+        from .db import upvote_score_bonus
+        from ..evaluator.rubric import calculate_letter_grade
+        for r in rows:
             d = dict(r)
-            d["rank"] = idx
+            base_score = round(float(d.get("final_score") or 0.0), 1)
+            up_cnt = int(d.get("upvote_count") or 0)
+            up_bonus = upvote_score_bonus(up_cnt)
+            boosted = round(min(100.0, base_score + up_bonus), 1)
+            grade = calculate_letter_grade(boosted)
+            d["rubric_score"] = base_score
+            d["final_score"] = boosted
+            d["curved_score"] = boosted
+            d["letter_grade"] = grade
+            d["curved_letter_grade"] = grade
+            d["upvote_bonus"] = up_bonus
             d["user_upvoted"] = int(r["id"]) in upvoted_ids
             items.append(d)
-        return {"projects": items, "total": total, "scale": scale}
+        items.sort(key=lambda x: (-float(x["final_score"]), -int(x.get("upvote_count") or 0)))
+        for idx, d in enumerate(items, start=offset + 1):
+            d["rank"] = idx
+        return {"projects": items, "total": total, "scale": "raw"}
 
 
 def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, Any]]:
@@ -360,7 +373,7 @@ def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, An
                    final_score, curved_score, upvote_count
             FROM projects
             WHERE latest_report_id IS NOT NULL AND deleted_at IS NULL AND COALESCE(is_test, 0) = 0
-            ORDER BY curved_score DESC
+            ORDER BY final_score DESC
             """
         ).fetchall()
     by_owner: Dict[str, Dict[str, Any]] = {}
@@ -383,16 +396,17 @@ def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, An
             },
         )
         entry["total_repos"] += 1
-        cs = float(r["curved_score"] or 0.0)
         rs = float(r["final_score"] or 0.0)
-        entry["scores"].append(cs)
+        up_cnt = int(r["upvote_count"] or 0)
+        boosted = min(100.0, rs + upvote_score_bonus(up_cnt))
+        entry["scores"].append(boosted)
         entry["raw_scores"].append(rs)
-        entry["total_upvotes"] += int(r["upvote_count"] or 0)
+        entry["total_upvotes"] += up_cnt
         lang = str(r["primary_language"] or "").strip()
         if lang and lang not in entry["languages"]:
             entry["languages"].append(lang)
-        if cs > entry["_best_score"]:
-            entry["_best_score"] = cs
+        if boosted > entry["_best_score"]:
+            entry["_best_score"] = boosted
             entry["top_repo_slug"] = r["full_slug"]
 
     creators = []
@@ -495,15 +509,24 @@ def get_anna_project_detail(
             ).fetchone()
             user_upvoted = bool(u)
 
+        from .db import upvote_score_bonus
+        from ..evaluator.rubric import calculate_letter_grade
         out = dict(proj)
+        base_score = round(float(rep["final_score"] or 0.0), 1)
+        up_cnt = int(proj["upvote_count"] or 0)
+        up_bonus = upvote_score_bonus(up_cnt)
+        boosted = round(min(100.0, base_score + up_bonus), 1)
+        grade = calculate_letter_grade(boosted)
         out["report_id"] = int(rep["id"])
         out["rubric_version"] = rep["rubric_version"]
         out["model_name"] = rep["model_name"]
         out["commit_sha"] = rep["commit_sha"]
-        out["final_score"] = float(rep["final_score"])
-        out["letter_grade"] = rep["letter_grade"]
-        out["curved_score"] = float(rep["curved_score"])
-        out["curved_letter_grade"] = rep["curved_letter_grade"]
+        out["rubric_score"] = base_score
+        out["final_score"] = boosted
+        out["letter_grade"] = grade
+        out["curved_score"] = boosted
+        out["curved_letter_grade"] = grade
+        out["upvote_bonus"] = up_bonus
         out["verdict_title"] = rep["verdict_title"]
         out["verdict_summary"] = rep["verdict_summary"]
         out["graded_at"] = rep["created_at"]

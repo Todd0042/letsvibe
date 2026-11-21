@@ -20,7 +20,6 @@ TEMPLATES_DIR = (
 # Content pages: slug -> (title, meta description). Bodies live in templates/pages/<slug>.html
 PAGES = {
     "sign-in": ("Sign in", "Sign in to LetsVibe with GitHub. Accept the Terms of Use first; you must be 18 or older."),
-    "grading-curve": ("Grading curve", "LetsVibe grades on a curve (a bell curve): why, how the curve was built, and every number behind it."),
     "how-it-works": ("How grading works", "How LetsVibe grades vibe-coded projects with local AI models, step by step."),
     "faq": ("FAQ", "Answers to common questions about LetsVibe scores, submissions and appeals."),
     "privacy": ("Privacy policy", "What LetsVibe collects, why, how long it is kept and how to delete it."),
@@ -207,7 +206,7 @@ def _fill_live_tables(content: str) -> str:
 
 
 _ARCHIVE_VER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:_\d{4}-\d{2}-\d{2})?$")
-DOC_ARCHIVE_SLUGS = {"how-it-works", "grading-curve", "faq", "privacy", "cookies", "terms"}
+DOC_ARCHIVE_SLUGS = {"how-it-works", "faq", "privacy", "cookies", "terms"}
 
 
 def _format_archive_label(ver_id: str) -> str:
@@ -413,8 +412,6 @@ def render_page(slug: str, version: Optional[str] = None, diff: bool = False) ->
     def _raw_current() -> Tuple[str, str]:
         if slug == "changelog":
             return _render_changelog(), ""
-        if slug == "grading-curve":
-            return _render_curve(), ""
         raw_txt = (TEMPLATES_DIR / "pages" / f"{slug}.html").read_text(encoding="utf-8")
         c, _, s = raw_txt.partition("<!--SCRIPT-->")
         return c, s

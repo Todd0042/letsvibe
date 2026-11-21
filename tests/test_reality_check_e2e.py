@@ -29,7 +29,10 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
             "npm_top_packages": [],
         }
 
+    captured_prompts: List[str] = []
+
     def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2000):
+        captured_prompts.append(user_prompt)
         return {
             "verdict": "DO NOT BUILD",
             "headline": "Crowded TODO Wrapper With Zero Switching Incentive",
@@ -77,6 +80,7 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
     assert home_res.status_code == 200
     assert "LetsVibe: Reality Check" in home_res.text
     assert "https://letsvibe.todd0042.dev" in home_res.text
+    assert 'value="whisper">Whisper Sweet Nothings<' in home_res.text
 
     # Main letsvibe dashboard links to Reality Check in nav and footer
     main_res = client.get("/", headers={"host": "letsvibe.todd0042.dev"})
@@ -116,3 +120,150 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
     assert dl.status_code == 200
     assert "<script>alert(1)</script>" not in dl.text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in dl.text
+
+    # Whisper Sweet Nothing tone routes through evaluator and stores tone="whisper"
+    whisper_sub = client.post(
+        "/api/rc/evaluate",
+        json={
+            "pitch": "An AI-powered daily task manager with dark mode",
+            "platform": "Web",
+            "twist": "Encouraging vibes",
+            "tone": "whisper",
+        },
+    )
+    assert whisper_sub.status_code == 200
+    whisper_job_id = whisper_sub.json()["job_id"]
+    whisper_report = None
+    for _ in range(30):
+        jr = client.get(f"/api/rc/job/{whisper_job_id}").json()
+        if jr["status"] == "completed":
+            whisper_report = jr["report"]
+            break
+        time.sleep(0.05)
+    assert whisper_report is not None
+    assert whisper_report["tone"] == "whisper"
+    assert any("WHISPER SWEET NOTHINGS" in p for p in captured_prompts)
+
+
+def test_idea_finder_e2e_optional_interests_and_brutal_gate(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("LETSVIBE_RC_IDEA_HISTORY_PATH", str(tmp_path / "idea_hist.json"))
+    monkeypatch.setattr(rc_routes, "_store", rc_routes.RealityCheckStore(str(tmp_path / "rc_if.db")))
+    monkeypatch.setattr(rc_routes, "_RATE_MAX_HITS", 20)
+    monkeypatch.setattr(rc_eval, "gather_market_grounding", lambda pitch, platform="Web", twist="": {"query": "test", "github_top_repos": [], "app_store_hits": []})
+    monkeypatch.setattr(rc_eval, "ensure_llama_awake", lambda **_: {"ok": True, "state": "awake"})
+
+    from letsvibe.reality_check import routes as r_mod
+
+    monkeypatch.setattr(
+        r_mod,
+        "generate_idea_batch_llama",
+        lambda sp, up, job_id="": {
+            "candidates": [
+                {"title": "Cliché Wrapper", "pitch": "A generic AI note taker for everyone online.", "twist": "Dark mode", "target_buyer": "Anyone", "why_monetizable": "Subs"},
+                {"title": "Offline Track Telemetry", "pitch": "An offline laptop pit-lane lap & tire-temp logger for Miata track-day drivers.", "twist": "Local Wi-Fi OBD2", "target_buyer": "Track-day drivers", "why_monetizable": "Replaces $49/mo cloud"},
+                {"title": "Backup Idea", "pitch": "Backup niche tool for local woodworking shops.", "twist": "Offline", "target_buyer": "Woodworkers", "why_monetizable": "One-time"},
+            ]
+        },
+    )
+
+    gate_calls = {"n": 0}
+
+    def fake_brutal(system_prompt: str, user_prompt: str, max_tokens: int = 4096):
+        gate_calls["n"] += 1
+        if gate_calls["n"] == 1:
+            return {
+                "verdict": "DO NOT BUILD",
+                "headline": "Generic wrapper slop",
+                "viability_score": 2.0,
+                "saturation_pct": 90.0,
+                "demand_tier": "Wrapper Slop",
+                "dimensions": {"market_saturation": {"label": "Sat", "score": 2.0, "weight": 100, "reasoning": "Bad"}},
+                "pricing_recommendation": {"suggested_price": "Do Not Monetize", "model": "Do Not Monetize", "reasoning": "No"},
+            }
+        return {
+            "verdict": "NICHE ONLY",
+            "headline": "Focused offline pit-lane logger",
+            "viability_score": 6.4,
+            "saturation_pct": 20.0,
+            "demand_tier": "Underserved Pain",
+            "dimensions": {"market_saturation": {"label": "Sat", "score": 6.4, "weight": 100, "reasoning": "Good"}},
+            "pricing_recommendation": {"suggested_price": "$49 one-time", "model": "One-Time License", "reasoning": "Fair"},
+        }
+
+    monkeypatch.setattr(rc_eval, "_call_shared_llama", fake_brutal)
+    client = TestClient(app)
+    sub = client.post("/api/rc/find-idea", json={"interests": "", "platform": "Desktop"})
+    assert sub.status_code == 200
+    job_id = sub.json()["job_id"]
+
+    res = None
+    for _ in range(30):
+        jr = client.get(f"/api/rc/job/{job_id}").json()
+        if jr["status"] == "completed":
+            res = jr
+            break
+        time.sleep(0.05)
+    assert res is not None
+    fr = res["finder_result"]
+    assert fr["passed_brutal_gate"] is True
+    assert fr["cycles_used"] == 2
+    assert len(fr["attempts"]) == 2
+    assert fr["attempts"][0]["passed"] is False
+    assert fr["attempts"][1]["passed"] is True
+    assert fr["selected_idea"]["title"] == "Offline Track Telemetry"
+    assert (tmp_path / "idea_hist.json").exists()
+
+
+def test_reality_check_e2e_github_rate_limit_graceful_fallback(monkeypatch, tmp_path) -> None:
+    from letsvibe.core.github_client import GitHubResponse, clear_github_cache
+    from letsvibe.reality_check import grounding as rc_grounding
+
+    clear_github_cache()
+    monkeypatch.setattr(rc_routes, "_store", rc_routes.RealityCheckStore(str(tmp_path / "rc_rl.db")))
+    monkeypatch.setattr(rc_routes, "_RATE_MAX_HITS", 20)
+    monkeypatch.setattr(rc_eval, "ensure_llama_awake", lambda **_: {"ok": True, "state": "awake"})
+    monkeypatch.setattr(
+        rc_grounding,
+        "github_get_json",
+        lambda url, timeout=8.0, cache_ttl=900.0: GitHubResponse(
+            ok=False,
+            status_code=403,
+            data=None,
+            rate_limited=True,
+            reset_in_sec=45,
+            error="GitHub API rate limit exceeded (resets in ~45s).",
+        ),
+    )
+    monkeypatch.setattr(rc_grounding, "_fetch_app_store", lambda short_q, platform, keywords: {"app_store_hits": []})
+
+    captured_prompts: List[str] = []
+
+    def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 4096):
+        captured_prompts.append(user_prompt)
+        return {
+            "verdict": "NICHE ONLY",
+            "headline": "Rate-limit resilient check",
+            "viability_score": 5.5,
+            "saturation_pct": 45.0,
+            "demand_tier": "Underserved Pain",
+            "dimensions": {"market_saturation": {"label": "Sat", "score": 5.5, "weight": 100, "reasoning": "Fallback"}},
+            "pricing_recommendation": {"suggested_price": "$19", "model": "One-Time License", "reasoning": "Fair"},
+        }
+
+    monkeypatch.setattr(rc_eval, "_call_shared_llama", fake_llama)
+    client = TestClient(app)
+    sub = client.post("/api/rc/evaluate", json={"pitch": "Offline track telemetry logger for Miata drivers", "platform": "Desktop"})
+    assert sub.status_code == 200
+    job_id = sub.json()["job_id"]
+
+    res = None
+    for _ in range(30):
+        jr = client.get(f"/api/rc/job/{job_id}").json()
+        if jr["status"] == "completed":
+            res = jr
+            break
+        time.sleep(0.05)
+    assert res is not None
+    assert len(captured_prompts) == 1
+    assert "rate-limited" in captured_prompts[0].lower()
+    assert "no widely-known >=500-star github" not in captured_prompts[0].lower()

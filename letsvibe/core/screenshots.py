@@ -12,6 +12,7 @@ from urllib.parse import unquote
 
 import httpx
 
+from .github_client import github_get_json
 from .icons import tracked_files
 
 _IMG_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
@@ -299,26 +300,44 @@ def discover_visuals_remote(
     readme_rel = "README.md"
     readme_text = ""
 
+    if not token:
+        tree_res = github_get_json(
+            f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1",
+            timeout=10.0,
+        )
+        if tree_res.ok and isinstance(tree_res.data, dict):
+            files = [
+                item["path"]
+                for item in tree_res.data.get("tree", [])
+                if isinstance(item, dict) and item.get("type") == "blob" and item.get("path")
+            ]
+            for f in sorted(files):
+                base = f.rsplit("/", 1)[-1].lower()
+                if "/" not in f and base in ("readme.md", "readme.markdown", "readme"):
+                    readme_rel = f
+                    break
+
     with httpx.Client(timeout=10.0, follow_redirects=True) as client:
-        try:
-            tree_res = client.get(
-                f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1",
-                headers=api_headers,
-            )
-            if tree_res.status_code == 200:
-                data = tree_res.json()
-                files = [
-                    item["path"]
-                    for item in data.get("tree", [])
-                    if isinstance(item, dict) and item.get("type") == "blob" and item.get("path")
-                ]
-                for f in sorted(files):
-                    base = f.rsplit("/", 1)[-1].lower()
-                    if "/" not in f and base in ("readme.md", "readme.markdown", "readme"):
-                        readme_rel = f
-                        break
-        except httpx.HTTPError:
-            pass
+        if token:
+            try:
+                tree_res = client.get(
+                    f"https://api.github.com/repos/{owner}/{repo_name}/git/trees/HEAD?recursive=1",
+                    headers=api_headers,
+                )
+                if tree_res.status_code == 200:
+                    data = tree_res.json()
+                    files = [
+                        item["path"]
+                        for item in data.get("tree", [])
+                        if isinstance(item, dict) and item.get("type") == "blob" and item.get("path")
+                    ]
+                    for f in sorted(files):
+                        base = f.rsplit("/", 1)[-1].lower()
+                        if "/" not in f and base in ("readme.md", "readme.markdown", "readme"):
+                            readme_rel = f
+                            break
+            except httpx.HTTPError:
+                pass
 
         try:
             raw_res = client.get(

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import shutil
 import socket
 import subprocess  # nosec B404 - fixed git list args only
@@ -88,6 +89,55 @@ def _fetch_https_text(url: str) -> str:
     raise ValueError("Too many redirects fetching reference URL.")
 
 
+def _digest_readme_for_context(md_text: str, max_chars: int = 1500) -> str:
+    """Extracts title, 1-line summary, and prioritized API/WebSocket route endpoints from a README."""
+    lines = (md_text or "").splitlines()
+    summary_lines: List[str] = []
+    route_lines: List[str] = []
+    fallback_lines: List[str] = []
+    in_toc = False
+
+    for raw in lines:
+        s = raw.strip()
+        low = s.lower()
+        if not s:
+            continue
+        if s.startswith("<") or s.startswith("[![") or s.startswith("![") or s == "---":
+            continue
+        if low.startswith("## ") and "table of contents" in low:
+            in_toc = True
+            continue
+        if in_toc:
+            if s.startswith("#"):
+                in_toc = False
+            else:
+                continue
+        if s.startswith("# ") and not summary_lines:
+            summary_lines.append(s)
+        elif (
+            len(summary_lines) < 2
+            and not s.startswith("#")
+            and not s.startswith("|")
+            and not s.startswith(("🤖", "🌐"))
+        ):
+            summary_lines.append(s.lstrip("> ").strip())
+        elif re.search(r"\b(GET|POST|PUT|PATCH|DELETE|WS)\s+/[A-Za-z0-9_{}/.-]*", s):
+            if s not in route_lines and len(route_lines) < 16:
+                route_lines.append(s)
+        elif re.search(r"`/[a-z0-9_{}/.-]+`", s):
+            if s not in fallback_lines and len(fallback_lines) < 6:
+                fallback_lines.append(s)
+
+    endpoints = route_lines if route_lines else fallback_lines
+    parts: List[str] = []
+    if summary_lines:
+        parts.append("Summary:\n" + "\n".join(summary_lines[:2]))
+    if endpoints:
+        parts.append("Endpoints / Interfaces:\n" + "\n".join(endpoints))
+    out = "\n\n".join(parts).strip()
+    return (out or md_text)[:max_chars]
+
+
 def _extract_repo_headers(repo_url: str) -> str:
     validate_safe_public_https_url(repo_url)
     tmp = tempfile.mkdtemp(prefix="letsvibe_ref_")
@@ -108,11 +158,12 @@ def _extract_repo_headers(repo_url: str) -> str:
         root = Path(tmp)
         snippets: List[str] = []
         used = 0
-        # README first
+        # README digest first (summary + endpoints, stripped of banners/badges/TOC)
         for p in sorted(root.iterdir()):
-            if p.is_file() and p.name.lower().startswith("readme") and used < 2500:
-                txt = p.read_text(encoding="utf-8", errors="replace")[:2000]
-                snippets.append(f"--- {p.name} ---\n{txt}")
+            if p.is_file() and p.name.lower().startswith("readme") and used < 1500:
+                raw_txt = p.read_text(encoding="utf-8", errors="replace")
+                txt = _digest_readme_for_context(raw_txt, max_chars=1200)
+                snippets.append(f"--- {p.name} (digest) ---\n{txt}")
                 used += len(txt)
                 break
         # Public headers / interface files
@@ -173,6 +224,8 @@ def _format_ref_text(label: str, text: str) -> str:
             caps = ", ".join(summary["capabilities"]) or "General C/C++ API"
             syms = ", ".join(summary["symbols"][:20])
             return f"Host-provided capabilities: {caps}\nAPI symbols: {syms}"
+    if "readme" in label.lower() or label.lower().endswith(".md"):
+        return _digest_readme_for_context(text, max_chars=1200)
     return text[:4000]
 
 

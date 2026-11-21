@@ -88,13 +88,8 @@ def _svg(width: float, height: float, title: str, body: str) -> str:
 def _summary(project: Optional[Dict[str, Any]], scale: str = "raw") -> Dict[str, Any]:
     if not project:
         return {"graded": False, "letter": "", "score": None, "name": "", "family": ""}
-    use_curve = scale == "curve" and project.get("curved_score") is not None
-    if use_curve:
-        score = project.get("curved_score")
-        letter = str(project.get("curved_letter_grade") or project.get("letter_grade") or "").strip()
-    else:
-        score = project.get("final_score")
-        letter = str(project.get("raw_letter_grade") or project.get("letter_grade") or "").strip()
+    score = project.get("final_score")
+    letter = str(project.get("letter_grade") or project.get("raw_letter_grade") or "").strip()
     return {"graded": bool(letter) and score is not None, "letter": letter,
             "score": float(score) if score is not None else None,
             "name": str(project.get("repo_name") or ""), "family": _family(letter)}
