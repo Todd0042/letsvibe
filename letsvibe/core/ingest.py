@@ -163,6 +163,26 @@ def strip_heavy_arrays(content: str, max_array_lines: int = 12) -> str:
     return "".join(out)
 
 
+# Folder names that are usually someone else's code...
+THIRD_PARTY_DIRS = ("vendor", "third_party", "third-party", "extern", "external", "sdk", "deps", "submodules")
+# ...and ones that are just as often the author's own (src/lib, React/Svelte components): a library only with a
+# library manifest or licence of its own in that subfolder.
+LIBRARY_MARKERS = ("library.properties", "library.json", "idf_component.yml", "package.json", "license", "license.txt",
+                   "license.md", "copying")
+
+
+def looks_like_library(rel: str, all_files) -> bool:
+    parts = rel.lower().split("/")
+    for i, part in enumerate(parts[:-1]):
+        if part in THIRD_PARTY_DIRS:
+            return True
+        if part in ("lib", "libs", "components", "managed_components") and i + 1 < len(parts) - 1:
+            libdir = "/".join(rel.split("/")[:i + 2]) + "/"
+            if any(f.startswith(libdir) and f[len(libdir):].lower() in LIBRARY_MARKERS for f in all_files):
+                return True
+    return False
+
+
 def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set[str]:
     """
     Uses git log in a single fast pass to identify files inside vendor/SDK/lib folders
@@ -212,6 +232,7 @@ def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set
         # modified in a focused developer commit (as opposed to a massive bulk SDK drop).
         touch_counts: Dict[str, int] = {f: 0 for f in candidate_set}
         developer_patched: Set[str] = set()
+        bulk_imported: Set[str] = set()  # first appeared in a bulk import (> 35 files in one commit)
 
         # commits are ordered newest -> oldest; reverse to walk oldest (initial import) -> newest
         for commit_files in reversed(commits):
@@ -219,6 +240,8 @@ def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set
             for f in commit_files:
                 if f in candidate_set:
                     touch_counts[f] += 1
+                    if touch_counts[f] == 1 and is_bulk_import:
+                        bulk_imported.add(f)
                     # If modified after its first appearance, OR touched in a small focused commit
                     # after the repo already existed, mark as developer-modified!
                     if touch_counts[f] > 1 or not is_bulk_import:
@@ -229,7 +252,10 @@ def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set
         # touched once (in the commit that added the folder), it is untouched upstream SDK code.
         untouched: Set[str] = set()
         for f in candidate_set:
-            if f not in developer_patched and touch_counts.get(f, 0) <= 1:
+            # Added in a bulk import and never changed since; and, in folders whose name says nothing (lib/,
+            # components/...), only inside a library that has a manifest or licence of its own.
+            if f not in developer_patched and touch_counts.get(f, 0) <= 1 and f in bulk_imported \
+                    and looks_like_library(f, candidate_set | set(tracked_files)):
                 untouched.add(f)
 
         # Whole third-party libraries identified by their package manifest (not at repo root,
@@ -797,11 +823,17 @@ _KNOWN_VENDOR_BASENAMES = {
 }
 
 
+# Host/SDK headers an app plugs into (it can't change them): context for the AI (analyzers/host_headers.py), never
+# counted or judged as the app's own code.
+HOST_SDK_HEADERS = {"nexus.h", "arcdps.h", "arcdps_structs.h", "arcdps_unofficial_extras.h", "mumble.h", "mumblelink.h",
+                    "linkedmem.h", "rtapi.h", "realtime_api.h"}
+
+
 def _is_known_vendored_lib_file(rel_path: str, content: str) -> bool:
     """Identifies bundled third-party single-header/amalgamated libraries even in single-commit repos."""
     low = rel_path.replace("\\", "/").lower()
     base = os.path.basename(low)
-    if base in _KNOWN_VENDOR_BASENAMES or base.startswith("stb_"):
+    if base in _KNOWN_VENDOR_BASENAMES or base in HOST_SDK_HEADERS or base.startswith("stb_"):
         return True
     if "nlohmann/json.hpp" in low:
         return True
