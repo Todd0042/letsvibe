@@ -115,6 +115,44 @@ _VISIBLE_LOG_JS = re.compile(r"^(console\.(error|warn|info)|Log\.[ewi]|Timber\.[
 _CLEANUP = re.compile(r"\b(kill|start_kill|shutdown|close|Close|remove_file|remove_dir(_all)?|Remove(All)?|flush|abort|send|unlink|set_nonblocking)\s*\(")
 
 
+# Host/SDK headers an app plugs into (it can't change them): context for the AI (host_headers.py), never findings.
+HOST_SDK_HEADERS = {"nexus.h", "arcdps.h", "arcdps_structs.h", "arcdps_unofficial_extras.h", "mumble.h", "mumblelink.h",
+                    "linkedmem.h", "rtapi.h", "realtime_api.h", "imgui_internal.h"}
+
+
+# Folder names that are usually someone else's code, whatever the history says...
+_THIRD_PARTY_DIRS = ("vendor", "third_party", "third-party", "extern", "external", "sdk", "deps", "submodules")
+# ...and ones that are just as often the author's own (src/lib, React/Svelte components): a library only with a
+# library manifest or licence of its own in that subfolder.
+_LIBRARY_MARKERS = ("library.properties", "library.json", "idf_component.yml", "package.json", "license", "license.txt",
+                    "license.md", "copying")
+
+
+def _looks_like_library(rel: str, everything: Dict[str, str]) -> bool:
+    parts = rel.lower().split("/")
+    for i, part in enumerate(parts[:-1]):
+        if part in _THIRD_PARTY_DIRS:
+            return True
+        if part in ("lib", "libs", "components", "managed_components") and i + 1 < len(parts) - 1:
+            libdir = "/".join(rel.split("/")[:i + 2]) + "/"
+            if any(f.startswith(libdir) and f[len(libdir):].lower() in _LIBRARY_MARKERS for f in everything):
+                return True
+    return False
+
+
+def dependency_files(root: Path, everything: Dict[str, str]) -> set:
+    """Files the author doesn't control, by the same rules ingest uses for line counts and complexity: dependency
+    folders (vendor/, sdk/, lib/, external/...) bulk-imported and never edited (from git history), Arduino/PlatformIO
+    library folders, known single-file libraries (ImGui, stb, sqlite3, nlohmann/json...), plus host SDK headers."""
+    from ..core.ingest import _is_known_vendored_lib_file, get_untouched_vendor_files
+
+    deps = {f for f in get_untouched_vendor_files(Path(root), list(everything)) if _looks_like_library(f, everything)}
+    for rel, content in everything.items():
+        if _is_known_vendored_lib_file(rel, content) or Path(rel).name.lower() in HOST_SDK_HEADERS:
+            deps.add(rel)
+    return deps
+
+
 def _py_types(node) -> set:
     t = node.type
     if t is None:
@@ -235,7 +273,9 @@ def _user_facing_functions(code: Dict[str, str]) -> set:
 
 def scan(root: Path, intent_aware: bool = False) -> Dict[str, List[Dict[str, object]]]:
     everything = tracked_files(Path(root))
-    code = {p: c for p, c in everything.items() if p.endswith(CODE_EXT) and not TEST.search(p)}
+    # v10.4+ (intent_aware): only the author's own code is judged; dependencies they can't change never produce findings.
+    deps = dependency_files(root, everything) if intent_aware else set()
+    code = {p: c for p, c in everything.items() if p.endswith(CODE_EXT) and not TEST.search(p) and p not in deps}
     funcs = {p: _functions(p, c) for p, c in code.items()}
     unused = set(_possibly_unused(code, everything))
     findings: List[Dict[str, object]] = []
