@@ -38,6 +38,21 @@ from ..storage.manager import ReportStorageManager
 logger = logging.getLogger("letsvibe.worker")
 
 
+def _engine_wants_owned_code_v2(engine_id: str) -> bool:
+    """Engines that declare "ingest_rules": "owned-code-v2" in the engine registry (v10.4+) get the stricter "what is
+    the author's own code" rules; every other engine (production v10.3 included) keeps the original ones."""
+    try:
+        from letsvibe_engine.api import load_registry
+        engines = load_registry()
+        entry = next((e for e in engines if e.get("id") == engine_id or e.get("rubric_version") == engine_id), None)
+        if entry is None:  # "default" / unknown: the production default engine
+            entry = next((e for e in engines if e.get("is_default")), {})
+        return entry.get("ingest_rules") == "owned-code-v2"
+    except Exception as exc:  # no registry: original rules, said in the log
+        logger.warning("engine registry unavailable (%s): original ingest rules", exc)
+        return False
+
+
 class TaskStopped(CpuSpilloverError):
     """Raised inside a running task when the admin presses Stop (a CpuSpilloverError so the pipeline halts at once)."""
 
@@ -243,6 +258,7 @@ class AuditQueueWorker:
                 ignore_limits=force_override,
                 branch=branch,
                 subpath=subpath,
+                owned_code_v2=_engine_wants_owned_code_v2(mode),
             )
             refs = submission_meta.get("references") or []
             if isinstance(refs, list) and refs:

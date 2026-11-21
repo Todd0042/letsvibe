@@ -121,9 +121,9 @@ def dependency_files(root: Path, everything: Dict[str, str]) -> set:
     library folders, known single-file libraries (ImGui, stb, sqlite3, nlohmann/json...), plus host SDK headers."""
     from ..core.ingest import _is_known_vendored_lib_file, get_untouched_vendor_files
 
-    deps = set(get_untouched_vendor_files(Path(root), list(everything)))  # the same rule ingest uses
+    deps = set(get_untouched_vendor_files(Path(root), list(everything), strict=True))  # ingest's v10.4 rules
     for rel, content in everything.items():
-        if _is_known_vendored_lib_file(rel, content):  # includes the host SDK headers (Nexus.h, arcdps.h...)
+        if _is_known_vendored_lib_file(rel, content, include_host_sdk=True):  # + Nexus.h, arcdps.h...
             deps.add(rel)
     return deps
 

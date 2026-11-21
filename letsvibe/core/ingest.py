@@ -183,7 +183,7 @@ def looks_like_library(rel: str, all_files) -> bool:
     return False
 
 
-def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set[str]:
+def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str], strict: bool = False) -> Set[str]:
     """
     Uses git log in a single fast pass to identify files inside vendor/SDK/lib folders
     that were dumped in a bulk upstream import and never subsequently modified by the developer.
@@ -254,9 +254,12 @@ def get_untouched_vendor_files(repo_path: Path, tracked_files: List[str]) -> Set
         for f in candidate_set:
             # Added in a bulk import and never changed since; and, in folders whose name says nothing (lib/,
             # components/...), only inside a library that has a manifest or licence of its own.
-            if f not in developer_patched and touch_counts.get(f, 0) <= 1 and f in bulk_imported \
-                    and looks_like_library(f, candidate_set | set(tracked_files)):
-                untouched.add(f)
+            if f not in developer_patched and touch_counts.get(f, 0) <= 1:
+                # strict (engine v10.4+, "owned-code-v2"): only if added in a bulk import, and in folders whose name
+                # says nothing (lib/, components/...) only inside a library with its own manifest or licence.
+                # Older engines keep the original rule (touched once) so their results don't change.
+                if not strict or (f in bulk_imported and looks_like_library(f, candidate_set | set(tracked_files))):
+                    untouched.add(f)
 
         # Whole third-party libraries identified by their package manifest (not at repo root,
         # which would mean the repo itself is the library), unless the developer kept working on them.
@@ -829,11 +832,11 @@ HOST_SDK_HEADERS = {"nexus.h", "arcdps.h", "arcdps_structs.h", "arcdps_unofficia
                     "linkedmem.h", "rtapi.h", "realtime_api.h"}
 
 
-def _is_known_vendored_lib_file(rel_path: str, content: str) -> bool:
+def _is_known_vendored_lib_file(rel_path: str, content: str, include_host_sdk: bool = False) -> bool:
     """Identifies bundled third-party single-header/amalgamated libraries even in single-commit repos."""
     low = rel_path.replace("\\", "/").lower()
     base = os.path.basename(low)
-    if base in _KNOWN_VENDOR_BASENAMES or base in HOST_SDK_HEADERS or base.startswith("stb_"):
+    if base in _KNOWN_VENDOR_BASENAMES or base.startswith("stb_") or (include_host_sdk and base in HOST_SDK_HEADERS):
         return True
     if "nlohmann/json.hpp" in low:
         return True
@@ -864,6 +867,7 @@ class RepositoryIngestor:
         ignore_limits: bool = False,
         branch: Optional[str] = None,
         subpath: Optional[str] = None,
+        owned_code_v2: bool = False,
     ) -> PackedRepository:
         """Ingests a local directory or clones a remote repository (optionally scoped to branch/subpath)."""
         is_temp = False
@@ -982,7 +986,7 @@ class RepositoryIngestor:
                 tracked_rel_files = None
 
         if tracked_rel_files is not None:
-            untouched_vendor_set = get_untouched_vendor_files(source_path, tracked_rel_files)
+            untouched_vendor_set = get_untouched_vendor_files(source_path, tracked_rel_files, strict=owned_code_v2)
 
             for rel_file in sorted(tracked_rel_files):
                 if rel_file in untouched_vendor_set:
@@ -1016,7 +1020,7 @@ class RepositoryIngestor:
                     with open(abs_file, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
 
-                    if _is_known_vendored_lib_file(rel_file, content):
+                    if _is_known_vendored_lib_file(rel_file, content, include_host_sdk=owned_code_v2):
                         skipped_vendor_count += 1
                         continue
 
@@ -1086,7 +1090,7 @@ class RepositoryIngestor:
                             continue
                         with open(abs_file, "r", encoding="utf-8", errors="replace") as f:
                             raw_content = f.read()
-                        if _is_known_vendored_lib_file(rel_file, raw_content):
+                        if _is_known_vendored_lib_file(rel_file, raw_content, include_host_sdk=owned_code_v2):
                             skipped_vendor_count += 1
                             continue
                         content = strip_heavy_arrays(raw_content)
