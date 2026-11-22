@@ -370,7 +370,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         DROP TABLE IF EXISTS visitor_journeys;
         """)
         # Safe migrations for existing databases
-        try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
+        try:  # legacy (the bell curve was removed): kept so old databases open; always NULL now
             conn.execute("ALTER TABLE reports ADD COLUMN curved_score REAL;")
         except sqlite3.OperationalError:
             pass
@@ -488,8 +488,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
                     conn.execute("UPDATE reports SET rubric_version = ?, rubric_rank = ? WHERE id = ?", (rv, rk, row["id"]))
         except Exception as exc:
             logger.warning(f"Rubric rank backfill skipped: {exc}")
-        # Ensure stored letter_grade in reports is always the uncurved raw rubric grade
-        # (bell curve is applied dynamically at presentation time via peer_grades.compute_peer_overlays)
+        # Clear what the removed bell curve left behind: the stored letter is the rubric score's letter, never curved
         try:
             from ..evaluator.rubric import calculate_letter_grade
             for row in conn.execute("SELECT id, final_score, letter_grade, curved_score, report_data_json FROM reports").fetchall():
@@ -574,7 +573,7 @@ def save_report_to_db(
 
     now_iso = datetime.now().isoformat()
     final_score = float(report_dict.get("final_vibe_score", 0.0))
-    # Always store the uncurved raw rubric letter grade in SQLite (bell curve is applied dynamically on read)
+    # The stored letter is the rubric score's letter; the Spark bonus is added when shown (get_leaderboard etc.)
     letter_grade = calculate_letter_grade(final_score)
     report_dict["letter_grade"] = letter_grade
     archetype = report_dict.get("archetype", {})
@@ -877,7 +876,6 @@ def get_leaderboard(
     platforms: Optional[Any] = None,
     with_facets: bool = False,
     include_test: bool = False,
-    use_curve: bool = True,
     engine_filter: Optional[str] = None,
 ) -> Any:
     """
@@ -1362,7 +1360,7 @@ def get_project_detail(
         h["curved_letter_grade"] = h_raw
         h["curved_score"] = round(float(h.get("final_score") or 0.0), 1)
         h["letter_grade"] = h_raw
-    from .peer_grades import category_standing
+    from .standing import category_standing
     data["standing"] = category_standing(conn, data["id"])
     data["factor_stats"] = factor_stats(conn)
 
@@ -2567,7 +2565,7 @@ def clear_entire_database(db_path: Path = DEFAULT_DB_PATH) -> bool:
         conn.close()
 
 def regrade_all_reports(db_path: Path = DEFAULT_DB_PATH) -> int:
-    """Recomputes stored letter grades from scores using the current grade curve. Returns rows changed."""
+    """Recomputes stored letter grades from scores on the fixed letter bands. Returns rows changed."""
     from ..evaluator.rubric import calculate_letter_grade
 
     init_db(db_path)

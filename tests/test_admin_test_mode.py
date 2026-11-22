@@ -9,7 +9,6 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
-from letsvibe.storage import peer_grades as pg
 from letsvibe.storage.db import (
     get_creators_leaderboard,
     get_db_connection,
@@ -21,11 +20,6 @@ from letsvibe.storage.db import (
 from letsvibe.storage.identity import parse_repo_identity
 from letsvibe.web import server
 from letsvibe.web.server import app
-
-
-@pytest.fixture(autouse=True)
-def _no_curve(monkeypatch):
-    monkeypatch.setattr(pg, "load_calibration", lambda: None)
 
 
 @pytest.fixture

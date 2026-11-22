@@ -34,7 +34,6 @@ from ..storage.anna_db import (
     list_anna_user_tickets,
     purge_anna_project,
     purge_expired_anna_projects,
-    recompute_anna_curve,
     restore_anna_project,
     save_anna_report,
     soft_delete_all_anna_user_projects,
@@ -180,7 +179,7 @@ async def anna_delete_all_my_projects(request: Request):
 @router.get("/leaderboard")
 async def anna_leaderboard(
     request: Request,
-    scale: str = Query("curve", pattern="^(curve|raw)$"),
+    scale: str = Query("raw", pattern="^(curve|raw)$"),  # ignored: one scale only (old links keep working)
     category: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
@@ -421,15 +420,6 @@ async def anna_admin_purge_expired(request: Request):
     _require_admin(request)
     purged = purge_expired_anna_projects()
     return {"status": "ok", "purged_count": purged}
-
-
-@router.post("/admin/recompute-curve")
-async def anna_admin_recompute_curve(request: Request):
-    _require_admin(request)
-    with get_anna_db_connection() as conn:
-        recompute_anna_curve(conn)
-        conn.commit()
-    return {"status": "ok", "message": "Recomputed Anna cohort bell curve."}
 
 
 @router.post("/tickets")

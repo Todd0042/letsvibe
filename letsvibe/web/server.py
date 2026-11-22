@@ -659,7 +659,7 @@ def is_admin_request(request: Request) -> bool:
 # ------------------------------------------------------------------------------------------------------------------
 # TEST MODE (remove before launch). With LETSVIBE_ADMIN_TEST_SUBMISSIONS=1 in .env, the admin may submit repositories
 # owned by other GitHub accounts to build a larger evaluation dataset. Those projects are flagged is_test: only the
-# admin sees them, and they never affect public grades, curves, ranks or badges (storage/db.py, peer_grades.py).
+# admin sees them, and they never affect public grades, ranks or badges (storage/db.py, storage/standing.py).
 # Everyone else, the admin's own submissions included, still follows owns_repo().
 # ------------------------------------------------------------------------------------------------------------------
 def admin_test_submissions_enabled() -> bool:
@@ -1804,7 +1804,6 @@ async def api_leaderboard(
     category: Optional[str] = Query(None, description="Comma-separated general categories"),
     platform: Optional[str] = Query(None, description="Comma-separated platform ids"),
     search: Optional[str] = Query(None, description="Search keyword"),
-    curve: bool = Query(True, description="Whether to apply the bell curve to letter grades"),
     engine: Optional[str] = Query(None, description="Admin-only engine version filter"),
 ):
     """Ranked repository list. OR within a filter group, AND across groups; `facets` holds option counts."""
@@ -1815,7 +1814,6 @@ async def api_leaderboard(
         sort_by=sort_by, tier_filter=tier, search=search,
         categories=category, platforms=platform, with_facets=True,
         include_test=is_admin,  # TEST MODE: admin test gradings and engine filter are available for the admin only
-        use_curve=curve,
         engine_filter=engine if is_admin else None,
     )
     up_counts, up_mine = get_upvote_map(viewer_gid)

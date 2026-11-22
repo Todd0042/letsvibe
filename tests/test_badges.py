@@ -5,7 +5,6 @@ import xml.dom.minidom  # nosec B408 - parses only SVG this project generates
 import pytest
 from fastapi.testclient import TestClient
 
-from letsvibe.storage import peer_grades as pg
 from letsvibe.storage.db import save_report_to_db
 from letsvibe.storage.identity import parse_repo_identity
 from letsvibe.web.badges import STYLES, render
@@ -13,11 +12,6 @@ from letsvibe.web.server import app
 
 PROJECT = {"repo_name": "my-app", "letter_grade": "A-", "curved_score": 92.9, "resonance_score": 90,
            "creativity_score": 80, "user_journey_score": 70, "functionality_score": 60, "ui_ux_score": None}
-
-
-@pytest.fixture(autouse=True)
-def _no_curve(monkeypatch):
-    monkeypatch.setattr(pg, "load_calibration", lambda: None)
 
 
 @pytest.mark.parametrize("style", STYLES)

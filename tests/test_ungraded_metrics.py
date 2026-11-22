@@ -115,7 +115,7 @@ def test_export_explains_empty_scores(saved):
 
 
 def test_sorting_by_a_retired_metric_lists_ungraded_reports_last(saved):
-    board = get_leaderboard(sort_by="maintainability", use_curve=False)
+    board = get_leaderboard(sort_by="maintainability")
     rows = board if isinstance(board, list) else board.get("projects") or board.get("items") or []
     order = [r["full_slug"].split("/", 1)[1] for r in rows if r["full_slug"].startswith(OWNER + "/")]
     assert order == ["legacy", "current-maint", "current"]

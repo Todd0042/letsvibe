@@ -17,7 +17,6 @@ from ..core.platforms import normalize_category
 from ..evaluator.rubric import calculate_letter_grade
 from .db import rubric_version_rank
 from .identity import parse_repo_identity
-from .peer_grades import global_curve_details
 
 DEFAULT_ANNA_DB_PATH = Path(
     os.environ.get("ANNA_DB_PATH", "data/anna_letsvibe.db")
@@ -71,48 +70,6 @@ def _primary_language(report: Dict[str, Any]) -> str:
         except Exception:
             pass
     return ""
-
-
-def recompute_anna_curve(conn: sqlite3.Connection) -> None:
-    """
-    Recomputes curved_score and curved_letter_grade across active Anna reports
-    using the latest report per non-deleted project as the reference cohort.
-    """
-    latest_rows = conn.execute(
-        """
-        SELECT r.id, r.project_id, r.final_score
-        FROM reports r
-        JOIN projects p ON p.id = r.project_id
-        WHERE r.is_latest = 1 AND p.deleted_at IS NULL AND COALESCE(p.is_test, 0) = 0
-        """
-    ).fetchall()
-    cohort = [float(r["final_score"]) for r in latest_rows]
-    if not cohort:
-        return
-
-    all_reports = conn.execute(
-        """
-        SELECT r.id, r.project_id, r.final_score, r.is_latest, p.deleted_at, COALESCE(p.is_test, 0) AS is_test
-        FROM reports r
-        JOIN projects p ON p.id = r.project_id
-        """
-    ).fetchall()
-    for r in all_reports:
-        raw = float(r["final_score"])
-        is_active_latest = int(r["is_latest"]) == 1 and r["deleted_at"] is None and int(r["is_test"]) == 0
-        scores_for_row = cohort if is_active_latest else (cohort + [raw])
-        details = global_curve_details(raw, scores_for_row)
-        curved = round(float(details["curved_score"]), 1)
-        c_grade = calculate_letter_grade(curved)
-        conn.execute(
-            "UPDATE reports SET curved_score = ?, curved_letter_grade = ? WHERE id = ?",
-            (curved, c_grade, int(r["id"])),
-        )
-        if int(r["is_latest"]) == 1:
-            conn.execute(
-                "UPDATE projects SET curved_score = ?, curved_letter_grade = ? WHERE id = ?",
-                (curved, c_grade, int(r["project_id"])),
-            )
 
 
 def _refresh_project_latest(conn: sqlite3.Connection, project_id: int) -> None:
@@ -283,25 +240,23 @@ def save_anna_report(
         )
         report_id = int(cur_rep.lastrowid)
         _refresh_project_latest(conn, project_id)
-        recompute_anna_curve(conn)
         conn.commit()
 
-        saved = conn.execute("SELECT curved_score, curved_letter_grade FROM reports WHERE id = ?", (report_id,)).fetchone()
         return {
             "project_id": project_id,
             "report_id": report_id,
             "full_slug": full_slug,
             "final_score": final_score,
             "letter_grade": letter_grade,
-            "curved_score": float(saved["curved_score"]) if saved else final_score,
-            "curved_letter_grade": str(saved["curved_letter_grade"]) if saved else letter_grade,
+            "curved_score": final_score,  # no curve: a new report has no Sparks yet, so it shows its rubric score
+            "curved_letter_grade": letter_grade,
             "rubric_version": rv,
         }
 
 
 def get_anna_leaderboard(
     *,
-    scale: str = "curve",
+    scale: str = "raw",  # ignored: there is only one scale (kept so old callers keep working)
     category: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 100,
@@ -495,7 +450,7 @@ def get_anna_project_detail(
         history_rows = conn.execute(
             """
             SELECT id, rubric_version, model_name, submitted_by, commit_sha, final_score, letter_grade,
-                   curved_score, curved_letter_grade, is_latest, created_at
+                   final_score AS curved_score, letter_grade AS curved_letter_grade, is_latest, created_at
             FROM reports WHERE project_id = ? ORDER BY rubric_rank DESC, id DESC
             """,
             (pid,),
@@ -602,7 +557,6 @@ def soft_delete_anna_project(
             "UPDATE projects SET deleted_at = ?, purge_after = ?, deleted_by = ?, updated_at = ? WHERE id = ?",
             (deleted_at, purge_after, actor_login, deleted_at, int(proj["id"])),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         return {
             "full_slug": slug,
@@ -633,8 +587,6 @@ def soft_delete_all_anna_user_projects(
             (deleted_at, purge_after, user_login.strip(), deleted_at, low, low),
         )
         cnt = int(cur.rowcount or 0)
-        if cnt:
-            recompute_anna_curve(conn)
         conn.commit()
     return {"hidden_count": cnt, "purge_after": purge_after, "retention_days": RETENTION_DAYS}
 
@@ -670,7 +622,6 @@ def restore_anna_project(
             "UPDATE projects SET deleted_at = NULL, purge_after = NULL, deleted_by = NULL, updated_at = ? WHERE id = ?",
             (_utc_now(), int(proj["id"])),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         return {"full_slug": slug, "restored": True}
 
@@ -686,7 +637,6 @@ def purge_anna_project(
         if not proj:
             return False
         conn.execute("DELETE FROM projects WHERE id = ?", (int(proj["id"]),))
-        recompute_anna_curve(conn)
         conn.commit()
         return True
 
@@ -698,8 +648,6 @@ def purge_expired_anna_projects(db_path: Path = DEFAULT_ANNA_DB_PATH) -> int:
             (_utc_now(),),
         )
         purged = int(cur.rowcount or 0)
-        if purged:
-            recompute_anna_curve(conn)
         conn.commit()
         return purged
 
@@ -999,7 +947,6 @@ def ban_anna_user(
             "UPDATE support_tickets SET status = 'resolved', updated_at = ? WHERE lower(user_login) = ? AND status = 'open'",
             (now, low),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         row = dict(conn.execute("SELECT * FROM bans WHERE lower(github_username) = ?", (low,)).fetchone())
     return row
@@ -1145,7 +1092,6 @@ def ban_anna_user(
             "UPDATE support_tickets SET status = 'resolved', updated_at = ? WHERE lower(user_login) = ? AND status = 'open'",
             (now, low),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         row = dict(conn.execute("SELECT * FROM bans WHERE lower(github_username) = ?", (low,)).fetchone())
     return row
