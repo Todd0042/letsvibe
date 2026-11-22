@@ -19,6 +19,12 @@ except ImportError:  # pragma: no cover
     lizard = None
 
 CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".kt", ".java", ".go", ".rs", ".cs", ".gd", ".swift", ".sh", ".vue", ".svelte")
+# C and C++ (Arduino/ESP32 sketches, game addons, native tools): scanned only by the intent-aware rules (v10.4+).
+C_EXT = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".ino")
+C_SOURCE = (".c", ".cc", ".cpp", ".cxx", ".ino")
+# Functions a host or toolchain calls by name (nothing in the project refers to them): their file is an entry point.
+C_ENTRY_FUNCS = {"main", "wmain", "WinMain", "wWinMain", "DllMain", "setup", "loop", "app_main", "GetAddonDef",
+                 "get_init_addr", "get_release_addr", "mod_init", "ModInit", "PluginInit"}
 WEB_EXT = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".html")
 SKIP = re.compile(r"(^|/)(node_modules|vendor|third_party|dist|build|\.git|venv|\.venv|__pycache__|site-packages|static/vendor)(/|$)|\.min\.(js|css)$")
 TEST = re.compile(r"(^|/)(tests?|__tests__|spec|androidTest|testing)(/|$)|(_test|\.test|\.spec|Test)\.\w+$|(^|/)test_")
@@ -75,9 +81,22 @@ def _enclosing(funcs, line: int) -> Optional[str]:
 def _possibly_unused(code: Dict[str, str], everything: Dict[str, str]) -> List[str]:
     out = []
     for p in code:
-        if ENTRY.search(p) or TEST.search(p) or not p.endswith(CODE_EXT) or p.endswith("__init__.py"):
+        if ENTRY.search(p) or TEST.search(p) or not p.endswith(CODE_EXT + C_EXT) or p.endswith("__init__.py"):
             continue
         stem = Path(p).stem
+        if p.endswith(C_EXT):
+            if p.endswith(".ino"):
+                continue  # an Arduino sketch is the program itself
+            own = {n.split("::")[-1] for n, *_ in _functions(p, code[p])}
+            if own & C_ENTRY_FUNCS:
+                continue
+            others = "\n".join(c for q, c in everything.items() if q != p)
+            if re.search(r"[\"'/<.]" + re.escape(stem) + r"\.(h|hh|hpp|hxx|c|cc|cpp|cxx)\b", others):
+                continue  # #include "stem.h" (its header), or named by a build file
+            if any(len(n) >= 4 and re.search(r"\b" + re.escape(n) + r"\b", others) for n in own):
+                continue  # one of its functions is called elsewhere
+            out.append(p)
+            continue
         if p.endswith((".kt", ".java", ".cs", ".swift", ".gd")):
             names = {stem} | set(re.findall(r"^(?:\s*(?:public|internal|private|data|sealed|abstract|open|enum|inline|value|annotation)\s+)*"
                                             r"(?:class|object|interface|fun|val|var|typealias)\s+(?:<[^>]*>\s*)?([A-Za-z_]\w+)", everything.get(p, ""), re.M))
@@ -113,6 +132,22 @@ _VISIBLE_LOG_PY = re.compile(r"^(print|(logging|logger|log|self\.log(ger)?)\.(er
 _VISIBLE_LOG_JS = re.compile(r"^(console\.(error|warn|info)|Log\.[ewi]|Timber\.[ewi])\s*\(")
 # Best-effort cleanup whose failure is fine to ignore in Rust/Go (closing, killing, removing, a send to a closed channel).
 _CLEANUP = re.compile(r"\b(kill|start_kill|shutdown|close|Close|remove_file|remove_dir(_all)?|Remove(All)?|flush|abort|send|unlink|set_nonblocking)\s*\(")
+
+
+_DATA_LINE = re.compile(r"^[\s0-9a-fA-FxXuUlL,{}()+\-.]*$")  # 0x00, 0x1f, ... / {12, 34}, ... (comments removed first)
+
+
+def generated_data_files(code: Dict[str, str]) -> set:
+    """C/C++ files that are data, not code: images and fonts converted to byte arrays (LVGL's image and font
+    converters, embedded assets). A file of 200+ lines that is at least 80% bare numbers is never judged as code."""
+    out = set()
+    for p, c in code.items():
+        if not p.endswith(C_EXT):
+            continue
+        lines = [l for l in re.sub(r"/\*.*?\*/|//[^\n]*", "", c, flags=re.S).splitlines() if l.strip()]
+        if len(lines) >= 200 and sum(1 for l in lines if _DATA_LINE.match(l)) >= 0.8 * len(lines):
+            out.add(p)
+    return out
 
 
 def dependency_files(root: Path, everything: Dict[str, str]) -> set:
@@ -188,6 +223,29 @@ def _swallow_js(body: str, intent: bool = False) -> Optional[str]:
     return " and ".join(sorted(kinds)) if kinds else None
 
 
+# C/C++: where an error is reported where whoever runs it sees it, or handed back to the caller.
+_VISIBLE_LOG_CPP = re.compile(r"(std::cerr|cerr\s*<<|fprintf\s*\(\s*stderr|Serial\d?\.print|ESP_LOG[EWI]\s*\(|log_[ewi]\s*\(|"
+                              r"\bAPI\w*->Log\s*\(|\bLog\w*\s*\(|\bLOG\w*\s*\(|spdlog::(error|warn|info|critical)|"
+                              r"q(Warning|Critical)\s*\(|MessageBox\w*\s*\(|ImGui::\w*Text\w*\s*\(|\bthrow\b|\bstd::rethrow)")
+_RETURNS_FAILURE_CPP = re.compile(r"^return\s+(false|nullptr|NULL|-\s*\d+|E_\w+|\w*(ERR|FAIL)\w*|std::nullopt|\{\s*\}|0)\s*$")
+
+
+def _swallow_cpp(body: str) -> Optional[str]:
+    """How a C++ catch block drops the error, or None when it doesn't: an explained, visibly logged, rethrown or
+    failure-returning handler is handling it; empty, or only written to the debugger, is swallowed."""
+    if re.search(r"//|/\*", body):
+        return None  # explained: the comment says why
+    stmts = [x.strip() for x in re.split(r";|\n", body) if x.strip()]
+    if not stmts:
+        return "ignored"
+    if any(_VISIBLE_LOG_CPP.search(x) or _RETURNS_FAILURE_CPP.match(x) for x in stmts):
+        return None
+    if all(re.match(r"(OutputDebugString\w*|printf|std::cout|cout|puts)\b", x) or re.fullmatch(r"\(void\)\s*\w+", x)
+           or x in ("return", "continue", "break") for x in stmts):
+        return "only written to the debug output" if any(re.match(r"OutputDebugString", x) for x in stmts) else "ignored"
+    return None
+
+
 def _swallow_py(body, intent: bool = False) -> Optional[str]:
     kinds = set()
     for st in body:
@@ -250,7 +308,11 @@ def scan(root: Path, intent_aware: bool = False) -> Dict[str, List[Dict[str, obj
     everything = tracked_files(Path(root))
     # v10.4+ (intent_aware): only the author's own code is judged; dependencies they can't change never produce findings.
     deps = dependency_files(root, everything) if intent_aware else set()
-    code = {p: c for p, c in everything.items() if p.endswith(CODE_EXT) and not TEST.search(p) and p not in deps}
+    exts = CODE_EXT + C_EXT if intent_aware else CODE_EXT  # older engines never saw C/C++: keep their results
+    code = {p: c for p, c in everything.items() if p.endswith(exts) and not TEST.search(p) and p not in deps}
+    if intent_aware:  # images/fonts compiled into C arrays aren't code: no lines, no findings
+        for p in generated_data_files(code):
+            del code[p]
     funcs = {p: _functions(p, c) for p, c in code.items()}
     unused = set(_possibly_unused(code, everything))
     findings: List[Dict[str, object]] = []
@@ -290,6 +352,12 @@ def scan(root: Path, intent_aware: bool = False) -> Dict[str, List[Dict[str, obj
                         how = _swallow_py(node.body, intent_aware)
                         if how:
                             add("swallowed error", p, node.lineno, f"an error is caught and {how}; the user is never told", lines[node.lineno - 1])
+        elif intent_aware and p.endswith(C_EXT):
+            for m in re.finditer(r"\bcatch\s*\([^)]*\)\s*\{", c):
+                how = _swallow_cpp(_braced(c, m.end() - 1))
+                if how:
+                    ln = c.count("\n", 0, m.start()) + 1
+                    add("swallowed error", p, ln, f"an error is caught and {how}; the user is never told", lines[ln - 1])
         elif intent_aware and p.endswith((".rs", ".go")):
             for ln, how in (_swallow_rust(c) if p.endswith(".rs") else _swallow_go(c)):
                 add("swallowed error", p, ln, f"an error is caught and {how}; the user is never told", lines[ln - 1])
