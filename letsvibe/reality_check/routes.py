@@ -98,6 +98,25 @@ async def rc_status() -> JSONResponse:
     })
 
 
+def _normalize_text(text: str) -> str:
+    return " ".join(str(text or "").split())
+
+
+def _evaluate_once(pitch: str, platform: str, twist: str, tone: str, job_id: str = "", on_progress=None) -> Dict[str, Any]:
+    """One Reality Check per idea: a saved report for exactly this idea is reused (marked with when it was made),
+    otherwise the idea is checked and saved. Used by the Reality Check tab and by Idea Finder alike."""
+    pitch, twist = _normalize_text(pitch), _normalize_text(twist)
+    saved = _store.find_report(pitch, platform, twist, tone)
+    if saved:
+        if on_progress:
+            on_progress("This idea was already checked: showing the same report.", 95)
+        saved["reused"] = True
+        return saved
+    report = evaluate_idea(pitch=pitch, platform=platform, twist=twist, tone=tone, job_id=job_id, on_progress=on_progress)
+    _store.save_report(report)
+    return report
+
+
 @router.post("/api/rc/evaluate")
 async def rc_evaluate(req: RealityCheckRequest, request: Request) -> JSONResponse:
     _check_rate_limit(_client_ip(request))
@@ -129,15 +148,8 @@ async def rc_evaluate(req: RealityCheckRequest, request: Request) -> JSONRespons
                     _jobs[job_id]["message"] = msg
 
         try:
-            report = evaluate_idea(
-                pitch=pitch,
-                platform=platform,
-                twist=twist,
-                tone=tone,
-                job_id=job_id,
-                on_progress=on_prog,
-            )
-            report_id = _store.save_report(report)
+            report = _evaluate_once(pitch, platform, twist, tone, job_id=job_id, on_progress=on_prog)
+            report_id = report["id"]
             with _jobs_lock:
                 _jobs[job_id]["status"] = "completed"
                 _jobs[job_id]["progress_pct"] = 100
@@ -184,21 +196,15 @@ async def rc_find_idea(req: IdeaFinderRequest, request: Request) -> JSONResponse
         try:
             res = run_idea_finder(
                 generate_json_fn=lambda sp, up: generate_idea_batch_llama(sp, up, job_id=job_id),
-                evaluate_brutal_fn=lambda p, plat, tw: evaluate_idea(
-                    pitch=p,
-                    platform=plat,
-                    twist=tw,
-                    tone="realistic",
-                    job_id=job_id,
-                ),
+                # the same Reality Check as the tab (realistic tone), saved, so "open in Reality Check" shows this report
+                evaluate_fn=lambda p, plat, tw: _evaluate_once(p, plat, tw, "realistic", job_id=job_id),
                 interests=interests,
                 platform=platform,
                 max_cycles=3,
                 on_progress=on_prog,
             )
-            winning_report = res["winning_report"]
-            report_id = _store.save_report(winning_report)
-            winning_report["id"] = report_id
+            winning_report = res["winning_report"] or res["closest_report"]
+            report_id = winning_report.get("id")
             with _jobs_lock:
                 _jobs[job_id]["status"] = "completed"
                 _jobs[job_id]["progress_pct"] = 100

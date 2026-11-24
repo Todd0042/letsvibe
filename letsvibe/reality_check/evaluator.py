@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..evaluator.llama_supervisor_client import ensure_llama_awake, llama_url, llm_lease, touch_engine
 from .grounding import gather_market_grounding
+from .sellability import sellability
 
 _SCHEMA_BLOCK = """Output STRICT JSON ONLY matching this schema:
 {
@@ -79,6 +80,7 @@ _SCHEMA_BLOCK = """Output STRICT JSON ONLY matching this schema:
   ],
   "pricing_recommendation": {
     "suggested_price": "<realistic price + billing cadence, $0 (Free/OSS), or Do Not Monetize>",
+    "buyer": "The specific group most likely to pay this price (e.g. 'mobile wedding DJs'), or 'none'",
     "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
     "reasoning": "2-3 sentences comparing recognizable competitor prices, value delivered, and buyer willingness."
   },
@@ -240,7 +242,7 @@ def evaluate_idea(
             on_progress(msg, pct)
 
     tone = normalize_tone(tone)
-    emit("Checking GitHub & package registries for existing competitors...", 15)
+    emit("Checking GitHub & the App Store for existing competitors...", 15)
     grounding = gather_market_grounding(pitch=pitch, platform=platform, twist=twist)
 
     tone_note = TONE_PROMPTS[tone]
@@ -281,7 +283,8 @@ Recognizable High-Traction Incumbents Check (query: "{grounding.get('query', '')
         if not wake.get("ok"):
             raise RuntimeError(wake.get("error") or "Local AI engine is unavailable.")
         emit("Running deep market saturation & viability analysis...", 65)
-        parsed = _call_shared_llama(system_prompt, user_prompt, max_tokens=4096)
+        # temperature 0: the same idea gets the same answer (Idea Finder's gate and the Reality Check tab agree)
+        parsed = _call_shared_llama(system_prompt, user_prompt, max_tokens=4096, temperature=0.0)
         touch_engine()
 
     dims = parsed.get("dimensions") if isinstance(parsed.get("dimensions"), dict) else {}
@@ -310,7 +313,7 @@ Recognizable High-Traction Incumbents Check (query: "{grounding.get('query', '')
         raw_verdict = "ACTUALLY VIABLE"
 
     emit("Finalizing Reality Check report...", 95)
-    return {
+    report = {
         "pitch": pitch,
         "platform": platform,
         "twist": twist,
@@ -334,3 +337,5 @@ Recognizable High-Traction Incumbents Check (query: "{grounding.get('query', '')
         "grounding": grounding,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    report["sellability"] = sellability(report)
+    return report

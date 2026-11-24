@@ -127,11 +127,6 @@ def gather_market_grounding(pitch: str, platform: str = "Web", twist: str = "") 
         "github_total_count": 0,
         "github_top_repos": [],
         "app_store_hits": [],
-        "npm_total_count": 0,
-        "npm_top_packages": [],
-        "hn_total_hits": 0,
-        "hn_stories": [],
-        "so_questions": [],
     }
 
     with ThreadPoolExecutor(max_workers=2) as pool:

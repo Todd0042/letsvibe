@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 from typing import Any, Dict
+from .sellability import sellability
 
 
 def _esc(val: Any) -> str:
@@ -50,7 +51,14 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
     ) or "<p class='lv-muted'>No viable pivots suggested.</p>"
 
     pr = report.get("pricing_recommendation") or {}
-    pricing_html = (
+    sell = report.get("sellability") or sellability(report)
+    sell_colour = {"viable": "#34d399", "niche": "#fbbf24"}.get(sell["level"], "#f87171")
+    sell_html = (
+        f"<div class='lv-card-item' style='border-color:{sell_colour}'><strong style='color:{sell_colour}'>"
+        f"{'✅' if sell['sellable'] else '⛔'} {_esc(sell['label'])}</strong>"
+        f"<p class='lv-muted' style='margin:0'>{_esc(sell['why'])}</p></div>"
+    )
+    pricing_html = sell_html + (
         f"<div class='lv-card-item'><div class='lv-item-head'><strong>{_esc(pr.get('suggested_price') or 'N/A')}</strong>"
         f"<span class='lv-pill'>{_esc(pr.get('model') or 'Pricing')}</span></div>"
         f"<p class='lv-muted' style='margin:0'>{_esc(pr.get('reasoning') or '')}</p></div>"
@@ -172,7 +180,7 @@ def render_rc_standalone_html(report: Dict[str, Any]) -> str:
   </div>
 
   <div class="card">
-    <h2>💵 Pricing &amp; Market Cost Reality</h2>
+    <h2>💵 Pricing, Buyers &amp; Sellability</h2>
     {pricing_html}
   </div>
 

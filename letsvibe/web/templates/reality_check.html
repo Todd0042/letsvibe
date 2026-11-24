@@ -126,6 +126,11 @@
     .lv-bar-fill { height: 100%; background: linear-gradient(90deg, #00f0ff, #10b981); border-radius: 999px; }
     .card-warn { border-left: 4px solid #f87171; }
     .card-solid { border-left: 4px solid #34d399; }
+    .sell-mark { display:flex; flex-direction:column; gap:0.2rem; border-radius:10px; padding:0.65rem 0.85rem; margin-bottom:0.75rem; border:1px solid; }
+    .sell-mark span { color:#cbd5e1; font-size:0.88rem; }
+    .sell-viable { background:rgba(16,185,129,0.12); border-color:rgba(16,185,129,0.45); color:#34d399; }
+    .sell-niche { background:rgba(245,158,11,0.12); border-color:rgba(245,158,11,0.45); color:#fbbf24; }
+    .sell-none { background:rgba(239,68,68,0.10); border-color:rgba(239,68,68,0.4); color:#f87171; }
     .item-box {
       padding: 0.85rem; border: 1px solid var(--card-border);
       border-radius: 10px; background: rgba(15, 23, 42, 0.55); margin-bottom: 0.75rem;
@@ -226,7 +231,7 @@
     <section class="card">
       <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:1rem;">
         <button type="button" id="mode-btn-rc" class="btn-primary" style="padding:0.5rem 1rem;font-size:0.86rem;" onclick="switchRcMode('rc')">🧪 Reality Check</button>
-        <button type="button" id="mode-btn-if" class="btn-link" style="cursor:pointer;" onclick="switchRcMode('if')">💡 Idea Finder (Brutal Gate)</button>
+        <button type="button" id="mode-btn-if" class="btn-link" style="cursor:pointer;" onclick="switchRcMode('if')">💡 Idea Finder</button>
       </div>
       <div id="rc-mode-header">
         <h1 class="hero-title">Save Your Tokens Before You Write Line 1</h1>
@@ -235,9 +240,9 @@
         </p>
       </div>
       <div id="if-mode-header" hidden>
-        <h1 class="hero-title">Find a Monetizable Gap That Survives Brutal Mode</h1>
+        <h1 class="hero-title">Find an Idea Someone Would Pay For</h1>
         <p class="muted">
-          Optionally share your hobbies, skills, or daily annoyances. We brainstorm diverse niche ideas once, then test up to 3 candidates against the Brutal Reality Check gate until one passes.
+          Optionally share your hobbies, skills, or daily annoyances. We brainstorm diverse niche ideas once, then run up to 3 of them through Reality Check itself. An idea is recommended only if Reality Check finds it could be sold to some group, for any amount.
         </p>
       </div>
       <form id="rc-form" class="form-grid">
@@ -293,7 +298,7 @@
         </div>
         <div style="display:flex;gap:0.85rem;align-items:center;flex-wrap:wrap;">
           <button id="if-submit" type="submit" class="btn-primary"><i class="fa-solid fa-lightbulb"></i> Find Viable Idea (Max 3 Cycles)</button>
-          <span class="muted" style="font-size:0.82rem;">Generates 4–5 candidates once, then gates up to 3 through Brutal Reality Check · Uses AI, AI can make mistakes.</span>
+          <span class="muted" style="font-size:0.82rem;">Generates 4–5 candidates once, then runs up to 3 through Reality Check · Recommends only a sellable idea · Uses AI, AI can make mistakes.</span>
         </div>
       </form>
       <div id="rc-error" class="err-box" hidden></div>
@@ -379,11 +384,20 @@
         </div>`).join("") || `<p class="muted">No viable pivots suggested.</p>`;
 
       const pr = rep.pricing_recommendation || {};
+      const sell = rep.sellability || null;
+      // Sellable = could be sold for some amount to some group (the same rule Idea Finder recommends by)
+      const sellHtml = sell ? `
+        <div class="sell-mark sell-${esc(sell.level)}">
+          <strong>${sell.sellable ? "✅" : "⛔"} ${esc(sell.label)}</strong>
+          <span>${esc(sell.why)}</span>
+        </div>` : "";
       const pricingHtml = (pr.suggested_price || pr.reasoning) ? `
+        ${sellHtml}
         <div class="item-box">
           <div class="item-head"><strong>${esc(pr.suggested_price || "N/A")}</strong><span class="lv-pill">${esc(pr.model || "Pricing")}</span></div>
+          ${pr.buyer && pr.buyer.toLowerCase() !== "none" ? `<p style="margin-bottom:0.35rem;"><strong>Who pays:</strong> ${esc(pr.buyer)}</p>` : ""}
           <p class="muted" style="font-size:0.88rem;">${esc(pr.reasoning || "")}</p>
-        </div>` : `<p class="muted">No pricing recommendation generated.</p>`;
+        </div>` : `${sellHtml}<p class="muted">No pricing recommendation generated.</p>`;
 
       const mp = rep.marketing_playbook || {};
       const hangouts = (mp.where_buyers_hang_out || []).map(h => `<span class="lv-pill">${esc(h)}</span>`).join(" ");
@@ -422,6 +436,7 @@
                 <span class="lv-pill">Est. Waste: ${esc(rep.wasted_hours_estimate)} / ${esc(rep.wasted_tokens_estimate)}</span>
               </div>
               <h2 style="font-size:1.5rem;margin-bottom:0.6rem;">${esc(rep.headline)}</h2>
+              ${rep.reused ? `<p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem;">This exact idea was checked on ${esc(String(rep.created_at || "").slice(0, 10))}: the same idea always gets the same report.</p>` : ""}
               <p style="color:#cbd5e1;white-space:pre-line;">${esc(rep.executive_summary)}</p>
               <div style="display:flex;gap:0.6rem;margin-top:1rem;flex-wrap:wrap;">
                 ${htmlUrl ? `<a class="btn-link" href="${htmlUrl}"><i class="fa-solid fa-download"></i> Download HTML Report</a>` : ""}
@@ -456,7 +471,7 @@
         </div>
 
         <div class="card">
-          <h2 style="margin-bottom:0.85rem;">💵 Pricing &amp; Market Cost Reality</h2>
+          <h2 style="margin-bottom:0.85rem;">💵 Pricing, Buyers &amp; Sellability</h2>
           ${pricingHtml}
         </div>
 
@@ -559,21 +574,19 @@
       const r = rep || fr.winning_report || {};
       const pr = r.pricing_recommendation || {};
       const li = r.liability_and_entity || {};
+      const sell = r.sellability || {};
       const flaws = (r.fatal_flaws || []).map(x => `- ${x}`).join("\n") || "- None listed";
       const redeeming = (r.redeeming_angles || []).map(x => `- ${x}`).join("\n") || "- Focused niche value";
-      const gateNote = fr.passed_brutal_gate
-        ? `Passed Brutal Reality Check Gate (${Number(r.viability_score || 0).toFixed(1)}/10, ${r.verdict})`
-        : `Top survivor after ${fr.cycles_used} Brutal Reality Check cycles (${Number(r.viability_score || 0).toFixed(1)}/10, ${r.verdict})`;
       return [
-        `Build a clean, modular implementation plan for the following validated product idea:`,
+        `Build a clean, modular implementation plan for the following product idea:`,
         ``,
         `Title: ${sel.title || r.headline || "Niche Product"}`,
         `Target Platform: ${r.platform || fr.platform || "Web"}`,
-        `Target Buyer: ${sel.target_buyer || "Niche end users"}`,
+        `Target Buyer: ${pr.buyer || sel.target_buyer || "Niche end users"}`,
         `Pitch: ${sel.pitch || r.pitch || ""}`,
         `Unique Twist / Edge: ${sel.twist || r.twist || "Focused workflow"}`,
         ``,
-        `Why It Passed Brutal Reality Check (${gateNote}):`,
+        `Reality Check result: ${sell.label || r.verdict} (${Number(r.viability_score || 0).toFixed(1)}/10). ${sell.why || ""}`,
         `- Verdict Headline: ${r.headline || ""}`,
         `- Summary: ${r.executive_summary || ""}`,
         `- Recommended Pricing: ${pr.suggested_price || "N/A"} (${pr.model || "N/A"})`,
@@ -593,27 +606,38 @@
       const box = document.getElementById("if-gate-summary");
       if (!box || !fr) return;
       box.hidden = false;
-      const sel = fr.selected_idea || {};
-      const statusText = fr.passed_brutal_gate
-        ? `✅ Passed Brutal Gate on Cycle ${fr.cycles_used}/${fr.max_cycles}`
-        : `⚠️ Best Survivor After ${fr.cycles_used}/${fr.max_cycles} Brutal Cycles`;
-      const attemptsHtml = (fr.attempts || []).map(a => `
+      const sel = fr.selected_idea;
+      const attemptsHtml = (fr.attempts || []).map(a => {
+        const s = a.sellability || {};
+        const link = a.report_id ? ` <a class="btn-link" style="padding:0.15rem 0.55rem;font-size:0.78rem;" href="/r/${encodeURIComponent(a.report_id)}">Open in Reality Check</a>` : "";
+        return `
         <div class="item-box">
           <div class="item-head">
             <strong>#${Number(a.cycle)}: ${esc(a.title)}</strong>
-            <span class="lv-pill">${a.passed ? "✅ PASSED" : "❌ REJECTED"} · ${Number(a.viability_score || 0).toFixed(1)}/10 · ${esc(a.verdict)}</span>
+            <span class="lv-pill">${a.passed ? "✅" : "⛔"} ${esc(s.label || a.verdict)} · ${Number(a.viability_score || 0).toFixed(1)}/10</span>
           </div>
-          <p class="muted" style="font-size:0.86rem;">${esc(a.headline)} (${esc(a.suggested_price)})</p>
-        </div>`).join("");
+          <p class="muted" style="font-size:0.86rem;">${esc(s.why || a.headline)}${link}</p>
+        </div>`;
+      }).join("");
+      const log = `<h3 style="font-size:0.95rem;margin:1rem 0 0.6rem;">Reality Check results (${(fr.attempts || []).length} tested from ${(fr.saved_candidates || []).length} brainstormed)</h3>${attemptsHtml}`;
+      if (!sel) {
+        box.innerHTML = `
+          <div class="meta-pills" style="margin-bottom:0.65rem;"><span class="lv-pill">⛔ No sellable idea this time</span></div>
+          <h2 style="margin-bottom:0.4rem;">None of the ${(fr.attempts || []).length} ideas passed Reality Check</h2>
+          <p class="muted">Idea Finder only recommends an idea Reality Check finds could be sold to some group. Try again, or add your hobbies and skills for more grounded ideas. The closest one's full report is below for reference: it is not a recommendation.</p>
+          ${log}`;
+        return;
+      }
+      const s = (rep && rep.sellability) || {};
       const llmPrompt = buildFinderLlmPrompt(fr, rep);
       box.innerHTML = `
         <div class="meta-pills" style="margin-bottom:0.65rem;">
-          <span class="lv-pill">${esc(statusText)}</span>
-          ${sel.target_buyer ? `<span class="lv-pill">Buyer: ${esc(sel.target_buyer)}</span>` : ""}
+          <span class="lv-pill">✅ ${esc(s.label || "Sellable")} (Reality Check ${Number((rep || {}).viability_score || 0).toFixed(1)}/10)</span>
         </div>
-        <h2 style="margin-bottom:0.4rem;">💡 Winning Idea: ${esc(sel.title || "Niche Concept")}</h2>
+        <h2 style="margin-bottom:0.4rem;">💡 Recommended Idea: ${esc(sel.title || "Niche Concept")}</h2>
         <p style="color:#cbd5e1;margin-bottom:0.5rem;">${esc(sel.pitch || "")}</p>
-        ${sel.twist ? `<p class="muted" style="font-size:0.88rem;margin-bottom:0.85rem;"><strong>Edge / Twist:</strong> ${esc(sel.twist)}</p>` : ""}
+        ${sel.twist ? `<p class="muted" style="font-size:0.88rem;margin-bottom:0.5rem;"><strong>Edge / Twist:</strong> ${esc(sel.twist)}</p>` : ""}
+        <p class="muted" style="font-size:0.88rem;margin-bottom:0.85rem;">${esc(s.why || "")} Its full Reality Check report is below; checking this idea in the Reality Check tab gives the same report.</p>
         <div style="margin:0.85rem 0 1rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.35rem;flex-wrap:wrap;">
             <label for="if-llm-prompt" style="margin:0;">📋 Prompt for Your LLM (Implementation Plan)</label>
@@ -621,8 +645,7 @@
           </div>
           <textarea id="if-llm-prompt" rows="8" readonly style="font-family:ui-monospace,monospace;font-size:0.82rem;">${esc(llmPrompt)}</textarea>
         </div>
-        <h3 style="font-size:0.95rem;margin-bottom:0.6rem;">Brutal Gate Log (${(fr.attempts || []).length} tested from ${(fr.saved_candidates || []).length} saved candidates)</h3>
-        ${attemptsHtml}`;
+        ${log}`;
     }
 
     async function pollRcJob(jobId, opts = {}) {

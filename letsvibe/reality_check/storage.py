@@ -7,7 +7,7 @@ import os
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -72,6 +72,18 @@ class RealityCheckStore:
             )
             conn.commit()
         return report_id
+
+    def find_report(self, pitch: str, platform: str, twist: str, tone: str, max_age_days: int = 30) -> Optional[Dict[str, Any]]:
+        """The latest report for exactly this idea (same text, platform, twist and tone) from the last `max_age_days`:
+        checking the same idea again returns the same answer, and Idea Finder's result is the one the tab shows."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT report_json FROM rc_reports WHERE pitch = ? AND platform = ? AND twist = ? AND tone = ? "
+                "AND created_at >= ? ORDER BY created_at DESC LIMIT 1",
+                (pitch[:2000], platform[:64], twist[:1000], tone[:32], cutoff),
+            ).fetchone()
+        return json.loads(row["report_json"]) if row else None
 
     def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
         clean_id = "".join(ch for ch in str(report_id) if ch.isalnum() or ch in ("-", "_"))[:32]

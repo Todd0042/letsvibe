@@ -25,13 +25,11 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
             "platform": platform,
             "github_total_count": 48000,
             "github_top_repos": [{"full_name": "example/todo", "stars": 12000, "language": "TS", "description": "Todo app", "url": ""}],
-            "npm_total_count": 5000,
-            "npm_top_packages": [],
-        }
+            }
 
     captured_prompts: List[str] = []
 
-    def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2000):
+    def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2000, **_options):
         captured_prompts.append(user_prompt)
         return {
             "verdict": "DO NOT BUILD",
@@ -145,7 +143,7 @@ def test_reality_check_e2e_flow_host_routing_and_xss(monkeypatch, tmp_path) -> N
     assert any("WHISPER SWEET NOTHINGS" in p for p in captured_prompts)
 
 
-def test_idea_finder_e2e_optional_interests_and_brutal_gate(monkeypatch, tmp_path) -> None:
+def test_idea_finder_recommends_the_first_sellable_idea(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LETSVIBE_RC_IDEA_HISTORY_PATH", str(tmp_path / "idea_hist.json"))
     monkeypatch.setattr(rc_routes, "_store", rc_routes.RealityCheckStore(str(tmp_path / "rc_if.db")))
     monkeypatch.setattr(rc_routes, "_RATE_MAX_HITS", 20)
@@ -168,7 +166,7 @@ def test_idea_finder_e2e_optional_interests_and_brutal_gate(monkeypatch, tmp_pat
 
     gate_calls = {"n": 0}
 
-    def fake_brutal(system_prompt: str, user_prompt: str, max_tokens: int = 4096):
+    def fake_brutal(system_prompt: str, user_prompt: str, max_tokens: int = 4096, **_options):
         gate_calls["n"] += 1
         if gate_calls["n"] == 1:
             return {
@@ -205,12 +203,15 @@ def test_idea_finder_e2e_optional_interests_and_brutal_gate(monkeypatch, tmp_pat
         time.sleep(0.05)
     assert res is not None
     fr = res["finder_result"]
-    assert fr["passed_brutal_gate"] is True
+    assert fr["passed_reality_check"] is True
     assert fr["cycles_used"] == 2
     assert len(fr["attempts"]) == 2
     assert fr["attempts"][0]["passed"] is False
     assert fr["attempts"][1]["passed"] is True
     assert fr["selected_idea"]["title"] == "Offline Track Telemetry"
+    # NICHE ONLY at $49 one-time: sellable, labelled as niche, in the report the UI shows
+    assert fr["attempts"][1]["sellability"]["label"] == "Sellable: niche only"
+    assert res["report"]["sellability"]["sellable"] is True
     assert (tmp_path / "idea_hist.json").exists()
 
 
@@ -238,7 +239,7 @@ def test_reality_check_e2e_github_rate_limit_graceful_fallback(monkeypatch, tmp_
 
     captured_prompts: List[str] = []
 
-    def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 4096):
+    def fake_llama(system_prompt: str, user_prompt: str, max_tokens: int = 4096, **_options):
         captured_prompts.append(user_prompt)
         return {
             "verdict": "NICHE ONLY",
@@ -267,3 +268,56 @@ def test_reality_check_e2e_github_rate_limit_graceful_fallback(monkeypatch, tmp_
     assert len(captured_prompts) == 1
     assert "rate-limited" in captured_prompts[0].lower()
     assert "no widely-known >=500-star github" not in captured_prompts[0].lower()
+
+
+def test_idea_finder_and_reality_check_agree_daily_bark(monkeypatch, tmp_path) -> None:
+    """The approvers' case: Idea Finder recommended "Daily Bark", then Reality Check scored the same idea 3.5 (Do
+    Not Build). Now Idea Finder's gate IS Reality Check (same prompt, temperature 0, same text): an idea that isn't
+    sellable is never recommended, and checking it in the Reality Check tab returns that same report."""
+    monkeypatch.setenv("LETSVIBE_RC_IDEA_HISTORY_PATH", str(tmp_path / "idea_hist.json"))
+    monkeypatch.setattr(rc_routes, "_store", rc_routes.RealityCheckStore(str(tmp_path / "rc_bark.db")))
+    monkeypatch.setattr(rc_routes, "_RATE_MAX_HITS", 20)
+    monkeypatch.setattr(rc_eval, "gather_market_grounding", lambda pitch, platform="Web", twist="": {"query": "dog", "github_top_repos": [], "app_store_hits": []})
+    monkeypatch.setattr(rc_eval, "ensure_llama_awake", lambda **_: {"ok": True, "state": "awake"})
+    monkeypatch.setattr(rc_routes, "generate_idea_batch_llama", lambda sp, up, job_id="": {"candidates": [
+        {"title": "Daily Bark", "pitch": "A daily dog-walk diary that reminds owners to walk their dog.", "twist": "Streaks", "target_buyer": "Dog owners", "why_monetizable": "Subs"},
+        {"title": "Leash Log", "pitch": "Another generic pet habit tracker for busy dog owners.", "twist": "Dark mode", "target_buyer": "Dog owners", "why_monetizable": "Subs"},
+        {"title": "Kennel Board", "pitch": "A free open-source kennel whiteboard for volunteer shelters.", "twist": "Offline", "target_buyer": "Shelters", "why_monetizable": "Donations"},
+    ]})
+    calls = []
+
+    def model(system_prompt: str, user_prompt: str, max_tokens: int = 4096, temperature: float = 0.25):
+        calls.append((user_prompt, temperature))
+        if "Kennel Board" in user_prompt:  # a fine idea nobody pays for
+            return {"verdict": "NICHE ONLY", "headline": "Useful but free", "viability_score": 5.0,
+                    "dimensions": {"d": {"label": "D", "score": 5.0, "weight": 100, "reasoning": "ok"}},
+                    "pricing_recommendation": {"suggested_price": "$0 (Free / OSS)", "model": "Free / OSS", "buyer": "none"}}
+        return {"verdict": "DO NOT BUILD", "headline": "Saturated habit tracker", "viability_score": 3.5,
+                "dimensions": {"d": {"label": "D", "score": 3.5, "weight": 100, "reasoning": "crowded"}},
+                "pricing_recommendation": {"suggested_price": "Do Not Monetize", "model": "Do Not Monetize"}}
+
+    monkeypatch.setattr(rc_eval, "_call_shared_llama", model)
+    client = TestClient(app)
+
+    def wait(job_id):
+        for _ in range(60):
+            jr = client.get(f"/api/rc/job/{job_id}").json()
+            if jr["status"] in ("completed", "failed"):
+                return jr
+            time.sleep(0.05)
+        raise AssertionError("job did not finish")
+
+    res = wait(client.post("/api/rc/find-idea", json={"interests": "dogs", "platform": "Android"}).json()["job_id"])
+    fr = res["finder_result"]
+    assert fr["passed_reality_check"] is False and fr["selected_idea"] is None and fr["winning_report"] is None
+    assert [a["passed"] for a in fr["attempts"]] == [False, False, False]
+    assert fr["attempts"][2]["sellability"]["why"].startswith("Reality Check found no price")
+    assert all(t == 0.0 for _, t in calls)  # deterministic: temperature 0 for every check
+    assert "Daily Bark: A daily dog-walk diary" in calls[0][0]  # the gate graded title + pitch, as the tab will
+
+    # The user checks Daily Bark in the Reality Check tab with the text Idea Finder showed: same report, no new call
+    bark = fr["attempts"][0]
+    n = len(calls)
+    rc = wait(client.post("/api/rc/evaluate", json={"pitch": bark["pitch"], "platform": "Android", "twist": bark["twist"], "tone": "realistic"}).json()["job_id"])
+    assert len(calls) == n
+    assert rc["report"]["id"] == bark["report_id"] and rc["report"]["viability_score"] == 3.5 and rc["report"]["reused"] is True

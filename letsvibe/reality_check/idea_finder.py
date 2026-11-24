@@ -1,4 +1,4 @@
-"""Inverse Reality Check (Idea Finder): generates diverse hobby/niche ideas and gates them through Reality Check."""
+"""Idea Finder: brainstorms niche ideas and recommends one only if Reality Check finds it sellable."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+
+from .sellability import sellability
 
 _TTL_SECONDS = 3 * 24 * 3600  # 3 days
 
@@ -50,7 +52,6 @@ _OPEN_DOMAINS = [
     "property-preservation, pool-service & irrigation techs",
 ]
 
-_PASS_MIN_SCORE = 6.0
 
 
 def _default_history_path() -> Path:
@@ -143,7 +144,7 @@ def _build_generator_prompts(
         )
 
     system_prompt = """You are LetsVibe: Idea Finder — an elite niche-product strategist who finds genuinely viable, high-moat software gaps.
-Your job is to invent concrete, monetizable software ideas that WILL pass a strict Reality Check (>= 6.0/10 viability).
+Your job is to invent concrete software ideas that a specific group of people would pay for, so they pass Reality Check.
 
 Rules:
 1. NEVER suggest generic AI wrappers, TODO lists, habit trackers, generic chatbots, or "AI assistant for X" CRUD apps.
@@ -175,16 +176,29 @@ Generate {count} distinct, non-obvious product candidates. Vary them across thes
     return system_prompt, user_prompt
 
 
+def idea_text(candidate: Dict[str, str]) -> str:
+    """The exact text Reality Check grades for a candidate; also what its Reality Check tab is filled with, so both
+    always look at the same idea."""
+    title = str(candidate.get("title") or "").strip()
+    pitch = str(candidate.get("pitch") or "").strip()
+    return f"{title}: {pitch}" if title and not pitch.lower().startswith(title.lower()) else pitch
+
+
 def run_idea_finder(
     generate_json_fn: Callable[[str, str], Dict[str, Any]],
-    evaluate_brutal_fn: Callable[[str, str, str], Dict[str, Any]],
+    evaluate_fn: Callable[[str, str, str], Dict[str, Any]],
     interests: str = "",
     platform: str = "Web",
     max_cycles: int = 3,
     on_progress: Optional[Callable[[str, int], None]] = None,
     history_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """Generates candidate ideas once, avoids 3-day repeat keywords, and gates up to `max_cycles`."""
+    """Brainstorms candidates once (avoiding 3-day repeat keywords), then runs each through Reality Check itself
+    (`evaluate_fn`: the same check as the Reality Check tab, realistic tone) until one is sellable.
+
+    An idea is recommended only if Reality Check says it can be sold for some amount to some group
+    (sellability.py). If none of the `max_cycles` candidates is, nothing is recommended: the result says so and
+    lists what was tested with its real Reality Check result."""
     def emit(msg: str, pct: int) -> None:
         if on_progress:
             on_progress(msg, pct)
@@ -221,61 +235,48 @@ def run_idea_finder(
     _record_history(candidates, history_path)
 
     attempts: List[Dict[str, Any]] = []
-    winner_report: Optional[Dict[str, Any]] = None
-    winner_candidate: Optional[Dict[str, str]] = None
-    best_report: Optional[Dict[str, Any]] = None
-    best_candidate: Optional[Dict[str, str]] = None
-    best_score = -1.0
-
+    winner: Optional[Dict[str, Any]] = None
+    closest: Optional[Dict[str, Any]] = None
     for idx, cand in enumerate(candidates[:capped_cycles]):
         pct_base = 25 + int((idx / capped_cycles) * 65)
-        emit(f"Reality Check Gate ({idx + 1}/{capped_cycles}): testing '{cand['title']}'...", pct_base)
-        report = evaluate_brutal_fn(cand["pitch"], platform, cand["twist"])
-        score = float(report.get("viability_score") or 0.0)
-        verdict = str(report.get("verdict") or "DO NOT BUILD").upper()
-        pricing_model = str((report.get("pricing_recommendation") or {}).get("model") or "")
-        passed = (
-            score >= _PASS_MIN_SCORE
-            and verdict != "DO NOT BUILD"
-            and pricing_model.strip().lower() != "do not monetize"
-        )
-
-        attempts.append({
+        emit(f"Reality Check ({idx + 1}/{capped_cycles}): '{cand['title']}'...", pct_base)
+        text = idea_text(cand)
+        report = evaluate_fn(text, platform, cand["twist"])
+        sell = report.get("sellability") or sellability(report)
+        report["sellability"] = sell
+        attempt = {
             "cycle": idx + 1,
             "title": cand["title"],
-            "pitch": cand["pitch"],
+            "pitch": text,
             "twist": cand["twist"],
             "target_buyer": cand["target_buyer"],
-            "verdict": verdict,
-            "viability_score": score,
-            "headline": str(report.get("headline") or verdict),
+            "verdict": str(report.get("verdict") or "DO NOT BUILD").upper(),
+            "viability_score": float(report.get("viability_score") or 0.0),
+            "headline": str(report.get("headline") or ""),
             "suggested_price": str((report.get("pricing_recommendation") or {}).get("suggested_price") or "N/A"),
-            "passed": passed,
-        })
-
-        if score > best_score:
-            best_score = score
-            best_report = report
-            best_candidate = cand
-
-        if passed:
-            winner_report = report
-            winner_candidate = cand
+            "sellability": sell,
+            "passed": bool(sell["sellable"]),
+            "report_id": report.get("id"),
+        }
+        attempts.append(attempt)
+        if closest is None or attempt["viability_score"] > closest["attempt"]["viability_score"]:
+            closest = {"attempt": attempt, "report": report, "candidate": cand}
+        if attempt["passed"]:
+            winner = {"attempt": attempt, "report": report, "candidate": dict(cand, pitch=text)}
             break
-
-    final_report = winner_report or best_report
-    final_cand = winner_candidate or best_candidate
-    assert final_report is not None and final_cand is not None
 
     emit("Idea Finder complete.", 100)
     return {
         "interests": (interests or "").strip(),
         "platform": platform,
-        "passed_brutal_gate": winner_report is not None,
+        "passed_reality_check": winner is not None,
         "cycles_used": len(attempts),
         "max_cycles": capped_cycles,
         "saved_candidates": candidates,
         "attempts": attempts,
-        "selected_idea": final_cand,
-        "winning_report": final_report,
+        # only a sellable idea is ever recommended
+        "selected_idea": winner["candidate"] if winner else None,
+        "winning_report": winner["report"] if winner else None,
+        # shown as "closest, not recommended" when nothing passed
+        "closest_report": None if winner else closest["report"],
     }
