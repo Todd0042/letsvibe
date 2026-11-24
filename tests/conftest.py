@@ -24,6 +24,14 @@ os.environ.update({
     "LETSVIBE_SUPERVISOR_URL": "http://127.0.0.1:9",
 })
 
+# The engine package, as the site's containers get it (PYTHONPATH=/engine, the letsvibe-engine checkout):
+# LETSVIBE_ENGINE_PATH, else the checkout next to this repo. Without it every v10 submission is "unknown audit mode".
+import sys  # noqa: E402
+
+_ENGINE = Path(os.environ.get("LETSVIBE_ENGINE_PATH") or Path(__file__).resolve().parents[2] / "letsvibe-engine")
+if (_ENGINE / "letsvibe_engine").is_dir() and str(_ENGINE) not in sys.path:
+    sys.path.insert(0, str(_ENGINE))
+
 import pytest  # noqa: E402
 from letsvibe.storage.db import init_db  # noqa: E402
 
@@ -58,21 +66,3 @@ def isolate_test_database(tmp_path, monkeypatch):
     monkeypatch.setattr(image_proxy, "CACHE_DIR", tmp_path / "img_cache")
     init_db(test_db)
     yield test_db
-
-
-def sign_in(client, username: str, github_id: str, is_admin: bool = False) -> None:
-    """Registers the user (sessions are only valid for existing accounts) and sets a signed session cookie."""
-    from letsvibe.core.auth import SESSION_COOKIE_NAME, create_session_token
-    from letsvibe.storage.db import upsert_user
-
-    client.cookies.set(SESSION_COOKIE_NAME, accepted_token(github_id, username, is_admin))
-
-
-def accepted_token(github_id: str, username: str, is_admin: bool = False) -> str:
-    """A signed session for an account that exists and has accepted the current Terms of Use (core/legal.py)."""
-    from letsvibe.core.auth import create_session_token
-    from letsvibe.core.legal import TERMS_VERSION
-    from letsvibe.storage.db import upsert_user
-
-    upsert_user(github_id=github_id, username=username, terms_version=TERMS_VERSION)
-    return create_session_token({"github_id": github_id, "username": username, "is_admin": is_admin})

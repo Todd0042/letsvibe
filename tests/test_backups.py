@@ -114,7 +114,7 @@ def test_clearing_the_database_deletes_all_backups():
 def test_my_data_delete_all_reaches_backups(monkeypatch):
     from starlette.testclient import TestClient
 
-    from conftest import sign_in
+    from auth_helpers import sign_in
     from letsvibe.web.server import app
 
     monkeypatch.setattr("letsvibe.web.privacy_jobs.PAUSE_BETWEEN_ITEMS_SEC", 0)

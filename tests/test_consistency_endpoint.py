@@ -12,7 +12,7 @@ from letsvibe.web.server import app
 
 @pytest.fixture
 def admin_client(monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
     c = TestClient(app)
     sign_in(c, "Todd0042", "1", is_admin=True)
     monkeypatch.setenv("LETSVIBE_ADMIN_TEST_SUBMISSIONS", "1")
@@ -26,7 +26,7 @@ def test_consistency_test_requires_admin_and_test_mode(monkeypatch, admin_client
     assert anon.get("/api/admin/consistency-results").status_code in (401, 403)
 
     # Non-admin user -> 403
-    from conftest import sign_in
+    from auth_helpers import sign_in
     user_client = TestClient(app)
     sign_in(user_client, "someoneelse", "2", is_admin=False)
     assert user_client.post("/api/admin/queue/consistency-test", json={"target": "https://github.com/Todd0042/deciflux"}).status_code == 403

@@ -71,10 +71,12 @@ def test_test_projects_never_win_badges_or_move_public_grades():
     assert get_project_detail("stranger/huge", include_test=True)["letter_grade"] != "?"
 
 
-def test_rescans_keep_the_flag_it_was_created_with():
+def test_test_projects_stay_hidden_until_their_owner_submits_them():
     _add("stranger/theirs", 50.0, is_test=True)
-    _add("stranger/theirs", 55.0, is_test=False)  # e.g. an admin force re-scan
+    _add("stranger/theirs", 52.0, is_test=True)  # admin re-scans carry the project's flag (server: rescan endpoint)
     assert get_project_detail("stranger/theirs") is None
+    _add("stranger/theirs", 55.0, is_test=False)  # the owner submits their own repo: now it's a public project
+    assert get_project_detail("stranger/theirs")["final_score"] == 55.0
 
 
 def test_scan_history_lists_every_grade_and_opens_an_earlier_one():
@@ -105,7 +107,7 @@ def _fake_ls_remote(monkeypatch):
 
 
 def test_admin_test_submissions_need_the_setting(client, monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _fake_ls_remote(monkeypatch)
     sign_in(client, "Todd0042", "1", is_admin=True)
@@ -142,7 +144,7 @@ def test_admin_test_submissions_need_the_setting(client, monkeypatch):
 
 
 def test_only_the_admin_gets_test_mode(client, monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _fake_ls_remote(monkeypatch)
     monkeypatch.setenv("LETSVIBE_ADMIN_TEST_SUBMISSIONS", "1")
@@ -151,7 +153,7 @@ def test_only_the_admin_gets_test_mode(client, monkeypatch):
 
 
 def test_sharing_a_test_project_opens_its_badge_and_report_by_link_only(client):
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _add("Todd0042/mine", 70.0)
     _add("stranger/theirs", 95.0, is_test=True)
@@ -180,7 +182,7 @@ def test_sharing_a_test_project_opens_its_badge_and_report_by_link_only(client):
 
 
 def test_only_the_admin_shares_and_only_test_projects(client):
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _add("Todd0042/mine", 70.0)
     _add("stranger/theirs", 95.0, is_test=True)

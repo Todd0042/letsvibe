@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from conftest import sign_in
+from auth_helpers import sign_in
 from letsvibe.analyzers.code_scan import FUNCTIONALITY_KINDS, scan
 from letsvibe.evaluator.experience import rubric, scoring
 from letsvibe.evaluator.experience.describe import problems

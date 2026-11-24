@@ -35,7 +35,7 @@ def _seed_public_project(full_slug: str = "someone/cool-app"):
 
 
 def test_content_report_hides_project_and_admin_can_restore_or_remove():
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _seed_public_project("alice/demo-app")
     anon = TestClient(app)
@@ -87,7 +87,7 @@ def test_content_report_hides_project_and_admin_can_restore_or_remove():
 
 
 def test_content_report_rate_limit():
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     for idx in range(1, 5):
         _seed_public_project(f"dev/app-{idx}")
@@ -107,7 +107,7 @@ def test_content_report_rate_limit():
 
 def test_enqueue_requires_confirmations(monkeypatch):
     import subprocess
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     monkeypatch.setattr(
         subprocess,

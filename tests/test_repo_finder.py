@@ -65,7 +65,7 @@ def test_skips_known_repos_forks_and_link_lists():
 
 @pytest.fixture
 def admin_client(monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
     c = TestClient(app)
     sign_in(c, "Todd0042", "1", is_admin=True)
     return c
@@ -103,7 +103,7 @@ def test_endpoint_reports_the_github_limit(admin_client, monkeypatch):
 
 
 def test_only_the_admin_can_use_it(monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
     monkeypatch.setenv("LETSVIBE_ADMIN_TEST_SUBMISSIONS", "1")
     c = TestClient(app)
     assert c.post("/api/admin/queue/find-random").status_code == 403

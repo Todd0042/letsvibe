@@ -9,7 +9,7 @@ from letsvibe.core.platforms import PlatformDetection, find_entry_file
 from letsvibe.evaluator.classifier import CLASSIFIER_SYSTEM_PROMPT, classify_project, merge_classification
 from letsvibe.storage.db import get_leaderboard, get_project_detail, init_db, save_report_to_db, update_report_classification
 from letsvibe.storage.identity import parse_repo_identity
-from tests.conftest import accepted_token
+from auth_helpers import accepted_token
 
 
 def _write(root: Path, rel: str, text: str = "") -> None:
@@ -106,7 +106,7 @@ def test_reclassify_mode_is_admin_only():
     from letsvibe.web.server import app
 
     client = TestClient(app)
-    from conftest import sign_in
+    from auth_helpers import sign_in
     sign_in(client, "someone", "7")
     r = client.post("/api/queue/enqueue", json={"target": "https://github.com/a/b", "mode": "reclassify"})
     assert r.status_code == 400

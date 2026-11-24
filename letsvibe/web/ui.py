@@ -304,10 +304,10 @@ def _render_version_bar(
     )
     return (
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.85rem;">'
-        '<label style="font-size:0.82rem;color:#94a3b8;display:inline-flex;align-items:center;gap:0.5rem;">'
+        '<label style="font-size:0.82rem;color:#94a3b8;display:inline-flex;flex-wrap:wrap;align-items:center;gap:0.5rem;min-width:0;max-width:100%;">'
         '<span>Document version:</span>'
         '<select aria-label="Document version history" onchange="if(this.value)window.location.href=this.value;" '
-        'style="background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,0.28);border-radius:8px;padding:0.3rem 0.55rem;font-size:0.82rem;">'
+        'style="background:#0f172a;color:#e2e8f0;border:1px solid rgba(148,163,184,0.28);border-radius:8px;padding:0.3rem 0.55rem;font-size:0.82rem;max-width:100%;min-width:0;text-overflow:ellipsis;">'
         + "".join(opts)
         + '</select></label>'
         f'<a href="{toggle_href}" style="{toggle_style}border-radius:8px;padding:0.3rem 0.7rem;font-size:0.8rem;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem;">'

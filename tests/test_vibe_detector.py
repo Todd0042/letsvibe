@@ -195,7 +195,7 @@ def _run_worker(tmp_path, monkeypatch, verdict):
         def model_dump(self, mode="json"): return {"repo_name": "proj", "final_vibe_score": 70.0}
 
     graded = []
-    monkeypatch.setattr(w.RepositoryIngestor, "ingest", staticmethod(lambda target: Packed()))
+    monkeypatch.setattr(w.RepositoryIngestor, "ingest", staticmethod(lambda target, **options: Packed()))
     monkeypatch.setattr(w.VibeDetector, "evaluate", classmethod(lambda cls, *a, **k: VibeCheckResult(*verdict)))
     monkeypatch.setattr(w, "OllamaClient", Client)
     monkeypatch.setattr(w, "gather_metrics", lambda packed: (type("M", (), {"readme_excerpt": ""})(), None))

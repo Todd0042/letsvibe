@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from conftest import sign_in
+from auth_helpers import sign_in
 from letsvibe.storage.db import get_db_connection, get_leaderboard, get_project_detail, init_db, save_report_to_db
 from letsvibe.storage.identity import parse_repo_identity
 from letsvibe.web.server import app

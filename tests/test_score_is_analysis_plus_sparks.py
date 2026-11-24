@@ -29,7 +29,7 @@ def _board(client, **params):
 
 
 def test_score_is_the_analysis_plus_sparks_everywhere():
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     for p in PROJECTS:
         _grade(*p)

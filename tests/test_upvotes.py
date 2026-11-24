@@ -35,7 +35,7 @@ def _seed_project(full_slug: str = "alice/spark-app"):
 
 
 def test_spark_upvote_toggle_and_account_deletion_cleanup():
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     _seed_project("alice/spark-app")
     _seed_project("alice/second-app")

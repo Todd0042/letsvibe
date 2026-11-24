@@ -8,7 +8,7 @@ from letsvibe.web.server import app
 
 
 def test_admin_batch_own_repos_auth_and_queue(monkeypatch):
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     anon = TestClient(app)
     user = TestClient(app)

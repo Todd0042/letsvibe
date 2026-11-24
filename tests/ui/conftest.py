@@ -27,8 +27,7 @@ from letsvibe.storage.db import init_db, save_report_to_db, update_queue_setting
 from letsvibe.storage.identity import parse_repo_identity  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-UI_SECRET = "ui-test-session-secret-0123456789abcdef-0123456789"
-UI_STATE = {}
+from ui_helpers import UI_SECRET, UI_STATE, session_cookie_for  # noqa: E402,F401 (shared with the tests)
 SCREENS = REPO_ROOT / "test-results" / "screens"
 
 SEED = [
@@ -111,14 +110,3 @@ def browser():
         b = p.chromium.launch()
         yield b
         b.close()
-
-
-def session_cookie_for(base: str, username: str, github_id: str) -> dict:
-    """Registers a user in the UI test database and returns a Playwright cookie signed with the server's secret."""
-    from letsvibe.core.auth import SESSION_COOKIE_NAME, create_session_token
-    from letsvibe.storage.db import upsert_user
-
-    from letsvibe.core.legal import TERMS_VERSION
-    upsert_user(github_id=github_id, username=username, db_path=UI_STATE["db"], terms_version=TERMS_VERSION)
-    token = create_session_token({"github_id": github_id, "username": username, "is_admin": False}, secret=UI_SECRET.encode())
-    return {"name": SESSION_COOKIE_NAME, "value": token, "url": base}

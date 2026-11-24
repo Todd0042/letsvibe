@@ -134,6 +134,10 @@ def test_discover_screenshot_urls_remote_tree_and_readme(monkeypatch):
             return FakeResp(404)
 
     monkeypatch.setattr(sc.httpx, "Client", FakeClient)
+    # Without a token the tree comes through the shared, cached GitHub client (core/github_client.py)
+    from types import SimpleNamespace
+    tree = FakeClient().get("https://api.github.com/repos/alice/demo/git/trees/HEAD")
+    monkeypatch.setattr(sc, "github_get_json", lambda url, **kw: SimpleNamespace(ok=True, data=tree.json(), status=200))
 
     urls = sc.discover_screenshot_urls_remote("alice", "demo", limit=4)
     assert urls == [

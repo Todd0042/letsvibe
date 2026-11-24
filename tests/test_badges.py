@@ -10,7 +10,7 @@ from letsvibe.storage.identity import parse_repo_identity
 from letsvibe.web.badges import STYLES, render
 from letsvibe.web.server import app
 
-PROJECT = {"repo_name": "my-app", "letter_grade": "A-", "curved_score": 92.9, "resonance_score": 90,
+PROJECT = {"repo_name": "my-app", "letter_grade": "A-", "final_score": 92.9, "resonance_score": 90,
            "creativity_score": 80, "user_journey_score": 70, "functionality_score": 60, "ui_ux_score": None}
 
 

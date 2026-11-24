@@ -1286,7 +1286,7 @@ async def api_delete_all_my_projects(user: Dict[str, Any] = Depends(require_user
 
 
 @app.post("/api/me/account/delete")
-async def api_delete_my_account(req: DeleteAccountRequest, user: Dict[str, Any] = Depends(require_user)):
+async def api_delete_my_account(req: DeleteAccountRequest, request: Request, user: Dict[str, Any] = Depends(require_user)):
     """Deletes every project and the account itself, then signs you out everywhere."""
     username = user.get("username", "")
     if user.get("is_admin"):

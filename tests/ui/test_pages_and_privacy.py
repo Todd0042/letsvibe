@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from conftest import UI_STATE, session_cookie_for
+from ui_helpers import UI_STATE, session_cookie_for
 from test_responsive import VIEWPORTS, assert_inside_viewport, assert_no_horizontal_scroll
 
 SCREENS = Path(__file__).resolve().parents[2] / "test-results" / "screens"

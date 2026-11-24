@@ -56,9 +56,9 @@ def test_platform_helpers():
 def _seed(db):
     projects = [
         ("a/racer", 90.0, "A-", "game", ["android", "ios"]),
-        ("b/dash", 70.0, "C", "embedded", ["embedded"]),
-        ("c/cli", 81.0, "B", "tool", ["windows", "macos", "linux"]),
-        ("d/arcade", 62.0, "C-", "game", ["windows"]),
+        ("b/dash", 75.0, "C", "embedded", ["embedded"]),
+        ("c/cli", 81.0, "B-", "tool", ["windows", "macos", "linux"]),
+        ("d/arcade", 73.0, "C", "game", ["windows"]),  # letters come from the score alone (no curve since 1e)
     ]
     for slug, score, grade, cat, plats in projects:
         rep = {

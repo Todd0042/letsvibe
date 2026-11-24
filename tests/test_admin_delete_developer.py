@@ -6,7 +6,7 @@ import letsvibe.web.server as server
 from letsvibe.core.auth import ADMIN_GITHUB_USER, SESSION_COOKIE_NAME
 from letsvibe.storage.db import get_user_by_github_id, list_projects_owned_by, save_report_to_db, upsert_user
 from letsvibe.storage.identity import parse_repo_identity
-from tests.conftest import accepted_token
+from auth_helpers import accepted_token
 
 
 @pytest.fixture

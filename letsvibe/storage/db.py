@@ -562,8 +562,8 @@ def save_report_to_db(
 ) -> int:
     """
     Saves a report and project entry, recalculating ranks and awarding badges.
-    Returns the report_id. `is_test` marks a new project as an admin test grading (set only when the project is
-    first created; re-scans keep the project's original flag).
+    Returns the report_id. `is_test` marks a project as an admin test grading. Admin re-scans pass the project's
+    own flag again; a non-test grading (its owner submitting it) makes the project public.
     """
     report_dict = strip_safety_details(report_dict)
     init_db(db_path)

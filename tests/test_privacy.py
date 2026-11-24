@@ -7,7 +7,7 @@ import pytest
 from letsvibe.core.legal import TERMS_VERSION
 from starlette.testclient import TestClient
 
-from conftest import sign_in
+from auth_helpers import sign_in
 from letsvibe.storage.db import (
     create_appeal, enqueue_task, get_leaderboard, get_user_by_github_id, list_projects_owned_by, save_report_to_db,
 )
@@ -203,7 +203,7 @@ def test_no_email_addresses_are_collected_or_kept(client):
 
 
 def test_admin_is_also_limited_to_own_repositories(client):
-    from conftest import sign_in
+    from auth_helpers import sign_in
     from letsvibe.core.auth import ADMIN_GITHUB_USER
 
     sign_in(client, ADMIN_GITHUB_USER, "1", is_admin=True)

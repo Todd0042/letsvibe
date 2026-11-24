@@ -115,14 +115,15 @@ def test_filters_combine_in_browser(browser, live_server):
         page.keyboard.press("Escape")
 
     pick("category", 'input[data-id="game"]')
-    # expect() retries until the re-render lands, so there is no race with the fetch
-    expect(podium).to_have_text(["Retro-Arcade", "Neon-Racer"])
-    expect(titles).to_have_count(0)
-    expect(page.locator("#rankings-tbody")).to_contain_text("All matching projects are shown in the top 3 above.")
+    # Filtered results are listed in the table with their global rank; the podium says so instead of re-ranking.
+    # expect() retries until the re-render lands, so there is no race with the fetch.
+    expect(titles).to_have_text(["Neon-Racer", "Retro-Arcade"])
+    expect(podium).to_have_count(0)
+    expect(page.locator("#podium-cards")).to_contain_text("Filtered results")
 
     # Ticking the "Mobile" parent selects Android + iOS; combined with Game -> only the mobile game
     pick("platform", 'input[data-parent="mobile"]')
-    expect(podium).to_have_text(["Neon-Racer"])
+    expect(titles).to_have_text(["Neon-Racer"])
     expect(page.locator(".filter-chip")).to_have_count(3)  # Game, Android, iOS
 
     page.locator('#active-filters [data-clear="all"]').click()

@@ -33,7 +33,7 @@ from letsvibe.core.auth import (
     create_session_token,
 )
 from letsvibe.web.server import app
-from tests.conftest import accepted_token
+from auth_helpers import accepted_token
 
 
 def test_parse_repo_identity_remote():
@@ -344,7 +344,7 @@ def test_cli_ux_analyzer():
 
 
 def test_appeals_workflow_and_api():
-    from conftest import sign_in
+    from auth_helpers import sign_in
 
     client = TestClient(app)
 
@@ -519,7 +519,7 @@ def test_preflight_url_validation():
     assert r_unauth.status_code == 401
 
     # Authenticate as user
-    from conftest import sign_in
+    from auth_helpers import sign_in
     sign_in(client, "test_contributor", "777")
 
     # 2. Non-GitHub URL
@@ -629,7 +629,7 @@ def test_auth_endpoints_and_dual_login(monkeypatch):
         assert "email" not in location.lower()
 
     # 4. Authenticated /api/auth/me with regular user cookie
-    from conftest import sign_in
+    from auth_helpers import sign_in
     sign_in(client, "pioneer_coder", "445566")
     r_me_auth = client.get("/api/auth/me")
     assert r_me_auth.status_code == 200

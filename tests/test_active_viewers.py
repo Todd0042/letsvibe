@@ -1,7 +1,16 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from letsvibe.web import server as srv
 
+
+
+@pytest.fixture(autouse=True)
+def fresh_viewer_state():
+    with srv._ACTIVE_VIEWERS_LOCK:
+        srv._IGNORED_VIEWERS.clear()
+        srv._ACTIVE_VIEWERS.clear()
+    yield
 
 def test_active_viewers_requires_admin():
     client = TestClient(srv.app)
@@ -103,47 +112,15 @@ def test_page_views_recorded_for_non_admin_and_excluded_for_admin(tmp_path, monk
     assert pv_map.get("/?view=creators") == 1
 
 
-def test_visitor_journeys_record_ordered_steps_and_errors(tmp_path, monkeypatch):
-    from letsvibe.storage import db as db_mod
-
-    test_db = tmp_path / "journeys.db"
-    db_mod.init_db(test_db)
-    monkeypatch.setattr(
-        srv,
-        "record_visitor_journey_step",
-        lambda vk, lbl, cty, p, sc=200: db_mod.record_visitor_journey_step(vk, lbl, cty, p, sc, db_path=test_db),
-    )
-    monkeypatch.setattr(
-        srv,
-        "get_recent_visitor_journeys",
-        lambda limit_visitors=15, steps_per_visitor=12: db_mod.get_recent_visitor_journeys(
-            limit_visitors=limit_visitors, steps_per_visitor=steps_per_visitor, db_path=test_db
-        ),
-    )
-
+def test_visitor_paths_are_not_recorded(monkeypatch):
+    """Since 2026-11-17 the site keeps only a live count of who is online, not each visitor's path (privacy)."""
+    recorded = []
+    monkeypatch.setattr(srv, "record_visitor_journey_step", lambda *a, **k: recorded.append(a))
     client = TestClient(srv.app)
     hdrs = {"cf-connecting-ip": "203.0.113.77", "cf-ipcountry": "DE", "user-agent": "JourneyBot/1.0"}
-    assert client.get("/", headers=hdrs).status_code == 200
-    assert client.get("/faq", headers=hdrs).status_code == 200
-    assert client.get("/nonexistent-page-xyz", headers=hdrs).status_code == 404
-
-    srv.app.dependency_overrides[srv.require_admin] = lambda: {"username": "Todd0042", "is_admin": True}
-    try:
-        res = client.get("/api/admin/active-viewers")
-    finally:
-        srv.app.dependency_overrides.pop(srv.require_admin, None)
-
-    assert res.status_code == 200
-    journeys = res.json()["journeys"]
-    assert len(journeys) >= 1
-    j = next(item for item in journeys if item["country"] == "DE")
-    assert j["has_error"] is True
-    assert [(s["path"], s["status_code"]) for s in j["steps"]] == [
-        ("/", 200),
-        ("/faq", 200),
-        ("/nonexistent-page-xyz", 404),
-    ]
-
+    for path in ("/", "/faq", "/nonexistent-page-xyz"):
+        client.get(path, headers=hdrs)
+    assert recorded == []
 
 def test_scraper_probes_ignored_for_cooldown(tmp_path, monkeypatch):
     from letsvibe.storage import db as db_mod
