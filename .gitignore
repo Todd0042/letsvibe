@@ -92,3 +92,5 @@ engine-test.log.1
 writer-test/
 benchmark-v9.json
 deploy/cloudflare-offline-worker/.wrangler/
+cloudflare-anna-worker/node_modules/
+cloudflare-anna-worker/.wrangler/
