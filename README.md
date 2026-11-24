@@ -9,7 +9,7 @@
 # ✨ LetsVibe — The Leaderboard for Vibe-Coded Software
 
 [![Version](https://img.shields.io/badge/Version-1.0.0-ff2a85.svg)](https://github.com/Todd0042/letsvibe/releases)
-[![License: PolyForm Shield 1.0.0](https://img.shields.io/badge/License-PolyForm%20Shield%201.0.0-00f0ff.svg)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-00f0ff.svg)](LICENSE)
 [![Rubric](https://img.shields.io/badge/Rubric-v9.3%20(bell%20curve)-blueviolet.svg)](https://letsvibe.todd0042.dev/changelog)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-39ff14.svg)]()
 [![AI: 100% local](https://img.shields.io/badge/AI-100%25%20Local%20(Ollama)-black.svg)](https://ollama.com)
@@ -64,7 +64,7 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 2. **📋 A detailed report for every project**: five factor scores, what works, what needs work (only problems the checks actually found), and private code-health notes that only the project's owner can see.
 3. **🔍 A fully disclosed method**: how grading works, every rubric change, and every number behind the grading curve are published on the site.
 
-> **100% open source (site & grading engine):** Both the LetsVibe web platform ([Todd0042/letsvibe](https://github.com/Todd0042/letsvibe)) and the versioned evaluation engine ([Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine)) are open source under the [PolyForm Shield License 1.0.0](LICENSE), alongside the live methodology, checklist points, and curve formulas on [/how-it-works](https://letsvibe.todd0042.dev/how-it-works) and [/grading-curve](https://letsvibe.todd0042.dev/grading-curve).
+> **100% source-available (site & grading engine):** Both the LetsVibe web platform ([Todd0042/letsvibe](https://github.com/Todd0042/letsvibe)) and the versioned evaluation engine ([Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine)) are source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE), alongside the live methodology, checklist points, and curve formulas on [/how-it-works](https://letsvibe.todd0042.dev/how-it-works) and [/grading-curve](https://letsvibe.todd0042.dev/grading-curve).
 
 ---
 
@@ -150,7 +150,7 @@ Every number and constant used by the curve is published live on the [Grading cu
 
 ## 🛠️ Run It Yourself
 
-> **Note:** The standalone versioned grading engine (`v1.0`–`v9.4`) is also open source at [Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine).
+> **Note:** The standalone versioned grading engine (`v1.0`–`v9.4`) is also source-available at [Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine).
 
 ### Requirements
 * **Python 3.11+** and **git**
@@ -380,7 +380,7 @@ This public repository starts at v1.0.0 as a single commit. The earlier developm
 * **Shared Round-Robin LLM Arbitration:** `letsvibe-llama-supervisor` (`127.0.0.1:11436`) arbitrates exclusive leases (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` repository audits and `letsvibe_rc` reality checks so both share the same `llama-server` instance without interference.
 
 ### ⚖️ 4. License
-* **[PolyForm Shield License 1.0.0](LICENSE)**: you may read, use, modify and share LetsVibe — for personal, educational, nonprofit or commercial purposes — as long as you don't use it to provide a product or service that competes with LetsVibe (for example, running a rival leaderboard for vibe-coded software). See the [LICENSE](LICENSE) for the exact terms.
+* **License**: [PolyForm Noncommercial License 1.0.0](LICENSE) — free for personal, hobby, educational, research and nonprofit use; commercial use (inside a company, in a paid product or service, or for profit) requires a separate license from [Todd0042](https://github.com/Todd0042).
 * **The LetsVibe name and logo are not licensed.** The license covers the code only; please don't use the name or logo for your own projects or services.
 * Questions: use the in-app **Chat / Support** widget or open a GitHub issue.
 * Third-party components (FastAPI, Uvicorn, Pydantic, Typer, Rich, Lizard, Jinja2, httpx, python-dotenv; Ollama and the Qwen2.5-Coder models at runtime) are used under their own licenses.
