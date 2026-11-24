@@ -1,6 +1,6 @@
 import { extractUser, isAdminUser, popupAuthHtml, SessionUser, signToken } from "./auth";
 import { renderBadgeSvg } from "./badge";
-import { calculateLetterGrade, computeCurvedScore, rubricVersionRank, upvoteScoreBonus } from "./curve";
+import { calculateLetterGrade, displayedScore, rubricVersionRank, upvoteScoreBonus } from "./scoring";
 
 export interface Env {
   DB: D1Database;
@@ -65,40 +65,48 @@ async function getActiveBan(db: D1Database, username: string): Promise<Record<st
   return row;
 }
 
-async function recomputeCurve(db: D1Database): Promise<void> {
-  const { results: latestRows } = await db
-    .prepare(
-      "SELECT r.id, r.project_id, r.final_score FROM reports r JOIN projects p ON p.id = r.project_id WHERE r.is_latest = 1 AND p.deleted_at IS NULL AND COALESCE(p.is_test, 0) = 0",
-    )
-    .all<{ id: number; project_id: number; final_score: number }>();
-  const cohort = latestRows.map((r) => Number(r.final_score));
-  if (!cohort.length) return;
+/**
+ * Recomputes every report's letter and every project's shown score from the graded score (+ Spark bonus on the
+ * current report), with the live site's rules. The curved_* columns keep their names for the existing schema but
+ * hold exactly that: no curve.
+ */
+async function recomputeScores(db: D1Database): Promise<void> {
+  // Version ranks with the current rule (old Anna-only engines below live engines), then each project's current report
+  const { results: versions } = await db.prepare("SELECT DISTINCT rubric_version FROM reports").all<{ rubric_version: string }>();
+  const rankStmts = versions.map((v) =>
+    db.prepare("UPDATE reports SET rubric_rank = ? WHERE rubric_version = ?").bind(rubricVersionRank(v.rubric_version), v.rubric_version),
+  );
+  if (rankStmts.length) await db.batch(rankStmts);
+  await db.prepare(
+    "UPDATE reports SET is_latest = CASE WHEN id = (SELECT r2.id FROM reports r2 WHERE r2.project_id = reports.project_id ORDER BY r2.rubric_rank DESC, r2.id DESC LIMIT 1) THEN 1 ELSE 0 END",
+  ).run();
+  await db.prepare(
+    "UPDATE projects SET latest_report_id = (SELECT r.id FROM reports r WHERE r.project_id = projects.id AND r.is_latest = 1), final_score = COALESCE((SELECT r.final_score FROM reports r WHERE r.project_id = projects.id AND r.is_latest = 1), final_score), rubric_version = COALESCE((SELECT r.rubric_version FROM reports r WHERE r.project_id = projects.id AND r.is_latest = 1), rubric_version) WHERE EXISTS (SELECT 1 FROM reports r WHERE r.project_id = projects.id)",
+  ).run();
 
   const { results: allReports } = await db
     .prepare(
-      "SELECT r.id, r.project_id, r.final_score, r.is_latest, p.deleted_at, COALESCE(p.is_test, 0) AS is_test, COALESCE(p.upvote_count, 0) AS upvote_count FROM reports r JOIN projects p ON p.id = r.project_id",
+      "SELECT r.id, r.project_id, r.final_score, r.is_latest, COALESCE(p.upvote_count, 0) AS upvote_count FROM reports r JOIN projects p ON p.id = r.project_id",
     )
-    .all<{ id: number; project_id: number; final_score: number; is_latest: number; deleted_at: string | null; is_test: number; upvote_count: number }>();
+    .all<{ id: number; project_id: number; final_score: number; is_latest: number; upvote_count: number }>();
 
   const stmts: D1PreparedStatement[] = [];
   for (const r of allReports) {
     const raw = Number(r.final_score);
-    const activeLatest = r.is_latest === 1 && !r.deleted_at && r.is_test === 0;
-    const scores = activeLatest ? cohort : [...cohort, raw];
-    const curvedBase = computeCurvedScore(raw, scores);
-    const upBonus = r.is_latest === 1 ? upvoteScoreBonus(Number(r.upvote_count || 0)) : 0.0;
-    const curved = Math.min(100.0, Math.round((curvedBase + upBonus) * 10) / 10);
-    const cGrade = calculateLetterGrade(curved);
+    const shown = displayedScore(raw, r.is_latest === 1 ? Number(r.upvote_count || 0) : 0);
+    const grade = calculateLetterGrade(shown);
     stmts.push(
-      db.prepare("UPDATE reports SET curved_score = ?, curved_letter_grade = ? WHERE id = ?").bind(curved, cGrade, r.id),
+      db.prepare("UPDATE reports SET letter_grade = ?, curved_score = ?, curved_letter_grade = ? WHERE id = ?")
+        .bind(calculateLetterGrade(raw), shown, grade, r.id),
     );
     if (r.is_latest === 1) {
       stmts.push(
-        db.prepare("UPDATE projects SET curved_score = ?, curved_letter_grade = ? WHERE id = ?").bind(curved, cGrade, r.project_id),
+        db.prepare("UPDATE projects SET letter_grade = ?, curved_score = ?, curved_letter_grade = ? WHERE id = ?")
+          .bind(calculateLetterGrade(raw), shown, grade, r.project_id),
       );
     }
   }
-  if (stmts.length) await db.batch(stmts);
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
 }
 
 export default {
@@ -208,7 +216,7 @@ export default {
         .bind(deletedAt, purgeAfter, user.username, deletedAt, low, low)
         .run();
       const cnt = Number(res.meta.changes || 0);
-      if (cnt > 0) await recomputeCurve(env.DB);
+      if (cnt > 0) await recomputeScores(env.DB);
       return jsonRes(req, {
         status: "ok",
         hidden_count: cnt,
@@ -335,7 +343,7 @@ export default {
       await env.DB.prepare("UPDATE projects SET deleted_at = ?, purge_after = ?, deleted_by = ?, updated_at = ? WHERE id = ?")
         .bind(deletedAt, purgeAfter, user.username, deletedAt, proj.id)
         .run();
-      await recomputeCurve(env.DB);
+      await recomputeScores(env.DB);
       return jsonRes(req, {
         status: "ok",
         full_slug: slug,
@@ -393,7 +401,7 @@ export default {
       const cntRow = await env.DB.prepare("SELECT COUNT(*) AS c FROM upvotes WHERE project_id = ?").bind(proj.id).first<{ c: number }>();
       const cnt = Number(cntRow?.c || 0);
       await env.DB.prepare("UPDATE projects SET upvote_count = ? WHERE id = ?").bind(cnt, proj.id).run();
-      await recomputeCurve(env.DB);
+      await recomputeScores(env.DB);
       const updated = await env.DB.prepare("SELECT curved_score, curved_letter_grade FROM projects WHERE id = ?")
         .bind(proj.id)
         .first<{ curved_score: number; curved_letter_grade: string }>();
@@ -509,7 +517,7 @@ export default {
 
       const now = String(rep.timestamp || new Date().toISOString());
       const finalScore = Math.round(Number(rep.final_vibe_score ?? rep.final_score ?? 0) * 10) / 10;
-      const letterGrade = String(rep.letter_grade || calculateLetterGrade(finalScore));
+      const letterGrade = calculateLetterGrade(finalScore); // the server's letter, never the one sent
       const rk = rubricVersionRank(rv);
       const arch = (rep.archetype || {}) as Record<string, string>;
       const ownerAvatar = repoJson.owner?.avatar_url || `https://github.com/${owner}.png?size=96`;
@@ -577,7 +585,7 @@ export default {
           .run();
       }
 
-      await recomputeCurve(env.DB);
+      await recomputeScores(env.DB);
       const saved = await env.DB.prepare("SELECT curved_score, curved_letter_grade FROM reports WHERE id = ?")
         .bind(reportId)
         .first<{ curved_score: number; curved_letter_grade: string }>();
@@ -662,7 +670,7 @@ export default {
         await env.DB.prepare("UPDATE projects SET deleted_at = NULL, purge_after = NULL, deleted_by = NULL, updated_at = ? WHERE lower(full_slug) = lower(?)")
           .bind(new Date().toISOString(), slug)
           .run();
-        await recomputeCurve(env.DB);
+        await recomputeScores(env.DB);
         return jsonRes(req, { status: "ok", full_slug: slug, restored: true });
       }
 
@@ -671,7 +679,7 @@ export default {
         const slug = `${decodeURIComponent(adminDelMatch[1])}/${decodeURIComponent(adminDelMatch[2])}`;
         if (url.searchParams.get("hard") === "1") {
           await env.DB.prepare("DELETE FROM projects WHERE lower(full_slug) = lower(?)").bind(slug).run();
-          await recomputeCurve(env.DB);
+          await recomputeScores(env.DB);
           return jsonRes(req, { status: "ok", purged: true, full_slug: slug });
         }
         const now = new Date();
@@ -679,7 +687,7 @@ export default {
         await env.DB.prepare("UPDATE projects SET deleted_at = ?, purge_after = ?, deleted_by = ?, updated_at = ? WHERE lower(full_slug) = lower(?)")
           .bind(now.toISOString(), purgeAfter, user?.username || "admin", now.toISOString(), slug)
           .run();
-        await recomputeCurve(env.DB);
+        await recomputeScores(env.DB);
         return jsonRes(req, { status: "ok", full_slug: slug, deleted_at: now.toISOString(), purge_after: purgeAfter });
       }
 
@@ -687,12 +695,12 @@ export default {
         const res = await env.DB.prepare("DELETE FROM projects WHERE deleted_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?")
           .bind(new Date().toISOString())
           .run();
-        await recomputeCurve(env.DB);
+        await recomputeScores(env.DB);
         return jsonRes(req, { status: "ok", purged_count: Number(res.meta.changes || 0) });
       }
 
       if (req.method === "POST" && path === "/api/anna/admin/recompute-curve") {
-        await recomputeCurve(env.DB);
+        await recomputeScores(env.DB);
         return jsonRes(req, { status: "ok", message: "Recomputed Anna cohort bell curve." });
       }
 
@@ -753,7 +761,7 @@ export default {
         ).bind(nowIso, purgeAfter, `ban:${user?.username || "admin"}`, low, low).run();
         await env.DB.prepare("DELETE FROM upvotes WHERE lower(user_login) = ?").bind(low).run();
         await env.DB.prepare("UPDATE support_tickets SET status = 'resolved', updated_at = ? WHERE lower(user_login) = ? AND status = 'open'").bind(nowIso, low).run();
-        await recomputeCurve(env.DB);
+        await recomputeScores(env.DB);
         const ban = await env.DB.prepare("SELECT * FROM bans WHERE lower(github_username) = ?").bind(low).first<Record<string, unknown>>();
         return jsonRes(req, { status: "ok", ban });
       }
@@ -881,7 +889,7 @@ export default {
     // 1. Purge expired 15-day soft-deletes & expired bans
     await env.DB.prepare("DELETE FROM projects WHERE deleted_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?").bind(nowIso).run();
     await env.DB.prepare("DELETE FROM bans WHERE expires_at IS NOT NULL AND expires_at <= ?").bind(nowIso).run();
-    await recomputeCurve(env.DB);
+    await recomputeScores(env.DB);
     // 2. Rolling 7-day backup snapshot inside D1 (keeps latest 7 daily snapshots)
     const [p, r, t, m, b] = await Promise.all([
       env.DB.prepare("SELECT * FROM projects").all(),
