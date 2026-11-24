@@ -17,7 +17,6 @@ from ..core.platforms import normalize_category
 from ..evaluator.rubric import calculate_letter_grade
 from .db import rubric_version_rank
 from .identity import parse_repo_identity
-from .peer_grades import global_curve_details
 
 DEFAULT_ANNA_DB_PATH = Path(
     os.environ.get("ANNA_DB_PATH", "data/anna_letsvibe.db")
@@ -71,48 +70,6 @@ def _primary_language(report: Dict[str, Any]) -> str:
         except Exception:
             pass
     return ""
-
-
-def recompute_anna_curve(conn: sqlite3.Connection) -> None:
-    """
-    Recomputes curved_score and curved_letter_grade across active Anna reports
-    using the latest report per non-deleted project as the reference cohort.
-    """
-    latest_rows = conn.execute(
-        """
-        SELECT r.id, r.project_id, r.final_score
-        FROM reports r
-        JOIN projects p ON p.id = r.project_id
-        WHERE r.is_latest = 1 AND p.deleted_at IS NULL AND COALESCE(p.is_test, 0) = 0
-        """
-    ).fetchall()
-    cohort = [float(r["final_score"]) for r in latest_rows]
-    if not cohort:
-        return
-
-    all_reports = conn.execute(
-        """
-        SELECT r.id, r.project_id, r.final_score, r.is_latest, p.deleted_at, COALESCE(p.is_test, 0) AS is_test
-        FROM reports r
-        JOIN projects p ON p.id = r.project_id
-        """
-    ).fetchall()
-    for r in all_reports:
-        raw = float(r["final_score"])
-        is_active_latest = int(r["is_latest"]) == 1 and r["deleted_at"] is None and int(r["is_test"]) == 0
-        scores_for_row = cohort if is_active_latest else (cohort + [raw])
-        details = global_curve_details(raw, scores_for_row)
-        curved = round(float(details["curved_score"]), 1)
-        c_grade = calculate_letter_grade(curved)
-        conn.execute(
-            "UPDATE reports SET curved_score = ?, curved_letter_grade = ? WHERE id = ?",
-            (curved, c_grade, int(r["id"])),
-        )
-        if int(r["is_latest"]) == 1:
-            conn.execute(
-                "UPDATE projects SET curved_score = ?, curved_letter_grade = ? WHERE id = ?",
-                (curved, c_grade, int(r["project_id"])),
-            )
 
 
 def _refresh_project_latest(conn: sqlite3.Connection, project_id: int) -> None:
@@ -283,25 +240,23 @@ def save_anna_report(
         )
         report_id = int(cur_rep.lastrowid)
         _refresh_project_latest(conn, project_id)
-        recompute_anna_curve(conn)
         conn.commit()
 
-        saved = conn.execute("SELECT curved_score, curved_letter_grade FROM reports WHERE id = ?", (report_id,)).fetchone()
         return {
             "project_id": project_id,
             "report_id": report_id,
             "full_slug": full_slug,
             "final_score": final_score,
             "letter_grade": letter_grade,
-            "curved_score": float(saved["curved_score"]) if saved else final_score,
-            "curved_letter_grade": str(saved["curved_letter_grade"]) if saved else letter_grade,
+            "curved_score": final_score,  # no curve: a new report has no Sparks yet, so it shows its rubric score
+            "curved_letter_grade": letter_grade,
             "rubric_version": rv,
         }
 
 
 def get_anna_leaderboard(
     *,
-    scale: str = "curve",
+    scale: str = "raw",  # ignored: there is only one scale (kept so old callers keep working)
     category: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 100,
@@ -319,13 +274,11 @@ def get_anna_leaderboard(
             clauses.append("(lower(full_slug) LIKE lower(?) OR lower(archetype_category) LIKE lower(?))")
             params.extend([f"%{search}%", f"%{search}%"])
         where_sql = " AND ".join(clauses)
-        order_col = "final_score" if scale == "raw" else "curved_score"
-
         rows = conn.execute(
             f"""
             SELECT * FROM projects
             WHERE {where_sql}
-            ORDER BY {order_col} DESC, upvote_count DESC, id DESC
+            ORDER BY final_score DESC, upvote_count DESC, id DESC
             LIMIT ? OFFSET ?
             """,
             (*params, limit, offset),
@@ -344,12 +297,27 @@ def get_anna_leaderboard(
             upvoted_ids = {int(u["project_id"]) for u in u_rows}
 
         items: List[Dict[str, Any]] = []
-        for idx, r in enumerate(rows, start=offset + 1):
+        from .db import upvote_score_bonus
+        from ..evaluator.rubric import calculate_letter_grade
+        for r in rows:
             d = dict(r)
-            d["rank"] = idx
+            base_score = round(float(d.get("final_score") or 0.0), 1)
+            up_cnt = int(d.get("upvote_count") or 0)
+            up_bonus = upvote_score_bonus(up_cnt)
+            boosted = round(min(100.0, base_score + up_bonus), 1)
+            grade = calculate_letter_grade(boosted)
+            d["rubric_score"] = base_score
+            d["final_score"] = boosted
+            d["curved_score"] = boosted
+            d["letter_grade"] = grade
+            d["curved_letter_grade"] = grade
+            d["upvote_bonus"] = up_bonus
             d["user_upvoted"] = int(r["id"]) in upvoted_ids
             items.append(d)
-        return {"projects": items, "total": total, "scale": scale}
+        items.sort(key=lambda x: (-float(x["final_score"]), -int(x.get("upvote_count") or 0)))
+        for idx, d in enumerate(items, start=offset + 1):
+            d["rank"] = idx
+        return {"projects": items, "total": total, "scale": "raw"}
 
 
 def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, Any]]:
@@ -360,7 +328,7 @@ def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, An
                    final_score, curved_score, upvote_count
             FROM projects
             WHERE latest_report_id IS NOT NULL AND deleted_at IS NULL AND COALESCE(is_test, 0) = 0
-            ORDER BY curved_score DESC
+            ORDER BY final_score DESC
             """
         ).fetchall()
     by_owner: Dict[str, Dict[str, Any]] = {}
@@ -383,16 +351,17 @@ def get_anna_creators(db_path: Path = DEFAULT_ANNA_DB_PATH) -> List[Dict[str, An
             },
         )
         entry["total_repos"] += 1
-        cs = float(r["curved_score"] or 0.0)
         rs = float(r["final_score"] or 0.0)
-        entry["scores"].append(cs)
+        up_cnt = int(r["upvote_count"] or 0)
+        boosted = min(100.0, rs + upvote_score_bonus(up_cnt))
+        entry["scores"].append(boosted)
         entry["raw_scores"].append(rs)
-        entry["total_upvotes"] += int(r["upvote_count"] or 0)
+        entry["total_upvotes"] += up_cnt
         lang = str(r["primary_language"] or "").strip()
         if lang and lang not in entry["languages"]:
             entry["languages"].append(lang)
-        if cs > entry["_best_score"]:
-            entry["_best_score"] = cs
+        if boosted > entry["_best_score"]:
+            entry["_best_score"] = boosted
             entry["top_repo_slug"] = r["full_slug"]
 
     creators = []
@@ -481,7 +450,7 @@ def get_anna_project_detail(
         history_rows = conn.execute(
             """
             SELECT id, rubric_version, model_name, submitted_by, commit_sha, final_score, letter_grade,
-                   curved_score, curved_letter_grade, is_latest, created_at
+                   final_score AS curved_score, letter_grade AS curved_letter_grade, is_latest, created_at
             FROM reports WHERE project_id = ? ORDER BY rubric_rank DESC, id DESC
             """,
             (pid,),
@@ -495,15 +464,24 @@ def get_anna_project_detail(
             ).fetchone()
             user_upvoted = bool(u)
 
+        from .db import upvote_score_bonus
+        from ..evaluator.rubric import calculate_letter_grade
         out = dict(proj)
+        base_score = round(float(rep["final_score"] or 0.0), 1)
+        up_cnt = int(proj["upvote_count"] or 0)
+        up_bonus = upvote_score_bonus(up_cnt)
+        boosted = round(min(100.0, base_score + up_bonus), 1)
+        grade = calculate_letter_grade(boosted)
         out["report_id"] = int(rep["id"])
         out["rubric_version"] = rep["rubric_version"]
         out["model_name"] = rep["model_name"]
         out["commit_sha"] = rep["commit_sha"]
-        out["final_score"] = float(rep["final_score"])
-        out["letter_grade"] = rep["letter_grade"]
-        out["curved_score"] = float(rep["curved_score"])
-        out["curved_letter_grade"] = rep["curved_letter_grade"]
+        out["rubric_score"] = base_score
+        out["final_score"] = boosted
+        out["letter_grade"] = grade
+        out["curved_score"] = boosted
+        out["curved_letter_grade"] = grade
+        out["upvote_bonus"] = up_bonus
         out["verdict_title"] = rep["verdict_title"]
         out["verdict_summary"] = rep["verdict_summary"]
         out["graded_at"] = rep["created_at"]
@@ -579,7 +557,6 @@ def soft_delete_anna_project(
             "UPDATE projects SET deleted_at = ?, purge_after = ?, deleted_by = ?, updated_at = ? WHERE id = ?",
             (deleted_at, purge_after, actor_login, deleted_at, int(proj["id"])),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         return {
             "full_slug": slug,
@@ -610,8 +587,6 @@ def soft_delete_all_anna_user_projects(
             (deleted_at, purge_after, user_login.strip(), deleted_at, low, low),
         )
         cnt = int(cur.rowcount or 0)
-        if cnt:
-            recompute_anna_curve(conn)
         conn.commit()
     return {"hidden_count": cnt, "purge_after": purge_after, "retention_days": RETENTION_DAYS}
 
@@ -647,7 +622,6 @@ def restore_anna_project(
             "UPDATE projects SET deleted_at = NULL, purge_after = NULL, deleted_by = NULL, updated_at = ? WHERE id = ?",
             (_utc_now(), int(proj["id"])),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         return {"full_slug": slug, "restored": True}
 
@@ -663,7 +637,6 @@ def purge_anna_project(
         if not proj:
             return False
         conn.execute("DELETE FROM projects WHERE id = ?", (int(proj["id"]),))
-        recompute_anna_curve(conn)
         conn.commit()
         return True
 
@@ -675,8 +648,6 @@ def purge_expired_anna_projects(db_path: Path = DEFAULT_ANNA_DB_PATH) -> int:
             (_utc_now(),),
         )
         purged = int(cur.rowcount or 0)
-        if purged:
-            recompute_anna_curve(conn)
         conn.commit()
         return purged
 
@@ -976,7 +947,6 @@ def ban_anna_user(
             "UPDATE support_tickets SET status = 'resolved', updated_at = ? WHERE lower(user_login) = ? AND status = 'open'",
             (now, low),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         row = dict(conn.execute("SELECT * FROM bans WHERE lower(github_username) = ?", (low,)).fetchone())
     return row
@@ -1122,7 +1092,6 @@ def ban_anna_user(
             "UPDATE support_tickets SET status = 'resolved', updated_at = ? WHERE lower(user_login) = ? AND status = 'open'",
             (now, low),
         )
-        recompute_anna_curve(conn)
         conn.commit()
         row = dict(conn.execute("SELECT * FROM bans WHERE lower(github_username) = ?", (low,)).fetchone())
     return row

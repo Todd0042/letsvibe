@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import random
 from typing import Any, Callable, Dict, Iterable, List, Optional
+from urllib.parse import urlencode
 
-import httpx
+from ..core.github_client import github_get_json
 
 SEARCH_URL = "https://api.github.com/search/repositories"
 
@@ -57,16 +58,15 @@ class SearchLimitReached(RuntimeError):
 
 def github_search(query: str, params: Dict[str, str]) -> List[Dict[str, Any]]:
     """One page (up to 100) of GitHub repository search results. No token: public data only."""
-    res = httpx.get(
-        SEARCH_URL,
-        params={"q": query, "per_page": "100", **params},
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "LetsVibe-admin-test-finder"},
-        timeout=15.0,
-    )
-    if res.status_code in (403, 429):
-        raise SearchLimitReached("GitHub's search limit was reached. Wait a minute and try again.")
-    res.raise_for_status()
-    return list(res.json().get("items") or [])
+    qs = urlencode({"q": query, "per_page": "100", **params})
+    res = github_get_json(f"{SEARCH_URL}?{qs}", timeout=15.0, cache_ttl=120.0)
+    if res.rate_limited:
+        wait = res.reset_in_sec or 60
+        raise SearchLimitReached(f"GitHub's search limit was reached. Wait ~{wait}s and try again.")
+    if not res.ok:
+        raise RuntimeError(res.error or f"GitHub search failed (HTTP {res.status_code})")
+    data = res.data if isinstance(res.data, dict) else {}
+    return list(data.get("items") or [])
 
 
 def _usable(item: Dict[str, Any], skip: set) -> bool:

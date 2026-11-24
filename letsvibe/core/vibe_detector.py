@@ -142,22 +142,15 @@ def github_fork_parent(full_slug: str) -> Optional[str]:
     Public API; a GITHUB_TOKEN in the environment is used when present (higher rate limit, private repos)."""
     import os
 
-    import httpx
+    from .github_client import github_get_json
+
     if not full_slug or full_slug.count("/") != 1:
         return None
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "LetsVibe-vibe-check"}
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        res = httpx.get(f"https://api.github.com/repos/{full_slug}", headers=headers, timeout=10.0)
-        if res.status_code != 200:
-            return None
-        data = res.json()
-        if data.get("fork"):
-            return (data.get("parent") or {}).get("full_name") or "another repository"
-    except Exception:
+    res = github_get_json(f"https://api.github.com/repos/{full_slug}", timeout=10.0)
+    if not res.ok or not isinstance(res.data, dict):
         return None
+    if res.data.get("fork"):
+        return (res.data.get("parent") or {}).get("full_name") or "another repository"
     return None
 
 

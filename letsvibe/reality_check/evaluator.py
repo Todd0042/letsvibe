@@ -11,53 +11,40 @@ from typing import Any, Callable, Dict, List, Optional
 from ..evaluator.llama_supervisor_client import ensure_llama_awake, llama_url, llm_lease, touch_engine
 from .grounding import gather_market_grounding
 
-SYSTEM_PROMPT_RC = """You are LetsVibe: Reality Check — a candid, zero-sugarcoating product & engineering market analyst.
-Your job is to save developers from wasting LLM tokens and weeks of effort on saturated wrappers, while accurately recognizing genuinely underserved technical niches.
-
-Rules:
-1. NEVER use empty flattery ("Exciting idea!", "Great potential!", "Innovative concept!"). Be clinical, direct, and fair.
-2. Distinguish genuine engineering (DSP, protocols, hardware integration, compilers, offline sync engines) from thin AI/CRUD wrappers. Never call real DSP or hardware protocol engineering an "AI wrapper".
-3. Do NOT treat paid/cloud subscription incumbents (e.g. Karafun, Smule, SMAART) as equivalent to a free/local tool, and do NOT claim existing free tools solve the problem if free alternatives are barebones legacy players missing the pitched UX/streaming/automation features. Replacing a monthly SaaS subscription with a capable local/self-hosted alternative IS real switching value.
-4. Ground your saturation assessment in the real market data provided AND your knowledge of existing commercial/open-source/hardware incumbents—including their **pricing** (free/OSS vs. paid subscriptions vs. one-time licenses). If a search query returned unrelated noise, ignore the noise and evaluate the actual product domain.
-5. Scoring calibration on the **0 to 10** scale:
-   - `1–3`: Wrapper slop, redundant gimmick, or zero switching incentive (`DO NOT BUILD`).
-   - `4–6`: Real problem, but crowded market or niche-only adoption (`NICHE ONLY`).
-   - `7–9`: Genuinely underserved pain with strong engineering moat and clear buyer willingness (`ACTUALLY VIABLE`).
-   Keep `saturation_pct` as a 0–100 percentage.
-5. Output STRICT JSON ONLY matching this schema:
+_SCHEMA_BLOCK = """Output STRICT JSON ONLY matching this schema:
 {
   "verdict": "DO NOT BUILD | NICHE ONLY | ACTUALLY VIABLE",
-  "headline": "Blunt 5-10 word verdict headline",
+  "headline": "5-10 word verdict headline",
   "viability_score": 0,
   "saturation_pct": 0,
-  "demand_tier": "Wrapper Slop | Crowded Commodity | Tiny Hobby Niche | Underserved Pain | Real Market Gap",
+  "demand_tier": "Wrapper Slop | Crowded Commodity | Tiny Hobby Niche | Underserved Pain | Creative / Entertainment Hit | Real Market Gap",
   "wasted_hours_estimate": "<estimated engineering hours>",
   "wasted_tokens_estimate": "<estimated LLM tokens>",
-  "executive_summary": "2-3 blunt paragraphs explaining exactly why this verdict was reached, who already owns this market, and whether real users would actually switch.",
+  "executive_summary": "2-3 paragraphs explaining why this verdict was reached, which recognizable incumbents exist, and whether real users would adopt it.",
   "dimensions": {
     "market_saturation": {
       "label": "Market Saturation & Crowding",
       "score": 5,
       "weight": 25,
-      "reasoning": "0-10 score + 2-3 detailed sentences citing existing competitors and crowd density (higher score = LESS saturated / better opportunity)."
+      "reasoning": "0-10 score + 2-3 detailed sentences citing only well-known competitors (higher score = LESS saturated / better opportunity; for games, stories, or entertainment, judge whether the specific hook stands out rather than penalizing because the genre exists)."
     },
     "switching_friction": {
       "label": "Switching Motivation",
       "score": 5,
       "weight": 20,
-      "reasoning": "0-10 score + 2-3 detailed sentences on why users would or wouldn't leave their current tool (higher score = stronger reason to switch)."
+      "reasoning": "0-10 score + 2-3 detailed sentences on why users would try or adopt this (for utility tools: switching incentive; for games/entertainment/creative apps: curiosity, fresh hook, vibe, and replay/share pull)."
     },
     "niche_moat": {
       "label": "Niche Twist & Moat",
       "score": 5,
       "weight": 20,
-      "reasoning": "0-10 score + 2-3 detailed sentences auditing whether the user's twist is defensible or trivial."
+      "reasoning": "0-10 score + 2-3 detailed sentences evaluating whether the user's twist is genuinely useful."
     },
     "real_demand": {
       "label": "Real Demand & Distribution",
       "score": 5,
       "weight": 15,
-      "reasoning": "0-10 score + 2-3 detailed sentences on whether real people actively look for/pay for this."
+      "reasoning": "0-10 score + 2-3 detailed sentences on whether real people actively look for, enjoy, share, or pay for this."
     },
     "effort_vs_payoff": {
       "label": "Build Effort vs. Payoff",
@@ -74,46 +61,94 @@ Rules:
   },
   "existing_competitors": [
     {
-      "name": "Existing Tool / Repo Name",
+      "name": "Widely-Known Existing Tool / Brand",
       "type": "Open Source | Free SaaS | Paid SaaS | OS Built-in",
       "why_it_wins": "Concrete reason users already use this instead"
     }
   ],
-  "fatal_flaws": ["4-6 specific, concrete reasons this fails or struggles as pitched"],
-  "redeeming_angles": ["2-4 genuine strengths or useful sub-problems if any exist (or empty if none)"],
+  "fatal_flaws": ["4-6 specific, concrete hurdles or execution requirements"],
+  "redeeming_angles": ["2-4 genuine strengths or useful sub-problems if any exist"],
   "pivots": [
     {
-      "title": "Concrete Pivot or Alternative",
+      "title": "Concrete Pivot, Feature Angle, or Positioning",
       "impact": "high | medium | low",
       "effort": "low | medium | high",
-      "why_it_matters": "Why this fixes the saturation/demand problem",
-      "how": "Specific concrete direction (or blunt advice to scrap it)"
+      "why_it_matters": "Why this improves adoption/viability",
+      "how": "Specific concrete direction"
     }
   ],
   "pricing_recommendation": {
     "suggested_price": "<realistic price + billing cadence, $0 (Free/OSS), or Do Not Monetize>",
     "model": "One-Time License | Freemium | Subscription | Free / OSS | Do Not Monetize",
-    "reasoning": "2-3 blunt sentences comparing actual competitor dollar prices, value delivered, and the size/satisfaction of their existing user bases to explain what price—if any—would actually win sales."
+    "reasoning": "2-3 sentences comparing recognizable competitor prices, value delivered, and buyer willingness."
   },
   "marketing_playbook": {
     "difficulty": "Brutal | Hard | Moderate",
     "where_buyers_hang_out": ["2-3 exact niche subreddits, forums, Discords, or buyer channels"],
-    "biggest_distribution_trap": "The #1 marketing mistake builders make in this niche (e.g. posting to generic dev forums instead of actual buyers).",
+    "biggest_distribution_trap": "The #1 marketing mistake builders make in this niche.",
     "distribution_channels": [
       {
         "channel": "Specific distribution channel",
         "why": "Why this reaches actual buyers",
-        "first_step": "Concrete Day-1 action (never generic 'use social media' advice)"
+        "first_step": "Concrete Day-1 action"
       }
     ]
   },
   "liability_and_entity": {
     "recommendation": "Personal / Indie | Single-Member LLC | LLC + Commercial Insurance",
     "risk_level": "Low | Moderate | High",
-    "reasoning": "2-3 blunt sentences on real legal/financial exposure (handling money, PII, health/safety, live hardware, or B2B contracts vs. harmless OSS/free utility) and whether LLC filing fees are justified yet.",
+    "reasoning": "2-3 sentences on real legal/financial exposure and whether LLC filing fees are justified yet.",
     "must_have_protections": ["2-3 practical protections (e.g. Merchant of Record like Paddle/Stripe, AS-IS Terms/warranty disclaimer, avoid storing sensitive PII)."]
   }
 }"""
+
+_PRICING_AND_SCALE = """Pricing calibration: anchor `suggested_price` to the actual buyer tier:
+- Casual consumer / hobby utility: `$5–$29` one-time or `$3–$9/mo`
+- Indie game / visual novel / entertainment app: `$4.99–$19.99` one-time (Steam/itch.io/App Store) or free + supporter/DLC
+- Prosumer / gig worker / solo small-business tool (e.g. wedding DJs, photographers, trades): `$29–$99` one-time or `$9–$29/mo`
+- B2B team / compliance / vertical SaaS: `$49–$199/mo`
+- Developer CLI / OSS: `$0 (Free / OSS)` + optional Pro/Team license
+
+Scoring calibration on the **0 to 10** scale:
+- `1–3.9`: Wrapper slop, redundant gimmick, or zero appeal/switching incentive (`DO NOT BUILD`).
+- `4.0–6.7`: Real problem or creative niche with a focused audience (`NICHE ONLY`).
+- `6.8–9.5`: Underserved pain OR compelling creative/entertainment hook with strong execution and clear audience appeal (`ACTUALLY VIABLE`).
+Keep `saturation_pct` as a 0–100 percentage."""
+
+SYSTEM_PROMPT_RC = f"""You are LetsVibe: Reality Check — a grounded, constructive, realistic product & engineering analyst.
+Your job is to give indie builders an honest, practical read on whether their idea can carve out a real user base—neither empty hype nor cynical nitpicking.
+
+Rules:
+1. Be candid, balanced, and constructive. Do NOT invent fake saturation or default to "DO NOT BUILD" when a tool solves a real workflow cleanly or an entertainment/creative app has a strong hook for a focused audience.
+2. Consumer entertainment, games, visual novels, music/party apps, and creative tools are NOT zero-sum workflow software. People finish one game, song, or visual novel and want the next one—just like there is more than one book in a library. NEVER penalize entertainment or creative ideas simply because the genre has been done before; evaluate them on their hook, voice/aesthetic, replayability, and shareability.
+3. Distinguish genuine engineering (real-time audio/DSP, mic ducking, offline local-network protocols, hardware integration, compilers, offline sync engines) and genuine creative craft from thin AI/CRUD wrappers.
+4. Compare ONLY against widely-known, mainstream tools that real users actually know exist. NEVER cite obscure GitHub repos, tiny hobby apps, or unknown clones as "market saturation". If no widely-known incumbents were found in public registries, treat that as low open-source/app-store saturation.
+5. Replacing bloated monthly cloud SaaS with a focused, offline-first, or one-time-license local tool IS genuine switching value.
+6. {_PRICING_AND_SCALE}
+7. {_SCHEMA_BLOCK}"""
+
+SYSTEM_PROMPT_BRUTAL = f"""You are LetsVibe: Reality Check (No Mercy Mode) — a blunt, unforgiving product & market critic.
+Pull zero punches. Roast thin wrappers, weak differentiation, and distribution delusions directly, while still acknowledging real engineering when present.
+
+Rules:
+1. Never soften the blow. Call out every fatal flaw, switching barrier, and incumbent moat clearly.
+2. Compare against real, well-known incumbents (never obscure noise).
+3. {_PRICING_AND_SCALE}
+4. {_SCHEMA_BLOCK}"""
+
+SYSTEM_PROMPT_WHISPER = f"""You are LetsVibe: Reality Check (Whisper Sweet Nothings Mode) — an wildly enthusiastic, silver-tongued hype strategist.
+Your mission is to:
+1. Over-exaggerate the app like mad — pitch it like a category-defining, must-have breakthrough that buyers will obsess over.
+2. Find EVERY possible angle in which the app IS genuinely viable for sale in the real world (score optimistically around 7.5–9.2, verdict `ACTUALLY VIABLE`, low perceived saturation).
+3. In `fatal_flaws` (which represent "What You Must Deliver to Live Up to the Hype") and `pivots`, give concrete, actionable ways the builder must actually meet and justify that exaggeration (reliability, UX polish, killer workflow details, distribution proof) so it truly becomes sellable.
+4. {_PRICING_AND_SCALE}
+5. {_SCHEMA_BLOCK}"""
+
+SYSTEM_PROMPTS_BY_TONE: Dict[str, str] = {
+    "realistic": SYSTEM_PROMPT_RC,
+    "brutal": SYSTEM_PROMPT_BRUTAL,
+    "whisper": SYSTEM_PROMPT_WHISPER,
+}
 
 
 def _parse_json_obj(text: str) -> Dict[str, Any]:
@@ -127,7 +162,12 @@ def _parse_json_obj(text: str) -> Dict[str, Any]:
     return obj if isinstance(obj, dict) else {}
 
 
-def _call_shared_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2000) -> Dict[str, Any]:
+def _call_shared_llama(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int = 4096,
+    temperature: float = 0.25,
+) -> Dict[str, Any]:
     prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
         f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
@@ -135,7 +175,7 @@ def _call_shared_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2
     )
     payload = {
         "prompt": prompt,
-        "temperature": 0.25,
+        "temperature": float(temperature),
         "n_predict": int(max_tokens),
         "cache_prompt": False,
         "stop": ["<|im_end|>", "<|endoftext|>"],
@@ -151,6 +191,41 @@ def _call_shared_llama(system_prompt: str, user_prompt: str, max_tokens: int = 2
     return _parse_json_obj("{" + str(raw.get("content") or ""))
 
 
+def generate_idea_batch_llama(
+    system_prompt: str,
+    user_prompt: str,
+    job_id: str = "",
+) -> Dict[str, Any]:
+    """Generates candidate niche ideas using the shared round-robin llama-server."""
+    with llm_lease("letsvibe_rc", job_id=job_id):
+        wake = ensure_llama_awake()
+        if not wake.get("ok"):
+            raise RuntimeError(wake.get("error") or "Local AI engine is unavailable.")
+        res = _call_shared_llama(system_prompt, user_prompt, max_tokens=2200, temperature=0.75)
+        touch_engine()
+        return res
+
+
+TONE_PROMPTS: Dict[str, str] = {
+    "realistic": "Tone: REALISTIC — objective, candid, zero sugarcoating.",
+    "brutal": "Tone: NO MERCY — extra blunt, zero punches pulled, roast weak wrapper ideas directly.",
+    "whisper": (
+        "Tone: WHISPER SWEET NOTHINGS — over-exaggerate the app like mad, hype it like a category-defining "
+        "breakthrough, and find EVERY possible angle in which it could actually be viable for sale in the "
+        "real world. Celebrate its potential enthusiastically—BUT in the pivots, fatal_flaws (framed as "
+        "'What You Must Deliver to Live Up to the Hype'), pricing_recommendation, and marketing_playbook, "
+        "spell out the concrete features, quality bar, distribution, and proof they MUST actually build to "
+        "meet that exaggeration and make it genuinely sellable (still return valid JSON matching the exact schema)."
+    ),
+}
+
+
+def normalize_tone(tone: str) -> str:
+    """Normalizes a user-supplied feedback tone key to a supported preset."""
+    key = str(tone or "").strip().lower()
+    return key if key in TONE_PROMPTS else "realistic"
+
+
 def evaluate_idea(
     pitch: str,
     platform: str = "Web",
@@ -164,34 +239,24 @@ def evaluate_idea(
         if on_progress:
             on_progress(msg, pct)
 
+    tone = normalize_tone(tone)
     emit("Checking GitHub & package registries for existing competitors...", 15)
     grounding = gather_market_grounding(pitch=pitch, platform=platform, twist=twist)
 
-    tone_note = (
-        "Tone: NO MERCY — extra blunt, zero punches pulled, roast weak wrapper ideas directly."
-        if str(tone).strip().lower() == "brutal"
-        else "Tone: REALISTIC — objective, candid, zero sugarcoating."
+    tone_note = TONE_PROMPTS[tone]
+    gh_empty = (
+        f"(GitHub search temporarily rate-limited: {grounding.get('github_error') or '429/403'} — rely on domain knowledge & App Store)"
+        if grounding.get("github_rate_limited")
+        else "(no widely-known >=500-star GitHub incumbents found)"
     )
     repos_txt = "\n".join(
         f"- {r['full_name']} ({r['stars']} stars, {r['language']}): {r['description']}"
         for r in (grounding.get("github_top_repos") or [])
-    ) or "(no direct GitHub matches found)"
-    npm_txt = "\n".join(
-        f"- {p['name']}: {p['description']}"
-        for p in (grounding.get("npm_top_packages") or [])
-    ) or "(none)"
+    ) or gh_empty
     app_txt = "\n".join(
         f"- {a['name']} ({a['price']}, {a['rating']}★, {a['reviews']} reviews)"
         for a in (grounding.get("app_store_hits") or [])
-    ) or "(none)"
-    hn_txt = "\n".join(
-        f"- {h['title']} ({h['points']} pts, {h['comments']} comments)"
-        for h in (grounding.get("hn_stories") or [])
-    ) or "(none)"
-    so_txt = "\n".join(
-        f"- {q['title']} (score {q['score']})"
-        for q in (grounding.get("so_questions") or [])
-    ) or "(none)"
+    ) or "(no widely-known >=500-review App Store incumbents found)"
 
     user_prompt = f"""{tone_note}
 
@@ -202,28 +267,21 @@ App Idea Pitch:
 Supposed Unique Twist / Niche Feature:
 {twist or "(none provided)"}
 
-Live Market Grounding (query: "{grounding.get('query', '')}"):
-- GitHub matching repositories: {grounding.get('github_total_count', 0)} total
-Top GitHub matches:
+Recognizable High-Traction Incumbents Check (query: "{grounding.get('query', '')}"):
+- Widely-known GitHub repositories (>=500 stars):
 {repos_txt}
-- npm matching packages: {grounding.get('npm_total_count', 0)} total
-Top npm matches:
-{npm_txt}
-- Apple App Store / macOS Store matches:
+- Widely-known Apple App Store / macOS Store apps (>=500 reviews):
 {app_txt}
-- Hacker News stories ({grounding.get('hn_total_hits', 0)} total):
-{hn_txt}
-- Stack Overflow top questions:
-{so_txt}
 """
 
+    system_prompt = SYSTEM_PROMPTS_BY_TONE.get(tone, SYSTEM_PROMPT_RC)
     emit("Acquiring shared AI engine turn (round-robin with LetsVibe)...", 35)
     with llm_lease("letsvibe_rc", job_id=job_id, on_wait=lambda msg: emit(msg, 40)):
         wake = ensure_llama_awake(on_progress=lambda msg: emit(msg, 50))
         if not wake.get("ok"):
             raise RuntimeError(wake.get("error") or "Local AI engine is unavailable.")
         emit("Running deep market saturation & viability analysis...", 65)
-        parsed = _call_shared_llama(SYSTEM_PROMPT_RC, user_prompt, max_tokens=2000)
+        parsed = _call_shared_llama(system_prompt, user_prompt, max_tokens=4096)
         touch_engine()
 
     dims = parsed.get("dimensions") if isinstance(parsed.get("dimensions"), dict) else {}
@@ -244,14 +302,12 @@ Top npm matches:
         raw_vs = raw_vs / 10.0
     computed_viability = round(weighted_sum / total_w, 1) if total_w > 0 else round(max(0.0, min(10.0, raw_vs)), 1)
 
-    raw_verdict = str(parsed.get("verdict") or "").strip().upper()
-    if raw_verdict not in ("DO NOT BUILD", "NICHE ONLY", "ACTUALLY VIABLE"):
-        if computed_viability < 4.2:
-            raw_verdict = "DO NOT BUILD"
-        elif computed_viability < 6.8:
-            raw_verdict = "NICHE ONLY"
-        else:
-            raw_verdict = "ACTUALLY VIABLE"
+    if computed_viability < 4.0:
+        raw_verdict = "DO NOT BUILD"
+    elif computed_viability < 6.8:
+        raw_verdict = "NICHE ONLY"
+    else:
+        raw_verdict = "ACTUALLY VIABLE"
 
     emit("Finalizing Reality Check report...", 95)
     return {

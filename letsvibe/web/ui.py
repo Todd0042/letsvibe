@@ -20,7 +20,6 @@ TEMPLATES_DIR = (
 # Content pages: slug -> (title, meta description). Bodies live in templates/pages/<slug>.html
 PAGES = {
     "sign-in": ("Sign in", "Sign in to LetsVibe with GitHub. Accept the Terms of Use first; you must be 18 or older."),
-    "grading-curve": ("Grading curve", "LetsVibe grades on a curve (a bell curve): why, how the curve was built, and every number behind it."),
     "how-it-works": ("How grading works", "How LetsVibe grades vibe-coded projects with local AI models, step by step."),
     "faq": ("FAQ", "Answers to common questions about LetsVibe scores, submissions and appeals."),
     "privacy": ("Privacy policy", "What LetsVibe collects, why, how long it is kept and how to delete it."),
@@ -61,80 +60,6 @@ def _render_changelog() -> str:
             f'<h2 id="{escape(str(entry["version"]))}">{escape(str(entry["version"]))}: {escape(str(entry["title"]))}</h2>'
             f'<p class="updated">{escape(str(entry["date"]))}</p><ul>{items}</ul>'
         )
-    return "\n".join(parts)
-
-
-def _render_curve() -> str:
-    """The grading-curve page, generated from the live curve constants in storage/peer_grades.py."""
-    from html import escape
-
-    from ..storage.peer_grades import (
-        DEFAULT_CURVE_HIGH,
-        DEFAULT_CURVE_LOW,
-        GLOBAL_PRIOR_MEAN,
-        OUTLIER_THRESHOLD,
-        PEER_MIN_PROJECTS,
-        SCHOOL_GRADE_CUTOFFS,
-        WHY,
-        describe_method,
-        load_calibration,
-    )
-
-    e = lambda v: escape(str(v))  # noqa: E731
-    cal = load_calibration() or {}
-    parts = [
-        "<h1>The grading curve</h1>",
-        '<p class="lede">LetsVibe grades on a single site-wide bell curve computed dynamically from raw rubric scores '
-        "(never stored in the database). You can switch between <strong>Bell Curve</strong> and "
-        "<strong>Raw Rubric</strong> on any leaderboard or project page.</p>",
-        "<h2>Why a curve</h2>",
-        f"<p>{e(WHY)}</p>",
-        "<h2>How it works</h2>",
-        f"<p>{e(describe_method(cal))}</p>",
-        "<ul>"
-        f"<li><strong>Default anchors:</strong> Raw <strong>{DEFAULT_CURVE_LOW:g}</strong> maps to <strong>0</strong>, "
-        f"raw <strong>{DEFAULT_CURVE_HIGH:g}</strong> maps to <strong>100</strong>, and the prior midpoint "
-        f"<strong>{GLOBAL_PRIOR_MEAN:g}</strong> maps to <strong>75 (C)</strong>.</li>"
-        f"<li><strong>Automatic scaling over time:</strong> Once <strong>{OUTLIER_THRESHOLD}</strong> or more "
-        f"projects score above {DEFAULT_CURVE_HIGH:g} (or below {DEFAULT_CURVE_LOW:g}), that endpoint shifts "
-        f"automatically to the {OUTLIER_THRESHOLD}th-highest (or {OUTLIER_THRESHOLD}th-lowest) raw score.</li>"
-        f"<li><strong>Adaptive spread:</strong> As more public projects are graded, the curve blends smoothly from "
-        f"the prior toward the real site-wide average and standard deviation (fully at {PEER_MIN_PROJECTS} projects).</li>"
-        "<li><strong>Single global scale:</strong> Every project shares the same base curve regardless of category, so "
-        "base curved rank order matches Raw Rubric rank order before community Sparks are added.</li>"
-        "</ul>",
-        "<h2>Community Sparks (upvotes)</h2>",
-        "<p>Signed-in users can give a <strong>Spark (&#10024;)</strong> upvote to public projects. Sparks act as a "
-        "bounded community nudge on the <strong>Bell Curve</strong> view while keeping the underlying AI evaluation intact:</p>",
-        "<ul>"
-        "<li><strong>Who can Spark:</strong> Signed-in GitHub accounts only (unlimited across other people's projects; "
-        "at most <strong>one</strong> of your own repositories).</li>"
-        "<li><strong>Exact formula:</strong> Each project receives a diminishing-returns bonus of "
-        "<code>min(3.0, 0.5 &times; log<sub>2</sub>(1 + sparks))</code> added to its Bell Curve score (clamped at 100.0). "
-        "For example: 1 Spark = <strong>+0.50</strong>, 3 Sparks = <strong>+1.00</strong>, 7 Sparks = <strong>+1.50</strong>, "
-        "and the maximum possible boost is <strong>+3.00</strong>.</li>"
-        "<li><strong>Raw Rubric stays pure:</strong> Sparks never change the <strong>Raw Rubric</strong> score or factor scores. "
-        "Toggle <strong>Raw Rubric</strong> on any leaderboard or project page to see the uncurved AI score alone.</li>"
-        "<li><strong>Privacy &amp; deletion:</strong> Your Spark is removed if you click it again or delete your account.</li>"
-        "</ul>",
-    ]
-
-    rows, upper = [], 100.0
-    for cut, grade in SCHOOL_GRADE_CUTOFFS:
-        span = f"{cut:g}&ndash;100" if upper == 100.0 else f"{cut:g}&ndash;{upper - 0.1:.1f}"
-        rows.append(f"<tr><td><strong>{e(grade)}</strong></td><td>{span}</td></tr>")
-        upper = cut
-    rows.append(f"<tr><td><strong>F</strong></td><td>below {upper:g}</td></tr>")
-
-    parts.append("<h2>Curved letter grades</h2>")
-    parts.append(
-        '<div class="table-scroll"><table><thead><tr><th>Grade</th><th>Curved score range (0&ndash;100)</th></tr></thead>'
-        f"<tbody>{''.join(rows)}</tbody></table></div>"
-    )
-    parts.append(
-        "<p>Raw scores are never modified; reports and API responses always preserve the uncurved rubric score "
-        "alongside the Bell Curve score.</p>"
-    )
     return "\n".join(parts)
 
 
@@ -207,7 +132,7 @@ def _fill_live_tables(content: str) -> str:
 
 
 _ARCHIVE_VER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:_\d{4}-\d{2}-\d{2})?$")
-DOC_ARCHIVE_SLUGS = {"how-it-works", "grading-curve", "faq", "privacy", "cookies", "terms"}
+DOC_ARCHIVE_SLUGS = {"how-it-works", "faq", "privacy", "cookies", "terms"}
 
 
 def _format_archive_label(ver_id: str) -> str:
@@ -413,8 +338,6 @@ def render_page(slug: str, version: Optional[str] = None, diff: bool = False) ->
     def _raw_current() -> Tuple[str, str]:
         if slug == "changelog":
             return _render_changelog(), ""
-        if slug == "grading-curve":
-            return _render_curve(), ""
         raw_txt = (TEMPLATES_DIR / "pages" / f"{slug}.html").read_text(encoding="utf-8")
         c, _, s = raw_txt.partition("<!--SCRIPT-->")
         return c, s

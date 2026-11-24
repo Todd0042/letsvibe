@@ -10,7 +10,7 @@
 
 [![Version](https://img.shields.io/badge/Version-1.0.0-ff2a85.svg)](https://github.com/Todd0042/letsvibe/releases)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-00f0ff.svg)](LICENSE)
-[![Rubric](https://img.shields.io/badge/Rubric-v9.3%20(bell%20curve)-blueviolet.svg)](https://letsvibe.todd0042.dev/changelog)
+[![Rubric](https://img.shields.io/badge/Rubric-v10.3%20(analysis%20%2B%20Sparks)-blueviolet.svg)](https://letsvibe.todd0042.dev/changelog)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-39ff14.svg)]()
 [![AI: 100% local](https://img.shields.io/badge/AI-100%25%20Local%20(Ollama)-black.svg)](https://ollama.com)
 [![Models](https://img.shields.io/badge/Models-Qwen2.5--Coder%207B%20%2B%2014B%20%2B%20mxbai--embed-teal.svg)]()
@@ -18,7 +18,7 @@
 
 > 🤖 *LetsVibe is itself vibe-coded: directed by [Todd0042](https://github.com/Todd0042), written by Antigravity (Gemini) and then Claude Code. [Who did what](#-3-how-letsvibe-itself-was-made).*
 
-> **An independent, privacy-first leaderboard that grades vibe-coded software — programs written by AI from someone's prompts — against other vibe-coded software, never against professional developers. Every grade is produced by open AI models running on one local graphics card, anchored by plain code measurements, and placed on a fully published bell curve.**
+> **An independent, privacy-first leaderboard that grades vibe-coded software — programs written by AI from someone's prompts — against other vibe-coded software, never against professional developers. Every grade is produced by open AI models running on one local graphics card, anchored by plain code measurements, plus the community's Sparks.**
 
 🌐 **Live site:** [letsvibe.todd0042.dev](https://letsvibe.todd0042.dev)
 
@@ -35,7 +35,7 @@
   * [🚀 How It Works in 3 Steps](#-how-it-works-in-3-steps)
   * [📸 Visual Tour](#-visual-tour)
   * [🧭 The 5 Factors](#-the-5-factors)
-  * [🔔 Graded on a Published Bell Curve](#-graded-on-a-published-bell-curve)
+  * [🎯 How a Score Is Made](#-how-a-score-is-made)
   * [🔒 Privacy Promises](#-privacy-promises)
   * [🛠️ Run It Yourself](#️-run-it-yourself)
 * **Part 2 — Technical Reference**
@@ -44,7 +44,7 @@
   * [3. Plain Measurements & User-Journey Evidence ([analyzers/](letsvibe/analyzers/))](#3-plain-measurements--user-journey-evidence)
   * [4. Classification & Category Weights ([evaluator/classifier.py](letsvibe/evaluator/classifier.py), [evaluator/weights.py](letsvibe/evaluator/weights.py))](#4-classification--category-weights)
   * [5. Experience Grading: Dossier, Checklists & Points ([evaluator/experience/](letsvibe/evaluator/experience/))](#5-experience-grading-dossier-checklists--points)
-  * [6. Scores, Letter Grades & the Bell Curve ([storage/peer_grades.py](letsvibe/storage/peer_grades.py))](#6-scores-letter-grades--the-bell-curve)
+  * [6. Scores & Letter Grades](#6-scores--letter-grades)
   * [7. The Website: Queue, Accounts, Privacy & Admin ([web/](letsvibe/web/), [storage/](letsvibe/storage/))](#7-the-website-queue-accounts-privacy--admin)
   * [8. CLI & Configuration](#8-cli--configuration)
   * [9. Repository Structure & Tests](#9-repository-structure--tests)
@@ -62,9 +62,9 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 
 1. **🏆 A public leaderboard** of graded GitHub projects, with a podium, filters by category and platform, factor-by-factor sorting and a Hall of Fame.
 2. **📋 A detailed report for every project**: five factor scores, what works, what needs work (only problems the checks actually found), and private code-health notes that only the project's owner can see.
-3. **🔍 A fully disclosed method**: how grading works, every rubric change, and every number behind the grading curve are published on the site.
+3. **🔍 A fully disclosed method**: how grading works and every rubric change are published on the site.
 
-> **100% source-available (site & grading engine):** Both the LetsVibe web platform ([Todd0042/letsvibe](https://github.com/Todd0042/letsvibe)) and the versioned evaluation engine ([Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine)) are source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE), alongside the live methodology, checklist points, and curve formulas on [/how-it-works](https://letsvibe.todd0042.dev/how-it-works) and [/grading-curve](https://letsvibe.todd0042.dev/grading-curve).
+> **100% source-available (site & grading engine):** Both the LetsVibe web platform ([Todd0042/letsvibe](https://github.com/Todd0042/letsvibe)) and the versioned evaluation engine ([Todd0042/letsvibe-engine](https://github.com/Todd0042/letsvibe-engine)) are source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE), alongside the live methodology and checklist points on [/how-it-works](https://letsvibe.todd0042.dev/how-it-works).
 
 ---
 
@@ -72,7 +72,7 @@ More and more software is **vibe-coded**: someone describes what they want, and 
 
 1. **Sign in & submit**: Sign in with GitHub (public username, ID and avatar only — never your email) and submit a public repository **you own**. Nobody, including the site operator, can submit someone else's work.
 2. **Graded on what people experience**: A program writes an App Dossier of what people see and do in the project (screens, on-screen text, setup, launch, saving, devices). An open 14B model on LetsVibe's own graphics card answers fixed checklists about it, one topic at a time, quoting the dossier for every answer, and each answer is worth fixed points. No AI reads the code and no AI picks a number. The copy is deleted afterwards. Your code never goes to an AI company.
-3. **Graded on a curve**: Your project gets a raw score and a letter grade from a published bell curve, plus its rank among similar projects. Delete it — or your whole account — yourself, at any time, from the live site and every backup.
+3. **Graded on its own merits**: Your project's score is its analysis plus its community Sparks, with a letter grade on fixed bands and its rank among similar projects. Other projects never change your score. Delete it — or your whole account — yourself, at any time, from the live site and every backup.
 
 ---
 
@@ -86,10 +86,10 @@ A podium for the top three, then every graded project with its score, letter gra
 </p>
 
 ### 📋 A Project Report
-Every report shows the letter grade from the bell curve with the exact reason for it, the target device the project was judged for, and its merit badges:
+Every report shows the score and letter grade with the exact reason for it, the target device the project was judged for, and its merit badges:
 
 <p align="center">
-  <img src="screenshots/report-header.png" alt="Report header with bell-curve grade" width="100%">
+  <img src="screenshots/report-header.png" alt="Report header with the grade" width="100%">
 </p>
 
 The radar is scaled to the project (0 at the centre, its best factor at the edge) with a dashed outline marking a typical vibe-coded project (62), next to the verdict, the reasoning behind the category's weights and the plain code measurements:
@@ -121,20 +121,15 @@ Graded on what people experience, never on how the code is written. "Good enough
 
 ---
 
-## 🔔 Graded on a Published Bell Curve
+## 🎯 How a Score Is Made
 
-AI reviewers are good at *comparing* projects but poor at absolute scores — they hedge toward the middle. So letter grades come from a single site-wide bell curve computed dynamically from raw rubric scores (never stored in the database), while **Raw Rubric** mode always preserves the direct uncurved score:
+A project's score is **its analysis plus its community Sparks, and nothing else**:
 
-* **Default anchors**: Raw **20** maps to **0**, raw **90** maps to **100**, and the prior midpoint **75** maps to **75 (C)**.
-* **Automatic scaling & adaptive spread**: If **5** or more projects score above 90 (or below 20), that endpoint shifts automatically; as more public projects are graded, the curve blends smoothly from the prior toward the real site-wide average and standard deviation.
-* **Community Sparks (✨ upvotes)**: Signed-in users can Spark public projects (unlimited for others' apps, max **1** of their own). Each project receives a bounded diminishing-returns bonus of `min(3.0, 0.5 * log2(1 + sparks))` (`+0.50` for the 1st Spark, capped at `+3.00`) on the **Bell Curve** score only. **Raw Rubric** scores are never modified by Sparks, and deleting an account deletes its Sparks.
+* **The analysis**: the grading engine's rubric score for the project's own code (0-100).
+* **Community Sparks (✨ upvotes)**: signed-in users can Spark public projects (any number of other people's, at most **1** of their own). The bonus grows ever more slowly: `0.5 * log2(1 + sparks)` (`+0.50` for the 1st Spark, `+1.00` at 3, `+1.50` at 7), and the total never goes above 100. Deleting an account deletes its Sparks.
+* **The letter** comes from that number on fixed bands (97+ A+, 93 A, 90 A-, 87 B+, 83 B, 80 B-, 77 C+, 73 C, 70 C-, 67 D+, 63 D, 60 D-, below 60 F).
 
-Every number and constant used by the curve is published live on the [Grading curve](https://letsvibe.todd0042.dev/grading-curve) page:
-
-| 🔔 Why a Curve & How It Works | ✨ Community Sparks & Curved Grade Bands |
-| :---: | :---: |
-| <img src="screenshots/curve-method.png" width="400"> | <img src="screenshots/curve-reference.png" width="400"> |
-| *Why AI scores need a curve, default anchors, and adaptive scaling* | *Community Spark upvotes and the curved letter-grade ranges* |
+There is no curve: other projects' scores never move yours, and a project's rank in its category is simply the order of those scores.
 
 ---
 
@@ -185,7 +180,7 @@ python letsvibe.py web      # http://127.0.0.1:8000 (leaderboard) and /admin (ad
 
 ## 1. Architecture & the Grading Pipeline
 
-LetsVibe is a Python package ([letsvibe/](letsvibe/)) with a **FastAPI** web server, a single background **queue worker**, **SQLite** storage (WAL mode, `secure_delete`), and a framework-free HTML/JavaScript front end. One grading recipe ([evaluator/pipeline.py](letsvibe/evaluator/pipeline.py)) is shared by the website worker, the command line and the curve calibration script, so every grade on the site — the reference projects included — is produced the same way.
+LetsVibe is a Python package ([letsvibe/](letsvibe/)) with a **FastAPI** web server, a single background **queue worker**, **SQLite** storage (WAL mode, `secure_delete`), and a framework-free HTML/JavaScript front end. One grading recipe ([evaluator/pipeline.py](letsvibe/evaluator/pipeline.py)) is shared by the website worker and the command line, so every grade on the site — the reference projects included — is produced the same way.
 
 ```mermaid
 flowchart TB
@@ -201,9 +196,8 @@ flowchart TB
     Rubric --> Compare["Item-by-item comparison; 14B rereads<br/>the quoted lines when they disagree<br/>(evaluator/experience/reconcile.py)"]
     Compare --> Score["Fixed points per answer, fixed weights<br/>(evaluator/experience/scoring.py)"]
     Score --> Describe["14B rewrites the checked answers; public, unscored<br/>complexity description (describe.py, complexity.py)"]
-    Describe --> Curve["Letter grade on the bell curve<br/>(storage/peer_grades.py)"]
-    Curve --> Board["Leaderboard & report<br/>(storage/db.py, web/templates/)"]
-    Calib["scripts/calibrate_curve.py<br/>reference projects x3 runs"] --> Curve
+    Describe --> Grade["Score + Spark bonus, letter on fixed bands<br/>(storage/db.py)"]
+    Grade --> Board["Leaderboard & report<br/>(storage/db.py, web/templates/)"]
 ```
 
 ### GPU discipline ([evaluator/ollama.py](letsvibe/evaluator/ollama.py))
@@ -242,7 +236,7 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 ## 4. Classification & Category Weights
 
 * **[evaluator/classifier.py](letsvibe/evaluator/classifier.py)** reads the README, file layout and build files to pick a general category (game, application, web app, tool, embedded, …) and target platforms.
-* **Fixed weights** ([evaluator/experience/scoring.py](letsvibe/evaluator/experience/scoring.py)): the same for every project (value 25, creativity 22, journey 20, functionality 18, UI/UX 15). The category is used for rankings, filters and the bell curve.
+* **Fixed weights** ([evaluator/experience/scoring.py](letsvibe/evaluator/experience/scoring.py)): the same for every project (value 25, creativity 22, journey 20, functionality 18, UI/UX 15). The category is used for rankings and filters.
 
 ---
 
@@ -257,20 +251,11 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 
 ---
 
-## 6. Scores, Letter Grades & the Bell Curve
+## 6. Scores & Letter Grades
 
-* **Score**: the five factor scores are combined with fixed weights ([evaluator/experience/scoring.py](letsvibe/evaluator/experience/scoring.py)).
-* **Bell curve ([storage/peer_grades.py](letsvibe/storage/peer_grades.py))**: `z = (score − average) / standard deviation`. The reference projects set the starting bell (average = their midpoint, one standard deviation = a quarter of the gap); each category's own scores take over as it grows, fully at 30 projects.
-
-| Grade | Standard deviations from the average | Share of a full bell |
-| :---: | :--- | :---: |
-| A+ / A / A- | +2.0 and above / +1.75 / +1.5 | ~6.7% |
-| B+ / B / B- | +1.17 / +0.83 / +0.5 | ~24.2% |
-| C+ / C / C- | +0.17 / −0.17 / −0.5 | ~38.3% |
-| D | −1.5 to −0.5 | ~24.2% |
-| F | below −1.5 | ~6.7% |
-
-* **Calibration ([scripts/calibrate_curve.py](scripts/calibrate_curve.py))**: grades both reference projects several times through the shared pipeline and writes everything — every run, average, spread and the reference reports — to [letsvibe/data/curve_calibration.json](letsvibe/data/curve_calibration.json). The public Grading curve page is generated from that file, so the disclosure can't drift from what the grader uses. It is re-run whenever the models, rubric or pipeline change.
+* **Score**: the factor scores are combined with fixed weights by the grading engine; the site adds the Spark bonus when it shows the project ([storage/db.py](letsvibe/storage/db.py), `upvote_score_bonus`). Stored reports always keep the analysis score alone.
+* **Letter**: the shown score on fixed bands ([evaluator/consensus.py](letsvibe/evaluator/consensus.py), `GRADE_CUTOFFS`), the same for every project.
+* **Rank**: the order of shown scores within the project's category ([storage/standing.py](letsvibe/storage/standing.py)), the same on the leaderboard and the project page.
 
 ---
 
@@ -286,7 +271,7 @@ Collected without AI in [`gather_metrics`](letsvibe/evaluator/pipeline.py):
 <p align="center">
   <img src="screenshots/admin-console.png" alt="Admin queue and engine console" width="90%">
 </p>
-* **Content pages ([web/templates/pages/](letsvibe/web/templates/pages/))**: How grading works, Grading curve, FAQ, rubric changelog, Privacy, Cookies, Terms, Remove my project, My Data and My Projects.
+* **Content pages ([web/templates/pages/](letsvibe/web/templates/pages/))**: How grading works, FAQ, rubric changelog, Privacy, Cookies, Terms, Remove my project, My Data and My Projects.
 
 ---
 
@@ -325,15 +310,13 @@ python letsvibe.py models                                   # list local Ollama 
 ```
 letsvibe/
 ├── letsvibe.py                  # Entry point (auto-uses .venv)
-├── scripts/calibrate_curve.py   # Builds the grading curve from the reference projects
 ├── letsvibe/
 │   ├── cli.py                   # analyze / web / models
 │   ├── analyzers/               # Proven-problem scan, complexity, packaging, user-journey evidence
 │   ├── core/                    # Ingestion, auth, terms, limits, platforms, vibe-coded check, data models
 │   ├── evaluator/               # Shared pipeline, experience grading (dossier, checklists, points), classifier, Ollama client
-│   ├── storage/                 # SQLite, bell curve, backups & deletion everywhere, held reports & corrections
+│   ├── storage/                 # SQLite, category standing, backups & deletion everywhere, held reports & corrections
 │   ├── reporters/               # Terminal, Markdown and HTML reports
-│   ├── data/curve_calibration.json  # Published curve calibration
 │   └── web/                     # FastAPI server, queue worker, deletion jobs, image proxy, templates & static files
 └── tests/                       # Unit, API and storage tests; tests/ui = browser tests (Playwright)
 ```
@@ -359,7 +342,7 @@ LetsVibe is built around three commitments: **honest grading, user privacy, and 
 
 ### 🎯 1. Honest grading
 * Vibe-coded software is compared with vibe-coded software only. Accuracy matters more than flattering scores; grades are automated opinions, not security audits or endorsements.
-* Every rubric change is published, and the grading curve's reference projects, prompts and runs are public.
+* Every rubric change is published, and the grading engine's prompts and rules are public.
 
 ### 🔒 2. Privacy by design
 * Cookieless aggregate pageviews only (Cloudflare Web Analytics); no tracking cookies, ads, personal profiles, or cross-site trackers. Code is graded locally and the copy deleted; users delete their own data (including Spark upvotes) from the live site and every backup, with nobody notified.
@@ -369,15 +352,15 @@ LetsVibe is vibe-coded too: by this site's own definition, it is exactly the kin
 
 | Contributor | Role |
 | :--- | :--- |
-| **[Todd0042](https://github.com/Todd0042)** | Creator: the idea, product direction, the privacy rules, the grading philosophy ("vibe-coded software graded as vibe-coded software", the bell curve), testing against real projects, and every review and decision |
+| **[Todd0042](https://github.com/Todd0042)** | Creator: the idea, product direction, the privacy rules, the grading philosophy ("vibe-coded software graded as vibe-coded software"; score = analysis + Sparks, no curve), testing against real projects, and every review and decision |
 | **Antigravity** (Google, Gemini models) | Wrote the original version, 2026-11-08 to 2026-11-11: the dual-model local analyzer and CLI, git-aware ingestion and chunking, archetype detection, the first web leaderboard with GitHub sign-in, quotas and 7-factor scoring, fail-closed scoring and the yes/no evidence checklist |
-| **Claude Code** (Anthropic, Claude Opus 5.5) | Took over from 2026-11-11 to v1.0.0: the fix for silently truncated prompts, rubrics v6 and v7 (the vibe-coded reference class, user journey, the name-based file filter, the bell curve and its calibration), privacy and self-service deletion everywhere, terms acceptance, the admin tools, the model bake-off, the README, and the two reference projects ([letsvibe-good](https://github.com/Todd0042/letsvibe-good), [letsvibe-bad](https://github.com/Todd0042/letsvibe-bad)), as documented in their `PROVENANCE.md` files |
+| **Claude Code** (Anthropic, Claude Opus 5.5) | Took over from 2026-11-11 to v1.0.0: the fix for silently truncated prompts, rubrics v6 and v7 (the vibe-coded reference class, user journey, the name-based file filter, the bell curve and its calibration, since removed), privacy and self-service deletion everywhere, terms acceptance, the admin tools, the model bake-off, the README, and the two reference projects ([letsvibe-good](https://github.com/Todd0042/letsvibe-good), [letsvibe-bad](https://github.com/Todd0042/letsvibe-bad)), as documented in their `PROVENANCE.md` files |
 
 This public repository starts at v1.0.0 as a single commit. The earlier development history, including the trial and error behind rubrics v1 to v7, is summarized on the site's [rubric changelog](https://letsvibe.todd0042.dev/changelog).
 
 ### 🔍 LetsVibe: Reality Check (`LetsVibeRC.todd0042.dev`)
 * **Pre-Build Idea Filter:** Evaluates an app idea pitch, target platform, and supposed unique twist *before* writing code, querying GitHub Search & npm for real competitors and returning a candid 6-dimension viability & market saturation report (`DO NOT BUILD` / `NICHE ONLY` / `ACTUALLY VIABLE`) with shareable links (`/r/<id>`) and standalone HTML export.
-* **Shared Round-Robin LLM Arbitration:** `letsvibe-llama-supervisor` (`127.0.0.1:11436`) arbitrates exclusive leases (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` repository audits and `letsvibe_rc` reality checks so both share the same `llama-server` instance without interference.
+* **Shared Round-Robin GPU Turns:** the host `gpu-scheduler` service (`127.0.0.1:11436`, repo `gpu-scheduler`) gives exclusive turns (`/lock/acquire`, `/lock/heartbeat`, `/lock/release`, `/lock/status`) round-robin between `letsvibe` audits, `letsvibe_rc` reality checks, Noir Studios and Graphical Studio. It keeps `llama-server` loaded whenever the GPU is idle, so LetsVibe starts instantly.
 
 ### ⚖️ 4. License
 * **License**: [PolyForm Noncommercial License 1.0.0](LICENSE) — free for personal, hobby, educational, research and nonprofit use; commercial use (inside a company, in a paid product or service, or for profit) requires a separate license from [Todd0042](https://github.com/Todd0042).

@@ -145,15 +145,15 @@ def test_score_validation_helpers_fail_closed():
     assert not _has_all_scores({"response": "I'm sorry, but I can't assist with that request."})
 
 
-def test_letter_grade_curve_is_calibrated_to_rubric():
+def test_letter_grades_are_fixed_bands():
     from letsvibe.evaluator.consensus import calculate_letter_grade as g
 
-    # Rubric v6 prior curve: 62 (typical vibe-coded project) is a C, the middle grade
-    assert g(62) == "C" and g(61.9) == "C-" and g(55) == "C-" and g(68) == "C+"
-    assert g(72) == "B-" and g(77) == "B" and g(81) == "B+" and g(85) == "A-" and g(89) == "A" and g(94) == "A+"
-    assert g(45) == "D" and g(39.9) == "F"
+    # No curve: the standard US bands (90s A, 80s B, 70s C, 60s D, below 60 F), the same for every project
+    assert g(97) == "A+" and g(93) == "A" and g(90) == "A-" and g(89.9) == "B+" and g(83) == "B" and g(80) == "B-"
+    assert g(77) == "C+" and g(73) == "C" and g(70) == "C-" and g(67) == "D+" and g(63) == "D" and g(60) == "D-"
+    assert g(59.9) == "F" and g(0) == "F"
     grades = [g(x) for x in range(0, 101)]
-    order = ["F", "D", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"]
+    order = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"]
     assert [order.index(x) for x in grades] == sorted(order.index(x) for x in grades)  # monotonic
 
 

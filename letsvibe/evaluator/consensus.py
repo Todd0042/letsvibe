@@ -113,25 +113,25 @@ def _has_all_scores(data: Any, factors: Optional[Any] = None) -> bool:
     return True
 
 
-# Letter-grade cutoffs (rubric v6). This is the fallback "prior" curve, used until a category has
-# enough projects for peer percentiles (see storage/peer_grades.py). It mirrors the score bands:
-# 55-69 typical vibe-coded project (62 = C, the middle grade), 70-79 strong, 80-89 among the best.
+# Standard US letter-grade cutoffs (90s=A, 80s=B, 70s=C, 60s=D, <60=F).
 GRADE_CUTOFFS = (
-    (94.0, "A+"),
-    (89.0, "A"),
-    (85.0, "A-"),
-    (81.0, "B+"),
-    (77.0, "B"),
-    (72.0, "B-"),
-    (68.0, "C+"),
-    (62.0, "C"),
-    (55.0, "C-"),
-    (40.0, "D"),
+    (97.0, "A+"),
+    (93.0, "A"),
+    (90.0, "A-"),
+    (87.0, "B+"),
+    (83.0, "B"),
+    (80.0, "B-"),
+    (77.0, "C+"),
+    (73.0, "C"),
+    (70.0, "C-"),
+    (67.0, "D+"),
+    (63.0, "D"),
+    (60.0, "D-"),
 )
 
 
 def calculate_letter_grade(score: float) -> str:
-    """Maps a 0-100 score to a letter grade on the prior curve (a typical vibe-coded project, ~62, earns a C)."""
+    """Maps a 0-100 score to a standard US letter grade (90s=A, 80s=B, 70s=C, 60s=D, <60=F)."""
     for cutoff, grade in GRADE_CUTOFFS:
         if score >= cutoff:
             return grade

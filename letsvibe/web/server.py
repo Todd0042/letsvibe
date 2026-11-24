@@ -659,7 +659,7 @@ def is_admin_request(request: Request) -> bool:
 # ------------------------------------------------------------------------------------------------------------------
 # TEST MODE (remove before launch). With LETSVIBE_ADMIN_TEST_SUBMISSIONS=1 in .env, the admin may submit repositories
 # owned by other GitHub accounts to build a larger evaluation dataset. Those projects are flagged is_test: only the
-# admin sees them, and they never affect public grades, curves, ranks or badges (storage/db.py, peer_grades.py).
+# admin sees them, and they never affect public grades, ranks or badges (storage/db.py, storage/standing.py).
 # Everyone else, the admin's own submissions included, still follows owns_repo().
 # ------------------------------------------------------------------------------------------------------------------
 def admin_test_submissions_enabled() -> bool:
@@ -729,8 +729,16 @@ def require_admin(request: Request) -> Dict[str, Any]:
 SESSION_RENEW_AFTER_SECONDS = 24 * 3600
 
 
+def _session_cookie_domain(request: Request) -> Optional[str]:
+    host = (request.headers.get("host") or request.url.hostname or "").split(":")[0].strip().lower()
+    if host == "todd0042.dev" or host.endswith(".todd0042.dev"):
+        return ".todd0042.dev"
+    return None
+
+
 def _set_session_cookie(res: Response, request: Request, token: str) -> None:
     is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    domain = _session_cookie_domain(request)
     res.set_cookie(
         SESSION_COOKIE_NAME,
         token,
@@ -740,7 +748,15 @@ def _set_session_cookie(res: Response, request: Request, token: str) -> None:
         samesite="lax",
         secure=is_https,
         path="/",
+        domain=domain,
     )
+
+
+def _clear_session_cookie(res: Response, request: Request) -> None:
+    res.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    domain = _session_cookie_domain(request)
+    if domain:
+        res.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=domain)
 
 
 @app.get("/api/auth/me")
@@ -894,27 +910,16 @@ async def api_github_callback(code: str, state: str, request: Request):
     else:
         target_redirect = "/admin" if is_admin else "/"
         res = RedirectResponse(url=target_redirect, status_code=302)
-    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-    expires_dt = datetime.now(timezone.utc) + timedelta(seconds=SESSION_DURATION_SECONDS)
-    res.set_cookie(
-        SESSION_COOKIE_NAME,
-        session_token,
-        max_age=SESSION_DURATION_SECONDS,
-        expires=expires_dt,
-        httponly=True,
-        samesite="lax",
-        secure=is_https,
-        path="/",
-    )
+    _set_session_cookie(res, request, session_token)
     res.delete_cookie(CSRF_COOKIE_NAME, path="/")
     return res
 
 
 @app.post("/api/auth/logout")
-async def api_logout():
+async def api_logout(request: Request):
     """Logs out user by clearing the session cookie."""
     res = JSONResponse({"status": "ok", "message": "Logged out successfully."})
-    res.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    _clear_session_cookie(res, request)
     return res
 
 
@@ -1076,7 +1081,7 @@ def _render_project_export_markdown(project: Dict[str, Any], notes_data: Optiona
     lines = [
         f"# LetsVibe Report: {slug}",
         "",
-        f"- **Score:** {project.get('curved_score', project.get('final_score'))} ({project.get('curved_letter_grade', project.get('letter_grade'))}) | **Raw Rubric:** {project.get('final_score')} ({project.get('raw_letter_grade', project.get('letter_grade'))})",
+        f"- **Score:** {project.get('final_score')} ({project.get('letter_grade')})",
         f"- **Rubric Version:** {project.get('rubric_version') or rep.get('rubric_version') or 'N/A'}",
         f"- **Commit SHA:** {project.get('commit_sha') or 'N/A'}",
         f"- **Graded At:** {project.get('graded_at') or 'N/A'}",
@@ -1118,7 +1123,7 @@ async def api_project_export(
 ):
     """Exports the complete evaluation report and maintainer notes for the project's owner or admin."""
     import re
-    from ..storage.db import strip_safety_details
+    from ..storage.db import strip_safety_details, unmeasured_notes
 
     user = get_current_user(request)
     is_admin = bool(user and user.get("is_admin")) and is_admin_user(user.get("username", ""), user.get("github_id"))
@@ -1139,6 +1144,10 @@ async def api_project_export(
         data.pop(k, None)
     if isinstance(data.get("full_report"), dict):
         data["full_report"] = strip_safety_details(data["full_report"])
+    # Empty metric scores mean "this engine didn't grade it" (not a 0): say so next to them.
+    not_graded = unmeasured_notes(data)
+    if not_graded:
+        data["not_graded"] = not_graded
 
     safe_owner = re.sub(r"[^\w\-.]", "_", owner)
     safe_repo = re.sub(r"[^\w\-.]", "_", repo)
@@ -1289,7 +1298,7 @@ async def api_delete_my_account(req: DeleteAccountRequest, user: Dict[str, Any] 
         "account", username, str(user.get("github_id", "")), avatar_url=db_user.get("github_avatar_url") or "",
     )
     res = JSONResponse({"status": "ok", **job.public()})
-    res.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    _clear_session_cookie(res, request)
     return res
 
 
@@ -1696,11 +1705,10 @@ _DOC_PAGE_META = {
     "faq.html": ("FAQ", "/faq"),
     "terms.html": ("Terms of Service", "/terms"),
     "privacy.html": ("Privacy Policy", "/privacy"),
-    "grading-curve.html": ("Grading Curve", "/grading-curve"),
 }
 
 _SITE_RECENT_FEATURES = [
-    ("2026-11-16", "Upward-only half-bell curve (never reduces Raw Rubric)", "/grading-curve"),
+    ("2026-11-19", "Direct rubric scoring + community Spark upvote bonus (bell curve removed)", "/how-it-works"),
     ("2026-11-16", "Doc version archives & code Diff View", "/how-it-works"),
     ("2026-11-16", "In-memory Live Visitors & Bots counter (no tracking saved)", "/"),
     ("2026-11-16", "On-demand local AI engine wake/sleep", None),
@@ -1722,14 +1730,6 @@ def _collect_whats_new(days: int = 7) -> Dict[str, Any]:
                 continue
             if mtime >= cutoff:
                 docs.append({"title": title, "url": url, "updated_at": int(mtime)})
-
-    # /grading-curve is rendered dynamically from peer_grades.py
-    curve_src = Path(__file__).resolve().parent.parent / "storage" / "peer_grades.py"
-    try:
-        if curve_src.is_file() and curve_src.stat().st_mtime >= cutoff:
-            docs.append({"title": "Grading Curve", "url": "/grading-curve", "updated_at": int(curve_src.stat().st_mtime)})
-    except OSError:
-        pass
 
     live_engine: Optional[Dict[str, Any]] = None
     try:
@@ -1804,7 +1804,6 @@ async def api_leaderboard(
     category: Optional[str] = Query(None, description="Comma-separated general categories"),
     platform: Optional[str] = Query(None, description="Comma-separated platform ids"),
     search: Optional[str] = Query(None, description="Search keyword"),
-    curve: bool = Query(True, description="Whether to apply the bell curve to letter grades"),
     engine: Optional[str] = Query(None, description="Admin-only engine version filter"),
 ):
     """Ranked repository list. OR within a filter group, AND across groups; `facets` holds option counts."""
@@ -1815,7 +1814,6 @@ async def api_leaderboard(
         sort_by=sort_by, tier_filter=tier, search=search,
         categories=category, platforms=platform, with_facets=True,
         include_test=is_admin,  # TEST MODE: admin test gradings and engine filter are available for the admin only
-        use_curve=curve,
         engine_filter=engine if is_admin else None,
     )
     up_counts, up_mine = get_upvote_map(viewer_gid)

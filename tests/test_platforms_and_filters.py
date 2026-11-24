@@ -11,14 +11,6 @@ from letsvibe.storage.db import get_leaderboard, init_db, save_report_to_db
 from letsvibe.storage.identity import parse_repo_identity
 
 
-@pytest.fixture(autouse=True)
-def _rubric_letters(monkeypatch):
-    """Filter tests use fixed rubric letters; the grading curve is tested in test_peer_grading.py."""
-    from letsvibe.storage import peer_grades
-
-    monkeypatch.setattr(peer_grades, "load_calibration", lambda: None)
-
-
 def _write(root: Path, rel: str, text: str = "") -> None:
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)

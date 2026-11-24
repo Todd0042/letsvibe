@@ -53,6 +53,71 @@ def _testing_rubric_versions() -> List[str]:
         return []
 LEGACY_V5_RUBRICS = ("v1", "v2", "v3", "v4", "v5")
 
+# Why a report has no score for a metric (shown next to the empty value in exports): the metric isn't part of the
+# engine that graded it, which is different from scoring 0.
+UNMEASURED_NOTES = {
+    "maintainability_score": "Not graded by this engine: retired after rubric v5 (now part of Code Health)",
+    "architecture_score": "Not graded by this engine: retired after rubric v5 (now part of Code Health)",
+    "code_health_score": "Not graded by this engine (introduced in rubric v6; experience-only engines skip it)",
+    "user_journey_score": "Not graded by this engine (introduced in rubric v6)",
+    "operational_safety_score": "Not graded by this engine",
+}
+
+
+def _was_graded(factors: Dict[str, Any], weights: Dict[str, Any], name: str, *aliases: str) -> bool:
+    """True when the report really graded this factor: it has an evaluation with a score and a weight above 0."""
+    for key in (name, *aliases):
+        entry = factors.get(key)
+        if not isinstance(entry, dict) or entry.get("score") is None:
+            continue
+        try:
+            if float(entry.get("weight", weights.get(key, 0)) or 0) > 0 or float(weights.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def unmeasured_notes(row: Dict[str, Any]) -> Dict[str, str]:
+    """For a report row: which metric columns are empty because its engine didn't grade them, and why."""
+    return {col: note for col, note in UNMEASURED_NOTES.items() if col in row and row[col] is None}
+
+
+def _clear_false_zeros(conn: sqlite3.Connection) -> int:
+    """One-time repair, safe to repeat: reports saved before empty values existed for retired or not-yet-introduced
+    metrics have a stored 0 instead. Turn those 0s into empty values when the report's engine didn't grade the metric;
+    real scores (graded, even if 0) stay as they are."""
+    rows = conn.execute(
+        """SELECT id, rubric_version, report_data_json, maintainability_score, architecture_score,
+                  code_health_score, user_journey_score
+           FROM reports
+           WHERE maintainability_score = 0 OR architecture_score = 0 OR code_health_score = 0 OR user_journey_score = 0"""
+    ).fetchall()
+    fixed = 0
+    for r in rows:
+        major = str(r["rubric_version"] or "").lower().split(".")[0]
+        if not major:
+            continue  # unknown engine: can't tell a real 0 from a missing one
+        legacy = major in LEGACY_V5_RUBRICS
+        try:
+            rep = json.loads(r["report_data_json"] or "{}")
+        except ValueError:
+            continue
+        factors = rep.get("factor_evaluations") or rep.get("factors") or {}
+        weights = rep.get("weights") or {}
+        checks = (("maintainability_score", ("maintainability", "complexity"), not legacy),
+                  ("architecture_score", ("architecture", "project_flow"), not legacy),
+                  ("code_health_score", ("code_health",), legacy),
+                  ("user_journey_score", ("user_journey",), legacy))
+        clear = [col for col, keys, outside_era in checks
+                 if outside_era and r[col] == 0 and not _was_graded(factors, weights, *keys)]
+        if clear:
+            conn.execute(f"UPDATE reports SET {', '.join(f'{c} = NULL' for c in clear)} WHERE id = ?", (r["id"],))
+            fixed += 1
+    if fixed:
+        logger.info("Cleared stored 0s for metrics their engine didn't grade in %d report(s)", fixed)
+    return fixed
+
 
 def rubric_version_rank(version: Optional[str]) -> int:
     """Converts a rubric version string ('v10', 'v10a', 'v9.3', 'v1') into an integer rank."""
@@ -305,7 +370,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
         DROP TABLE IF EXISTS visitor_journeys;
         """)
         # Safe migrations for existing databases
-        try:  # number shown with the letter, from the same bell curve (storage/peer_grades.py)
+        try:  # legacy (the bell curve was removed): kept so old databases open; always NULL now
             conn.execute("ALTER TABLE reports ADD COLUMN curved_score REAL;")
         except sqlite3.OperationalError:
             pass
@@ -423,8 +488,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
                     conn.execute("UPDATE reports SET rubric_version = ?, rubric_rank = ? WHERE id = ?", (rv, rk, row["id"]))
         except Exception as exc:
             logger.warning(f"Rubric rank backfill skipped: {exc}")
-        # Ensure stored letter_grade in reports is always the uncurved raw rubric grade
-        # (bell curve is applied dynamically at presentation time via peer_grades.compute_peer_overlays)
+        # Clear what the removed bell curve left behind: the stored letter is the rubric score's letter, never curved
         try:
             from ..evaluator.rubric import calculate_letter_grade
             for row in conn.execute("SELECT id, final_score, letter_grade, curved_score, report_data_json FROM reports").fetchall():
@@ -463,6 +527,11 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
                     )
         except Exception as exc:
             logger.warning(f"Qualifier score backfill skipped: {exc}")
+        # One-time repair: 0s stored for metrics the report's engine never graded become empty ("not graded").
+        try:
+            _clear_false_zeros(conn)
+        except (sqlite3.Error, ValueError, TypeError) as exc:
+            logger.warning(f"Clearing stored 0s for ungraded metrics skipped: {exc}")
     conn.close()
 
 
@@ -504,7 +573,7 @@ def save_report_to_db(
 
     now_iso = datetime.now().isoformat()
     final_score = float(report_dict.get("final_vibe_score", 0.0))
-    # Always store the uncurved raw rubric letter grade in SQLite (bell curve is applied dynamically on read)
+    # The stored letter is the rubric score's letter; the Spark bonus is added when shown (get_leaderboard etc.)
     letter_grade = calculate_letter_grade(final_score)
     report_dict["letter_grade"] = letter_grade
     archetype = report_dict.get("archetype", {})
@@ -566,6 +635,14 @@ def save_report_to_db(
         # Rubric v1-v5 graded maintainability and architecture instead of user_journey and code_health
         journey_score = None
         health_score = None
+    # Maintainability and architecture belong to rubric v1-v5 (v6 folded them into Code Health). For any later engine
+    # that didn't grade them, store them empty ("not part of this engine"), never as a 0 that reads like a real score.
+    if major_ver and major_ver not in LEGACY_V5_RUBRICS:
+        weights = report_dict.get("weights") or {}
+        if not _was_graded(factors, weights, "maintainability", "complexity"):
+            maint_score = None
+        if not _was_graded(factors, weights, "architecture", "project_flow"):
+            arch_score = None
 
     with conn:
         # Upsert project
@@ -799,7 +876,6 @@ def get_leaderboard(
     platforms: Optional[Any] = None,
     with_facets: bool = False,
     include_test: bool = False,
-    use_curve: bool = True,
     engine_filter: Optional[str] = None,
 ) -> Any:
     """
@@ -944,10 +1020,7 @@ def get_leaderboard(
         cur = conn.execute(query, (1 if include_test else 0, *testing_vers, 1 if include_test else 0, 1 if include_test else 0))
     rows = [dict(row) for row in cur.fetchall()]
 
-    # Compute presentation-layer bell curve overlays without mutating SQLite
     from ..evaluator.rubric import calculate_letter_grade
-    from .peer_grades import basis_for, compute_peer_overlays
-    overlays = compute_peer_overlays(conn)
 
     # Collect badges for all projects
     badge_cur = conn.execute("""
@@ -971,31 +1044,28 @@ def get_leaderboard(
 
     for item in rows:
         item["badges"] = badges_by_project.get(item["project_id"], [])
-        ov = overlays.get(int(item["report_id"]))
-        raw_grade = calculate_letter_grade(float(item.get("final_score") or 0.0))
-        item["raw_letter_grade"] = ov["raw_letter_grade"] if ov else raw_grade
-        item["curved_letter_grade"] = ov["curved_letter_grade"] if ov else raw_grade
-        item["curved_score"] = ov["curved_score"] if ov else round(float(item.get("final_score") or 0.0), 1)
+        base_score = round(float(item.get("final_score") or 0.0), 1)
         up_cnt = up_counts.get(int(item["project_id"]), 0)
         up_bonus = upvote_score_bonus(up_cnt)
+        boosted = round(min(100.0, base_score + up_bonus), 1)
+        grade = calculate_letter_grade(boosted)
+        item["rubric_score"] = base_score
+        item["final_score"] = boosted
+        item["curved_score"] = boosted
         item["upvote_count"] = up_cnt
         item["upvote_bonus"] = up_bonus
-        if up_bonus > 0:
-            boosted = round(min(100.0, float(item["curved_score"]) + up_bonus), 1)
-            item["curved_score"] = boosted
-            item["curved_letter_grade"] = calculate_letter_grade(boosted)
-        item["curve"] = ov["curve"] if ov else None
-        item["raw_tier"] = item["raw_letter_grade"][0] if item["raw_letter_grade"][:1] in ("A", "B", "C", "D") else "F"
-        item["curved_tier"] = item["curved_letter_grade"][0] if item["curved_letter_grade"][:1] in ("A", "B", "C", "D") else "F"
-        item["letter_grade"] = item["curved_letter_grade"] if use_curve else item["raw_letter_grade"]
-        # Tier = letter-grade family, so the filter always agrees with the grade shown
-        grade = (item.get("letter_grade") or "F").strip().upper()
-        item["tier"] = grade[0] if grade[:1] in ("A", "B", "C", "D") else "F"
+        item["raw_letter_grade"] = grade
+        item["curved_letter_grade"] = grade
+        item["letter_grade"] = grade
+        item["curve"] = None
+        item["raw_tier"] = grade[0] if grade[:1] in ("A", "B", "C", "D") else "F"
+        item["curved_tier"] = item["raw_tier"]
+        item["tier"] = item["raw_tier"]
         item["general_category"] = normalize_category(item.get("general_category"))
         item["platforms"] = [p for p in (item.get("platforms") or "").split(",") if p]
 
-    if sort_by == "overall" and use_curve:
-        rows.sort(key=lambda r: (float(r.get("curved_score") or 0.0), float(r.get("final_score") or 0.0)), reverse=True)
+    if sort_by == "overall":
+        rows.sort(key=lambda r: (float(r.get("final_score") or 0.0), int(r.get("upvote_count") or 0)), reverse=True)
 
     for rank_idx, item in enumerate(rows, start=1):
         item["rank"] = rank_idx
@@ -1008,8 +1078,7 @@ def get_leaderboard(
         for i, item in enumerate(sorted(cat_items, key=lambda x: -float(x["final_score"] or 0)), start=1):
             item["category_rank"] = i
             item["category_count"] = len(cat_items)
-            ov = overlays.get(int(item["report_id"]))
-            item["grade_basis"] = ov["grade_basis"] if ov else basis_for(len(cat_items))
+            item["grade_basis"] = "rubric"
 
     def matches(item: Dict[str, Any], skip: str = "") -> bool:
         if skip != "tier" and tiers_wanted and item["tier"].lower() not in tiers_wanted:
@@ -1262,37 +1331,36 @@ def get_project_detail(
     ).fetchall()]
     data["is_latest"] = bool(data["history"]) and data["history"][0]["report_id"] == data["report_id"]
     from ..evaluator.rubric import calculate_letter_grade
-    from .peer_grades import category_standing, compute_peer_overlays
-    overlays = compute_peer_overlays(conn)
-    ov = overlays.get(int(data["report_id"]))
-    raw_grade = calculate_letter_grade(float(data.get("final_score") or 0.0))
-    data["raw_letter_grade"] = ov["raw_letter_grade"] if ov else raw_grade
-    data["curved_letter_grade"] = ov["curved_letter_grade"] if ov else raw_grade
-    data["curved_score"] = ov["curved_score"] if ov else round(float(data.get("final_score") or 0.0), 1)
+    base_score = round(float(data.get("final_score") or 0.0), 1)
     up_cnt = int(conn.execute("SELECT COUNT(*) c FROM project_upvotes WHERE project_id = ?", (data["id"],)).fetchone()["c"])
     up_bonus = upvote_score_bonus(up_cnt)
+    boosted = round(min(100.0, base_score + up_bonus), 1)
+    grade = calculate_letter_grade(boosted)
+    data["rubric_score"] = base_score
+    data["final_score"] = boosted
+    data["curved_score"] = boosted
     data["upvote_count"] = up_cnt
     data["upvote_bonus"] = up_bonus
-    if up_bonus > 0:
-        boosted = round(min(100.0, float(data["curved_score"]) + up_bonus), 1)
-        data["curved_score"] = boosted
-        data["curved_letter_grade"] = calculate_letter_grade(boosted)
-    data["grade_basis"] = ov["grade_basis"] if ov else "rubric"
-    data["curve"] = ov["curve"] if ov else None
-    data["letter_grade"] = data["curved_letter_grade"]
+    data["raw_letter_grade"] = grade
+    data["curved_letter_grade"] = grade
+    data["letter_grade"] = grade
+    data["grade_basis"] = "rubric_plus_sparks" if up_bonus > 0 else "rubric"
+    data["curve"] = None
     if isinstance(data.get("full_report"), dict):
-        data["full_report"]["raw_letter_grade"] = data["raw_letter_grade"]
-        data["full_report"]["curved_letter_grade"] = data["curved_letter_grade"]
-        data["full_report"]["letter_grade"] = data["curved_letter_grade"]
+        data["full_report"]["rubric_score"] = base_score
+        data["full_report"]["final_score"] = boosted
+        data["full_report"]["raw_letter_grade"] = grade
+        data["full_report"]["curved_letter_grade"] = grade
+        data["full_report"]["letter_grade"] = grade
         data["full_report"]["grade_basis"] = data["grade_basis"]
-        data["full_report"]["curve"] = data["curve"]
+        data["full_report"]["curve"] = None
     for h in data["history"]:
-        h_ov = overlays.get(int(h["report_id"]))
         h_raw = calculate_letter_grade(float(h.get("final_score") or 0.0))
-        h["raw_letter_grade"] = h_ov["raw_letter_grade"] if h_ov else h_raw
-        h["curved_letter_grade"] = h_ov["curved_letter_grade"] if h_ov else h_raw
-        h["curved_score"] = h_ov["curved_score"] if h_ov else round(float(h.get("final_score") or 0.0), 1)
-        h["letter_grade"] = h["curved_letter_grade"]
+        h["raw_letter_grade"] = h_raw
+        h["curved_letter_grade"] = h_raw
+        h["curved_score"] = round(float(h.get("final_score") or 0.0), 1)
+        h["letter_grade"] = h_raw
+    from .standing import category_standing
     data["standing"] = category_standing(conn, data["id"])
     data["factor_stats"] = factor_stats(conn)
 
@@ -2497,7 +2565,7 @@ def clear_entire_database(db_path: Path = DEFAULT_DB_PATH) -> bool:
         conn.close()
 
 def regrade_all_reports(db_path: Path = DEFAULT_DB_PATH) -> int:
-    """Recomputes stored letter grades from scores using the current grade curve. Returns rows changed."""
+    """Recomputes stored letter grades from scores on the fixed letter bands. Returns rows changed."""
     from ..evaluator.rubric import calculate_letter_grade
 
     init_db(db_path)
