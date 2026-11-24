@@ -1,6 +1,6 @@
 <h1>Privacy policy</h1>
 <p class="lede">LetsVibe is built to collect as little as possible. We do not use tracking cookies, ads or cross-site trackers, we never ask for your email address, and you can delete everything yourself at any time.</p>
-<p class="updated">Last updated 14 November 2026</p>
+<p class="updated">Last updated 24 November 2026</p>
 
 <div class="callout">
   <p><strong>The short version</strong></p>
@@ -8,6 +8,7 @@
     <li>We store your public GitHub username, numeric ID and avatar link so you can sign in and so we can confirm which repositories are yours. Nothing else about you.</li>
     <li>Graded reports are public. They show your username, avatar, repository name and scores.</li>
     <li>Your code is copied temporarily, graded by AI models running on LetsVibe's own computer, and the copy is deleted. It is never sent to an AI company.</li>
+    <li>When the grading engine gets a major update, every published repository is graded again, one at a time through the queue, so all grades come from the same engine.</li>
     <li>You can export or delete your data from <a href="/my-data">My Data</a> instantly, with no request to anyone and no notification sent.</li>
   </ul>
 </div>
@@ -36,6 +37,9 @@
   <li><strong>The report</strong> we generate is kept: scores, written findings, the verdict, measurements (such as lines of code and complexity), the detected category, platforms and hardware, a short excerpt of your README, the graded commit ID and when it was graded.</li>
   <li><strong>Queue history:</strong> which repository was submitted, by which account, when, and whether it succeeded.</li>
 </ul>
+<h3>When the grading engine gets a major update</h3>
+<p>Every repository on LetsVibe is <strong>graded again</strong> with the new engine, so all grades on the leaderboard are made the same way. The re-grades go through the normal queue one at a time, which can take several days. Each one works exactly like a submission: the repository's <strong>current public contents</strong> (its latest commit) are copied to a temporary folder, graded by AI models on LetsVibe's own computer, and the copy is deleted when grading ends. The new report becomes the project's current grade; earlier grades stay in the project's scan history.</p>
+<p>No new information about you is collected for a re-grade, and you don't need to do anything. If you would rather not be re-graded, delete the project from <a href="/my-projects">My Projects</a> or <a href="/my-data">My Data</a> at any time; a re-grade still waiting in the queue is removed with it.</p>
 <p>Possible hard-coded secrets found in your code are recorded by <em>type</em> only (for example "API key, 1 occurrence"). Their location and contents are never stored or published.</p>
 
 <h3>When you submit an appeal</h3>
@@ -59,7 +63,7 @@
 <h2 id="use">How we use it</h2>
 <ul>
   <li>To sign you in and confirm you own the repositories you submit.</li>
-  <li>To grade repositories and publish the results on the leaderboard.</li>
+  <li>To grade repositories and publish the results on the leaderboard, and to re-grade them when the grading engine gets a major update.</li>
   <li>To enforce fair-use limits and review appeals.</li>
   <li>To keep the service secure and working.</li>
 </ul>
@@ -87,7 +91,7 @@
 
 <h2 id="retention">How long we keep it</h2>
 <ul>
-  <li><strong>Temporary repository copies:</strong> deleted as soon as grading finishes, or at the next server start if grading was interrupted.</li>
+  <li><strong>Temporary repository copies:</strong> deleted as soon as grading (or a re-grade) finishes, or at the next server start if grading was interrupted.</li>
   <li><strong>Reports and projects:</strong> until you delete them, delete your account, or the repository is removed by us.</li>
   <li><strong>Your account:</strong> until you delete it.</li>
   <li><strong>Cached avatars and icons:</strong> until the project or account they belong to is deleted.</li>

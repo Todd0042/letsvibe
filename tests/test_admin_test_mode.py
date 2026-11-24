@@ -192,3 +192,23 @@ def test_only_the_admin_shares_and_only_test_projects(client):
     sign_in(client, "Todd0042", "1", is_admin=True)
     assert client.post("/api/admin/project/share", json={"full_slug": "Todd0042/mine", "shared": True}).status_code == 400
     assert client.post("/api/admin/project/share", json={"full_slug": "nobody/none", "shared": True}).status_code == 404
+
+
+def test_engine_update_regrade_keeps_test_gradings_private(client):
+    """'Re-grade everything' after an engine update: every project is queued once more with the new default engine,
+    and an admin test grading of someone else's repo stays a test grading (a normal one would publish it)."""
+    from auth_helpers import sign_in
+    from letsvibe.evaluator.pipeline import get_default_engine_id
+
+    _add("Todd0042/mine", 70.0)
+    _add("stranger/theirs", 60.0, is_test=True)
+    sign_in(client, "Todd0042", "1", is_admin=True)
+    r = client.post("/api/admin/rescan-all", json={})
+    assert r.status_code == 200 and r.json()["requeued_count"] == 2
+    conn = get_db_connection()
+    queued = {row["target"].rsplit("/", 2)[-2] + "/" + row["target"].rsplit("/", 1)[-1]: (bool(row["is_test"]), row["mode"])
+              for row in conn.execute("SELECT target, is_test, mode FROM audit_queue")}
+    conn.close()
+    engine = get_default_engine_id()
+    assert queued == {"Todd0042/mine": (False, engine), "stranger/theirs": (True, engine)}
+    assert get_project_detail("stranger/theirs") is None  # still not public

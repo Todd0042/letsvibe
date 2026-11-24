@@ -85,6 +85,7 @@ from ..storage.db import (
     review_appeal,
     update_queue_settings,
     upsert_user,
+    get_all_project_rescan_targets,
     get_all_project_targets,
     create_content_report,
     list_content_reports,
@@ -2311,10 +2312,10 @@ async def api_admin_rescan_all(request: Request, _admin: Dict[str, Any] = Depend
     if req_mode and not get_engine_info(selected_mode):
         raise HTTPException(status_code=400, detail=f"Unknown engine version: {selected_mode}")
 
-    targets = get_all_project_targets()
     requeued_count = 0
-    for target in targets:
-        enqueue_task(target=target, mode=selected_mode, requested_by="admin_rescan", force_override=True)
+    for project in get_all_project_rescan_targets():
+        enqueue_task(target=project["url"], mode=selected_mode, requested_by="admin_rescan", force_override=True,
+                     is_test=project["is_test"])  # a test grading stays one (never published by a re-grade)
         requeued_count += 1
 
     return {

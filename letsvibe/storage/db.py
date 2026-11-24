@@ -2532,6 +2532,18 @@ def check_user_submission_quota(
         conn.close()
 
 
+def get_all_project_rescan_targets(db_path: Path = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    """Every project for a bulk re-grade, with its own test flag: an admin test grading must stay a test grading
+    (a normal grading would publish someone else's repository)."""
+    init_db(db_path)
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute("SELECT canonical_url, is_test FROM projects").fetchall()
+        return [{"url": r["canonical_url"], "is_test": bool(r["is_test"])} for r in rows if r["canonical_url"]]
+    finally:
+        conn.close()
+
+
 def get_all_project_targets(db_path: Path = DEFAULT_DB_PATH) -> List[str]:
     """Retrieves all canonical repository URLs for bulk re-scanning."""
     init_db(db_path)
