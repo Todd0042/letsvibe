@@ -7,7 +7,6 @@ export interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   SESSION_SECRET: string;
-  GITHUB_VERIFY_TOKEN?: string;
 }
 
 const RETENTION_DAYS = 15;
@@ -508,23 +507,18 @@ export default {
         return jsonRes(req, { detail: "Report is missing a valid commit_sha." }, 400);
       }
 
-      const ghHeaders: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "LetsVibe-Anna-Worker" };
-      if (env.GITHUB_VERIFY_TOKEN) ghHeaders.Authorization = `Bearer ${env.GITHUB_VERIFY_TOKEN}`;
-      const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, { headers: ghHeaders });
-      if (!repoRes.ok) return jsonRes(req, { detail: "Repository not found on GitHub or is private." }, 400);
-      const repoJson = (await repoRes.json()) as { private?: boolean; owner?: { avatar_url?: string } };
-      if (repoJson.private) return jsonRes(req, { detail: "Private repositories cannot be published." }, 400);
-
-      const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}/commits/${sha}`, { headers: ghHeaders });
-      if (!commitRes.ok) return jsonRes(req, { detail: "Commit SHA could not be verified on GitHub." }, 400);
-      const verifiedSha = String(((await commitRes.json()) as { sha?: string }).sha || sha);
+      // No GitHub calls here (they were rate-limited on Cloudflare's shared addresses and reported as "not found").
+      // Ownership is the signed-in GitHub account (the session is signed by this server) matching the repo's owner,
+      // checked above; the Anna app checks the same before grading, downloads the repository anonymously from public
+      // GitHub (so it is public) and reports the commit it graded.
+      const verifiedSha = sha;
 
       const now = String(rep.timestamp || new Date().toISOString());
       const finalScore = Math.round(Number(rep.final_vibe_score ?? rep.final_score ?? 0) * 10) / 10;
       const letterGrade = calculateLetterGrade(finalScore); // the server's letter, never the one sent
       const rk = rubricVersionRank(rv);
       const arch = (rep.archetype || {}) as Record<string, string>;
-      const ownerAvatar = repoJson.owner?.avatar_url || `https://github.com/${owner}.png?size=96`;
+      const ownerAvatar = (!isOtherOwner && user.avatar_url) || `https://github.com/${owner}.png?size=96`;
       const langs = (rep.deterministic_metrics?.languages || {}) as Record<string, number>;
       const primaryLang = Object.entries(langs).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))[0]?.[0] || "";
 
