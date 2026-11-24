@@ -377,9 +377,18 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None, declared_tar
     not_own = ("third_party/", "third-party/", "vendor/", "external/", "node_modules/", "/libs/", "site-packages/")
     # v10.4+: documentation builders (Sphinx's docs/make.bat) say where the docs build, not where the code runs
     docs_tooling = (lambda p: p.startswith("docs/") or "/docs/" in p or os.path.basename(p) == "make.bat") if declared_targets else (lambda p: False)
-    if any_path(lambda p: p.endswith((".iss", ".msi", ".nsi", ".bat", ".ps1", ".cmd")) and os.path.basename(p) not in build_wrappers
-                and not any(x in p for x in not_own) and not docs_tooling(p)):
-        hit(["windows"], "Windows packaging/scripts")
+    win_scripts = [p for p in paths if p.lower().endswith((".iss", ".msi", ".nsi", ".bat", ".ps1", ".cmd"))
+                   and os.path.basename(p).lower() not in build_wrappers and not any(x in p for x in not_own) and not docs_tooling(p)]
+    if win_scripts:
+        # v10.4+: a Windows launcher next to a shell launcher in the same folder (start.bat + start.sh) means the
+        # project starts on every desktop, not only on Windows.
+        sh_dirs = {os.path.dirname(p) for p in paths if p.lower().endswith((".sh", ".command"))}
+        paired = declared_targets and any(os.path.dirname(p) in sh_dirs and p.lower().endswith((".bat", ".cmd", ".ps1"))
+                                          for p in win_scripts)
+        if paired:
+            hit(PC_PLATFORMS, "launchers for Windows and macOS/Linux (e.g. start.bat + start.sh)")
+        else:
+            hit(["windows"], "Windows packaging/scripts")
     if any_path(lambda p: p.endswith((".desktop", "pkgbuild", ".appimage", ".service", "snapcraft.yaml", ".flatpakref"))
                 or p.endswith("appimagebuilder.yml") or "appimage" in os.path.basename(p) or "flatpak" in os.path.basename(p)):
         hit(["linux"], "Linux packaging")
