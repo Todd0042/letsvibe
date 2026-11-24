@@ -29,10 +29,34 @@ VULNERABLE_PATTERNS = [
 class SecurityAnalyzer:
     """Detects secrets, API keys, and unsafe security anti-patterns across repository files."""
 
+    @staticmethod
+    def _precise_false_positive(desc: str, content: str, start: int) -> bool:
+        """Engine v10.4+ only: a match that isn't what the rule means."""
+        line_start = content.rfind("\n", 0, start) + 1
+        line_end = content.find("\n", start)
+        line = content[line_start: line_end if line_end != -1 else len(content)]
+        before = content[line_start:start]
+        if "//" in before or before.lstrip().startswith("#"):
+            return True  # inside a comment
+        if desc in ("Hardcoded Password Assignment", "Generic API Key Assignment", "AWS Credential / Secret Key"):
+            # A template placeholder or variable reference is not a secret: "{{ password }}", "${PASSWORD}", "%(pw)s"
+            value = content[start: content.find("\n", start) if content.find("\n", start) != -1 else len(content)]
+            if re.search(r"\{\{|\$\{|%\(|\{[A-Za-z_][\w.]*\}", value):
+                return True
+        if desc in ("Use of exec() function", "Use of eval() function"):
+            # A method or function *named* exec/eval being declared, not the built-in being called:
+            # `exec(cmd: EditorCommand): void;`  `def exec(self, ...):`  `function exec(...) {`  `async exec(...) {`
+            if re.match(r"\s*(?:(?:export|public|private|protected|static|async|override|abstract|def|function)\s+)*(?:exec|eval)\s*\([^)]*\)\s*(?::|\{|=>|;|$)", line):
+                return True
+        return False
+
     @classmethod
-    def scan(cls, files: Dict[str, str]) -> Tuple[int, List[str]]:
+    def scan(cls, files: Dict[str, str], precise: bool = False) -> Tuple[int, List[str]]:
         """
         Returns (total findings, one summary line per finding type).
+
+        precise=True (engine v10.4+): values can't span lines; declared methods named exec/eval and
+        matches inside comments don't count. Older engines get exactly the previous results.
 
         Findings end up in PUBLIC reports, so they name only the type and how many times it was
         seen -- never the file, line or any characters of the secret. Publishing "where the leaked
@@ -44,8 +68,17 @@ class SecurityAnalyzer:
             # Skip test files and documentation for secret scans to reduce false positives
             if "test" in rel_path.lower() or "mock" in rel_path.lower() or rel_path.endswith((".md", ".txt", ".rst")):
                 continue
+            # v10.4+: bundled, minified third-party files (melonJS-min.js, jquery.min.js) aren't the project's code
+            if precise and (re.search(r"[.-]min\.(?:js|css)$", rel_path.lower()) or any(
+                    x in rel_path.lower() for x in ("node_modules/", "vendor/", "third_party/", "third-party/", "site-packages/"))):
+                continue
             for pattern, desc in list(SECRET_PATTERNS) + list(VULNERABLE_PATTERNS):
-                n = sum(1 for _ in re.finditer(pattern, content))
+                if precise:
+                    # A quoted value never runs across lines (the old rule could join a comment with later code)
+                    pattern = pattern.replace("[^'\\\"]", "[^'\\\"\\n]")
+                    n = sum(1 for m in re.finditer(pattern, content) if not cls._precise_false_positive(desc, content, m.start()))
+                else:
+                    n = sum(1 for _ in re.finditer(pattern, content))
                 if n:
                     counts[desc] = counts.get(desc, 0) + n
 

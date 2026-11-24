@@ -10,6 +10,7 @@ project against the hardware it targets instead of against a desktop PC.
 """
 
 import configparser
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -196,8 +197,74 @@ def _platformio_profile(text: str) -> List[str]:
     return described
 
 
-def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformDetection:
-    """Deterministically infers target platforms and a device profile from repository markers."""
+TAURI_TARGETS = {"appimage": "linux", "deb": "linux", "rpm": "linux", "msi": "windows", "nsis": "windows",
+                 "dmg": "macos", "app": "macos"}
+LINUX_ONLY_MARKERS = ("import pty", "import termios", "import fcntl", "from pty", "/proc/", "systemctl", "podman ",
+                      "journalctl", "apt-get install", "pacman -s", "inotify", "epoll")
+WINDOWS_ONLY_MARKERS = ("import winreg", "import msvcrt", "win32api", "ctypes.windll", "pywin32", "win32con",
+                        "#include <windows.h>", "#include <conio.h>")
+# Code that branches by OS is cross-platform, whatever OS-specific calls sit inside the branches
+PLATFORM_GUARDS = ("sys.platform", "os.name ==", "os.name !=", "platform.system()", "#ifdef _win32", "#if defined(_win32)",
+                   "#ifdef __linux__", "#ifdef __apple__", "cfg(target_os", "cfg(windows)", "cfg(unix)", "runtime.goos",
+                   "process.platform")
+POSIX_MARKERS = ("#include <termios.h>", "#include <sys/ioctl.h>", "#include <unistd.h>", "#include <pthread.h>")
+
+
+def _declared_desktop_targets(root: Path, paths: List[str]) -> Optional[Set[str]]:
+    """OSes a Tauri/Electron app says it builds for; None when it doesn't say (then: all three)."""
+    found: Set[str] = set()
+    said = False
+    for p in paths:
+        base = os.path.basename(p).lower()
+        if base == "tauri.conf.json":
+            try:
+                conf = json.loads(_read(root, p, 200_000) or "{}")
+            except ValueError:
+                continue
+            targets = (conf.get("bundle") or {}).get("targets")
+            if isinstance(targets, str):
+                targets = [targets]
+            if isinstance(targets, list) and targets and "all" not in [str(t).lower() for t in targets]:
+                said = True
+                found.update(TAURI_TARGETS[t] for t in (str(x).lower() for x in targets) if t in TAURI_TARGETS)
+        elif base in ("electron-builder.yml", "electron-builder.yaml", "electron-builder.json"):
+            txt = _read(root, p, 50_000).lower()
+            for key, plat in (("\nlinux:", "linux"), ("\nwin:", "windows"), ("\nmac:", "macos"), ('"linux"', "linux"), ('"win"', "windows"), ('"mac"', "macos")):
+                if key in "\n" + txt:
+                    said = True
+                    found.add(plat)
+    return found if said and found else None
+
+
+def _declared_signals(root: Path, paths: List[str], lower: List[str]) -> Dict[str, object]:
+    """Evidence read from what the repo declares or does (engine v10.4+ only; see detect_platforms)."""
+    android = next((p for p in paths if "/android/" in p.lower() and p.lower().endswith((".kt", ".java"))
+                    and "import android." in _read(root, p, 30_000)), None)
+    android = android or next((p for p in lower if "/gen/android/" in p), None)
+    ios = next((p for p in lower if "/gen/apple/" in p), None)
+    sample = [p for p in paths if p.lower().endswith((".py", ".sh", ".service", ".rs", ".go", ".ts", ".js", ".c", ".h", ".cpp", ".cc", ".hpp"))
+              and not any(x in p.lower() for x in ("node_modules/", "vendor/", "third_party/", "site-packages/"))][:300]
+    text = " ".join(_read(root, p, 40_000).lower() for p in sample)
+    return {
+        "android": android, "ios": ios,
+        "linux_only": any(m in text for m in LINUX_ONLY_MARKERS) or any(p.endswith(".service") for p in lower),
+        "windows_only": any(m in text for m in WINDOWS_ONLY_MARKERS),
+        "posix": any(m in text for m in POSIX_MARKERS),
+        "guarded": any(m in text for m in PLATFORM_GUARDS),
+        # an OS check only proves Windows support if Windows is one of the branches
+        "windows_aware": any(m in text for m in PLATFORM_GUARDS) and any(
+            w in text for w in ("_win32", "win32", "'nt'", '"nt"', "cfg(windows)", 'target_os = "windows"', "winreg")),
+    }
+
+
+def detect_platforms(root: Path, paths: Optional[List[str]] = None, declared_targets: bool = False) -> PlatformDetection:
+    """Deterministically infers target platforms and a device profile from repository markers.
+
+    declared_targets=True (engine v10.4+) reads what the repo itself declares instead of assuming:
+    Tauri/Electron build targets, Tauri-mobile Android/iOS sources, a Tauri/Electron UI is not a website,
+    and the generic "code file -> every desktop OS" fallback narrows to the OS the code is written for.
+    Older engines call it without the flag and get exactly the previous results.
+    """
     root = Path(root)
     paths = paths if paths is not None else _list_paths(root)
     lower = [p.lower() for p in paths]
@@ -263,7 +330,7 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
                         ("windows/", "windows"), ("macos/", "macos"), ("linux/", "linux")):
             if d in lower:
                 hit([plat], f"Flutter {plat} target")
-    if "package.json" in names:
+    if "package.json" in names and not declared_targets:
         pkg = _read(root, next(p for p in paths if os.path.basename(p).lower() == "package.json")).lower()
         if '"react-native"' in pkg or '"expo"' in pkg:
             hit(["android", "ios"], "React Native / Expo")
@@ -271,6 +338,21 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
             hit(PC_PLATFORMS, "Electron/Tauri desktop app")
         if any(k in pkg for k in ('"vite"', '"next"', '"react-scripts"', '"@sveltejs/kit"', '"nuxt"', '"astro"')):
             hit(["web"], "web frontend build (package.json)")
+    elif "package.json" in names:
+        # Every package.json, not just the first; a Tauri/Electron app's own UI build is not a website.
+        desktop_app = False
+        for p in [x for x in paths if os.path.basename(x).lower() == "package.json" and "node_modules/" not in x.lower()][:20]:
+            pkg = _read(root, p).lower()
+            if '"react-native"' in pkg or '"expo"' in pkg:
+                hit(["android", "ios"], "React Native / Expo")
+            if '"electron"' in pkg or "@tauri-apps" in pkg:
+                desktop_app = True
+            elif any(k in pkg for k in ('"vite"', '"next"', '"react-scripts"', '"@sveltejs/kit"', '"nuxt"', '"astro"')):
+                hit(["web"], f"web frontend build ({p})")
+        if desktop_app:
+            declared = _declared_desktop_targets(root, paths)
+            hit(sorted(declared) if declared else PC_PLATFORMS,
+                "Tauri/Electron app, declared targets: " + ", ".join(sorted(declared)) if declared else "Tauri/Electron app (targets not stated)")
 
     # Game engines and consoles
     if "project.godot" in names:
@@ -293,8 +375,10 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
     # Bundled third-party code and virtual-environment scripts belong to someone else's project and never count.
     build_wrappers = ("gradlew.bat", "gradlew", "mvnw.cmd", "mvnw", "activate.bat", "deactivate.bat", "activate.ps1")
     not_own = ("third_party/", "third-party/", "vendor/", "external/", "node_modules/", "/libs/", "site-packages/")
+    # v10.4+: documentation builders (Sphinx's docs/make.bat) say where the docs build, not where the code runs
+    docs_tooling = (lambda p: p.startswith("docs/") or "/docs/" in p or os.path.basename(p) == "make.bat") if declared_targets else (lambda p: False)
     if any_path(lambda p: p.endswith((".iss", ".msi", ".nsi", ".bat", ".ps1", ".cmd")) and os.path.basename(p) not in build_wrappers
-                and not any(x in p for x in not_own)):
+                and not any(x in p for x in not_own) and not docs_tooling(p)):
         hit(["windows"], "Windows packaging/scripts")
     if any_path(lambda p: p.endswith((".desktop", "pkgbuild", ".appimage", ".service", "snapcraft.yaml", ".flatpakref"))
                 or p.endswith("appimagebuilder.yml") or "appimage" in os.path.basename(p) or "flatpak" in os.path.basename(p)):
@@ -317,9 +401,25 @@ def detect_platforms(root: Path, paths: Optional[List[str]] = None) -> PlatformD
         if "Raspberry Pi" not in profile:
             profile.append("Raspberry Pi")
 
+    if declared_targets:
+        ev = _declared_signals(root, paths, lower)
+        if ev["android"]:
+            hit(["android"], f"Android sources ({ev['android']})")
+        if ev["ios"]:
+            hit(["ios"], "Tauri iOS project (gen/apple)")
+
     # Plain cross-platform desktop code (Python/Go/Rust/Node CLIs) when nothing more specific was found
     if not found and any_path(lambda p: p.endswith((".py", ".go", ".rs", ".js", ".ts", ".java", ".cs", ".cpp", ".c", ".rb"))):
-        hit(PC_PLATFORMS, "cross-platform desktop/CLI code")
+        if declared_targets and ev["windows_aware"]:
+            hit(PC_PLATFORMS, "cross-platform desktop/CLI code (handles Windows explicitly)")
+        elif declared_targets and ev["windows_only"] and not (ev["linux_only"] or ev["posix"]):
+            hit(["windows"], "desktop/CLI code written for Windows")
+        elif declared_targets and ev["posix"] and not ev["windows_only"]:
+            hit(["linux", "macos"], "desktop/CLI code written for POSIX (Linux/macOS)")
+        elif declared_targets and ev["linux_only"] and not ev["windows_only"] and not ev["guarded"]:
+            hit(["linux"], "desktop/CLI code written for Linux")
+        else:
+            hit(PC_PLATFORMS, "cross-platform desktop/CLI code")
 
     return PlatformDetection(
         platforms=normalize_platforms(found),
