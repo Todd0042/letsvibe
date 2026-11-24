@@ -485,8 +485,12 @@ export default {
       const body = (await req.json().catch(() => ({}))) as { report?: Record<string, any> };
       const rep = body.report || {};
       const rv = String(rep.rubric_version || "").trim().toLowerCase();
-      if (!["v10a", "v10.3a", "v11a", "v12a", "v13", "v13a", "anna-v1"].includes(rv)) {
-        return jsonRes(req, { detail: "Only Anna edition reports can be imported here." }, 400);
+      // The Anna app's engines: the old Anna-only ones, and the live site's engines from v10.4 on (the app grades with
+      // them since 2026-11-24, using the user's own model)
+      const legacyAnna = ["v10a", "v10.3a", "v11a", "v12a", "v13", "v13a", "anna-v1"].includes(rv);
+      const liveEngine = /^v\d+\.\d+$/.test(rv) && rubricVersionRank(rv) >= rubricVersionRank("v10.4");
+      if (!legacyAnna && !liveEngine) {
+        return jsonRes(req, { detail: `Unknown engine version '${rv}': update the LetsVibe app and grade again.` }, 400);
       }
 
       const rawTarget = String(rep.full_slug || rep.repo_source || "").replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
